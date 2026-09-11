@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@import "katex/dist/katex.min.css";
+
+/* Modo oscuro por clase (estrategia darkMode: 'class' en Tailwind v4) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+.katex {
+  font-size: 1em;
+}
+
+/* KaTeX con alto contraste sobre fondos oscuros (cambio instantáneo) */
+.dark .katex {
+  color: #f1f5f9;
+}
+
+/* Controles nativos (spinners, scrollbars) coherentes con el tema */
+.dark {
+  color-scheme: dark;
+}

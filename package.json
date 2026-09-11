@@ -1,0 +1,20 @@
+{
+  "name": "math-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Plataforma de modelos matemáticos - IO",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build:engine": "npm run build -w @math-platform/engine",
+    "test:engine": "npm run test -w @math-platform/engine",
+    "dev:engine": "npm run dev -w @math-platform/engine",
+    "dev:api": "npm run dev -w @math-platform/api",
+    "dev:frontend": "npm run dev -w @math-platform/frontend",
+    "dev": "concurrently -k -n engine,api,frontend -c green,blue,magenta \"npm run dev:engine\" \"npm run dev:api\" \"npm run dev:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
