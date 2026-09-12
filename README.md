@@ -1,4 +1,4 @@
-# Math Platform - Plataforma de Modelos Matemáticos
+# Equilibria — Modelos de Investigación de Operaciones
 
 Plataforma web para resolución, visualización y análisis de modelos de Investigación de Operaciones.
 

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
-import { calcularEOQ, ApiError, type EOQResult } from '../services/api';
+import { calcularEPQ, ApiError, type EPQResult } from '../services/api';
 import CostChart, { type PuntoCosto } from '@shared/components/CostChart';
-import EOQTeoria from '../components/EOQTeoria';
-import { VARIABLES_EOQ } from '../data/glosario';
+import EPQTeoria from '../components/EPQTeoria';
+import { VARIABLES_EPQ } from '../data/glosario';
 import Formula from '@shared/components/Formula';
 import Glossary, { GlossaryButton } from '@shared/components/Glossary';
 import KpiCard from '@shared/components/KpiCard';
@@ -18,6 +18,7 @@ const PESTANAS: { clave: Pestana; etiqueta: string }[] = [
 
 interface FormState {
   demandaAnual: string;
+  tasaProduccion: string;
   costoOrdenar: string;
   costoMantener: string;
   costoUnitario: string;
@@ -42,7 +43,8 @@ interface CampoFormulario {
 
 const FORM_METADATA: CampoFormulario[] = [
   { key: 'demandaAnual', label: 'Demanda anual', simbolo: 'D', min: 0.01, unidadSufijo: (u: string, _m: string) => `${u} / año` },
-  { key: 'costoOrdenar', label: 'Costo de ordenar', simbolo: 'S', min: 0.01, unidadSufijo: (_u: string, m: string) => `${m} / orden` },
+  { key: 'tasaProduccion', label: 'Tasa de producción (P)', simbolo: 'P', min: 0.01, unidadSufijo: (u: string, _m: string) => `${u} / año` },
+  { key: 'costoOrdenar', label: 'Costo de preparación', simbolo: 'S', min: 0.01, unidadSufijo: (_u: string, m: string) => `${m} / corrida` },
   { key: 'costoMantener', label: 'Costo de mantener', simbolo: 'H', min: 0.01, unidadSufijo: (u: string, m: string) => `${m} / ${u}-año` },
   { key: 'costoUnitario', label: 'Costo unitario (opcional)', simbolo: 'C', opcional: true, min: 0, unidadSufijo: (u: string, m: string) => `${m} / ${u}` },
   { key: 'diasLaborables', label: 'Días laborables al año', min: 1, unidadSufijo: () => 'días al año' },
@@ -58,9 +60,10 @@ const fmtMoneda = (n: number, moneda: string) =>
 const fmtDecimal = (n: number, max = 2) =>
   n.toLocaleString('en-US', { maximumFractionDigits: max });
 
-export default function EOQPage() {
+export default function EPQPage() {
   const [form, setForm] = useState<FormState>({
     demandaAnual: '10000',
+    tasaProduccion: '20000',
     costoOrdenar: '20',
     costoMantener: '5',
     costoUnitario: '10',
@@ -71,7 +74,7 @@ export default function EOQPage() {
     unidad: 'unidades',
     moneda: 'USD',
   });
-  const [resultado, setResultado] = useState<EOQResult | null>(null);
+  const [resultado, setResultado] = useState<EPQResult | null>(null);
   const [cargando, setCargando] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -92,8 +95,9 @@ export default function EOQPage() {
     try {
       const diasLaborables = Number(datos.diasLaborables);
       const leadTime = Number(datos.leadTime);
-      const res = await calcularEOQ({
+      const res = await calcularEPQ({
         demandaAnual: Number(datos.demandaAnual),
+        tasaProduccion: Number(datos.tasaProduccion),
         costoOrdenar: Number(datos.costoOrdenar),
         costoMantener: Number(datos.costoMantener),
         costoUnitario: Number(datos.costoUnitario) || undefined,
@@ -139,14 +143,13 @@ export default function EOQPage() {
     (key: keyof PrefsState) => (e: ChangeEvent<HTMLInputElement>) =>
       setPrefs((prev) => ({ ...prev, [key]: e.target.value }));
 
-  // Curva de costos: solo costos relevantes (se excluye D·C, el costo del producto).
-  // El punto mínimo (Q*) y su costo se obtienen de la API; las curvas se
-  // reconstruyen en el cliente con las mismas fórmulas EOQ.
+  // Curva de costos: el costo de mantener se contrae por el factor (1 - D/P)
+  // porque el inventario se acumula gradualmente durante la producción.
   const curva: PuntoCosto[] = useMemo(() => {
     if (!resultado) return [];
 
-    const { demandaAnual: D, costoFijoOrden: S, costoHoldingUnitario: H } =
-      resultado.desglose;
+    const { demandaAnual: D, costoFijoOrden: S, costoHoldingUnitario: H } = resultado.desglose;
+    const factor = resultado.desglose.factorProduccion;
     const qMin = Math.max(1, Math.round(resultado.cantidadOptima * 0.25));
     const qMax = Math.ceil(resultado.cantidadOptima * 1.75);
     const paso = (qMax - qMin) / 80;
@@ -155,7 +158,7 @@ export default function EOQPage() {
     for (let i = 0; i <= 80; i++) {
       const Q = qMin + paso * i;
       const ordenar = (D / Q) * S;
-      const mantener = (Q / 2) * H;
+      const mantener = (Q / 2) * H * factor;
       puntos.push({
         cantidad: Math.round(Q),
         ordenar,
@@ -170,20 +173,20 @@ export default function EOQPage() {
     return (
       <div className="space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <EOQHeader />
+          <EPQHeader />
           <GlossaryButton onClick={() => setGlosarioAbierto(true)} />
         </div>
         <TabsPanel
           pestanas={PESTANAS}
           activa={pestana}
           onCambio={(c) => setPestana(c as Pestana)}
-          ariaLabel="Secciones del modelo EOQ"
+          ariaLabel="Secciones del modelo EPQ"
         />
-        <EOQTeoria />
+        <EPQTeoria />
         <Glossary
           abierto={glosarioAbierto}
           onClose={() => setGlosarioAbierto(false)}
-          variables={VARIABLES_EOQ}
+          variables={VARIABLES_EPQ}
         />
       </div>
     );
@@ -193,23 +196,23 @@ export default function EOQPage() {
     return (
       <div className="space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <EOQHeader />
+          <EPQHeader />
           <GlossaryButton onClick={() => setGlosarioAbierto(true)} />
         </div>
         <TabsPanel
           pestanas={PESTANAS}
           activa={pestana}
           onCambio={(c) => setPestana(c as Pestana)}
-          ariaLabel="Secciones del modelo EOQ"
+          ariaLabel="Secciones del modelo EPQ"
         />
         <div className="mx-auto flex max-w-md flex-col items-center gap-2 rounded-lg border border-slate-200 bg-white p-8 text-center shadow-md  dark:border-gray-700 dark:bg-gray-800">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
-          <p className="text-sm text-slate-500  dark:text-gray-400">Calculando EOQ…</p>
+          <p className="text-sm text-slate-500  dark:text-gray-400">Calculando EPQ…</p>
         </div>
         <Glossary
           abierto={glosarioAbierto}
           onClose={() => setGlosarioAbierto(false)}
-          variables={VARIABLES_EOQ}
+          variables={VARIABLES_EPQ}
         />
       </div>
     );
@@ -218,14 +221,14 @@ export default function EOQPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <EOQHeader />
+        <EPQHeader />
         <GlossaryButton onClick={() => setGlosarioAbierto(true)} />
       </div>
       <TabsPanel
         pestanas={PESTANAS}
         activa={pestana}
         onCambio={(c) => setPestana(c as Pestana)}
-        ariaLabel="Secciones del modelo EOQ"
+        ariaLabel="Secciones del modelo EPQ"
       />
 
       {/* Preferencias de visualización (unidad y moneda) */}
@@ -241,7 +244,7 @@ export default function EOQPage() {
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
           <h2 className="mb-1 text-lg font-semibold text-slate-700  dark:text-gray-100">Parámetros</h2>
           <p className="mb-4 text-sm text-slate-400  dark:text-gray-500">
-            Ingresa la demanda y los costos del modelo.
+            Ingresa la demanda, la tasa de producción y los costos del modelo.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -320,19 +323,19 @@ export default function EOQPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <KpiCard
               large
-              title="Cantidad óptima de pedido"
+              title="Lote óptimo de producción"
               value={`${fmtDecimal(resultado.cantidadOptima)} ${unidad}`}
-              formula={'Q^* = \\sqrt{ \\frac{2DS}{H} }'}
+              formula={'Q^* = \\sqrt{ \\frac{2DS}{H\\left(1-\\frac{D}{P}\\right)} }'}
               tone="blue"
-              description="Punto en el que se equilibran el costo de ordenar y el costo de mantener."
+              description="Tamaño de lote que minimiza los costos relevantes considerando el reabastecimiento gradual."
             />
             <KpiCard
               large
               title="Costo total anual"
               value={fmtMoneda(resultado.costoTotalAnual, moneda)}
-              formula={'TC = \\frac{D}{Q^*}S + \\frac{Q^*}{2}H + DC'}
+              formula={'TC = \\frac{D}{Q^*}S + \\frac{Q^*}{2}H\\left(1-\\frac{D}{P}\\right) + DC'}
               tone="emerald"
-              description="Suma anual de los costos de ordenar, mantener y comprar el inventario."
+              description="Suma anual de los costos de preparación, mantener y comprar el inventario."
             />
           </div>
         </section>
@@ -344,50 +347,50 @@ export default function EOQPage() {
           Desglose de operación y costos
         </h2>
         <p className="mb-4 text-sm text-slate-400  dark:text-gray-500">
-          Métricas derivadas del punto óptimo Q*.
+          Métricas derivadas del lote óptimo Q*, con reabastecimiento a tasa P.
         </p>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <KpiCard
-            title="Número de pedidos"
-            value={`${fmtDecimal(resultado.numeroPedidos)} / año`}
+            title="Corridas de producción"
+            value={`${fmtDecimal(resultado.numeroProducciones)} / año`}
             formula={'N = \\frac{D}{Q^*}'}
             tone="slate"
-            description="Órdenes emitidas al año en el punto óptimo."
+            description="Veces que se arranca la línea de producción al año."
           />
           <KpiCard
-            title="Ciclo de reposición"
-            value={`${fmtDecimal(resultado.cicloReposicion)} días`}
-            formula={'T = \\frac{365}{N}'}
+            title="Ciclo de producción"
+            value={`${fmtDecimal(resultado.cicloProduccion)} días`}
+            formula={'T = \\frac{\\text{días laborables}}{N}'}
             tone="slate"
-            description="Días entre una orden y la siguiente."
+            description="Días de operación entre el inicio de una corrida y la siguiente."
           />
           <KpiCard
-            title="Inventario promedio"
-            value={`${fmtDecimal(resultado.inventarioPromedio)} ${unidad}`}
-            formula={'I_{media} = \\frac{Q^*}{2}'}
+            title="Inventario máximo"
+            value={`${fmtDecimal(resultado.inventarioMaximo)} ${unidad}`}
+            formula={'I_{max} = Q^* \\left(1 - \\frac{D}{P}\\right)'}
             tone="slate"
-            description="Nivel medio de stock a lo largo del ciclo."
+            description="Nivel máximo de inventario alcanzado al finalizar la producción del lote."
           />
           <KpiCard
-            title="Costo anual de ordenar"
+            title="Costo anual de preparación"
             value={fmtMoneda(resultado.costoOrdenar, moneda)}
             formula={'C_o = \\frac{D}{Q^*} \\cdot S'}
             tone="amber"
-            description="Costo fijo multiplicado por los pedidos del año."
+            description="Costo de preparación multiplicado por las corridas del año."
           />
           <KpiCard
             title="Costo anual de mantener"
             value={fmtMoneda(resultado.costoMantener, moneda)}
-            formula={'C_h = \\frac{Q^*}{2} \\cdot H'}
+            formula={'C_h = \\frac{I_{max}}{2} \\cdot H'}
             tone="amber"
-            description="Costo de holding aplicado al inventario promedio."
+            description="Costo de holding aplicado al inventario máximo acumulado."
           />
           <KpiCard
             title="Costo de adquisición"
             value={fmtMoneda(resultado.costoAdquisicion, moneda)}
             formula={'C_c = D \\cdot C'}
             tone="slate"
-            description="Costo de comprar la demanda anual al precio unitario."
+            description="Costo de fabricar o comprar la demanda anual al costo unitario."
           />
           {mostrarROP ? (
             <KpiCard
@@ -395,7 +398,7 @@ export default function EOQPage() {
               value={`${fmtDecimal(resultado.puntoReorden)} ${unidad}`}
               formula={'ROP = d \\cdot L'}
               tone="blue"
-              description="Nivel de inventario en el que se debe emitir una nueva orden."
+              description="Nivel de inventario en el que se debe iniciar una nueva corrida."
             />
           ) : null}
         </div>
@@ -407,10 +410,10 @@ export default function EOQPage() {
           Comportamiento de los costos
         </h2>
         <p className="mb-4 text-sm text-slate-400  dark:text-gray-500">
-          Variación de los costos según la cantidad pedida Q. El gráfico muestra
-          solo los costos relevantes (excluye el costo del producto D·C). La línea
+          Variación de los costos según el lote producido Q. El costo de mantener usa
+          el factor (1 − D/P) porque el inventario se acumula gradualmente. La línea
           azul punteada marca Q*, el punto más bajo del Costo Relevante Total
-          (curva en forma de U), donde se cruzan el costo de ordenar y el de mantener.
+          (curva en forma de U), donde se cruzan el costo de preparación y el de mantener.
         </p>
         <CostChart
           data={curva}
@@ -418,25 +421,27 @@ export default function EOQPage() {
           costoTotalOptimo={resultado.costoOrdenar + resultado.costoMantener}
           unidad={unidad}
           moneda={moneda}
+          formulaMantener={'\\frac{Q}{2}H\\left(1-\\frac{D}{P}\\right)'}
+          formulaTotal={'\\frac{D}{Q}S + \\frac{Q}{2}H\\left(1-\\frac{D}{P}\\right)'}
         />
       </section>
       <Glossary
         abierto={glosarioAbierto}
         onClose={() => setGlosarioAbierto(false)}
-        variables={VARIABLES_EOQ}
+        variables={VARIABLES_EPQ}
       />
     </div>
   );
 }
 
-function EOQHeader() {
+function EPQHeader() {
   return (
     <header>
       <h1 className="text-2xl font-bold text-slate-800  dark:text-gray-100">
-        EOQ — Cantidad Económica de Pedido
+        EPQ — Lote Económico de Producción
       </h1>
       <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
-        Modelo clásico de inventario con demanda constante y sin faltantes.
+        Modelo de inventario con reabastecimiento gradual a una tasa de producción finita.
       </p>
     </header>
   );

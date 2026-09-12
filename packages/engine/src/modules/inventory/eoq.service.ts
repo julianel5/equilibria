@@ -57,6 +57,7 @@ export const EOQInputSchema = z.object({
   diasLaborables: z.number()
     .int({ message: 'Los días laborables deben ser un número entero' })
     .min(1, { message: 'Los días laborables deben ser al menos 1' })
+    .max(366, { message: 'Los días laborales al año no pueden exceder los 366 días de un año bisiesto.' })
     .optional()
     .describe('Días laborables al año (d), por defecto 365'),
   leadTime: z.number()

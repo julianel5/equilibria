@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import {
   CartesianGrid,
   Legend,
@@ -11,7 +11,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { useTheme } from '../hooks/useTheme';
 import Formula from './Formula';
 
 export interface PuntoCosto {
@@ -23,10 +22,12 @@ export interface PuntoCosto {
 
 interface CostChartProps {
   data: PuntoCosto[];
-  qOptimo: number;
+  optimalQ: number;
   costoTotalOptimo: number;
   unidad?: string;
   moneda?: string;
+  formulaMantener?: string;
+  formulaTotal?: string;
 }
 
 const fmt = (n: number, moneda: string) =>
@@ -70,14 +71,32 @@ function Stat({ label, value, formula, dot }: StatProps) {
   );
 }
 
+/** Detecta el modo oscuro observando la clase `dark` en <html> (independiente del frontend). */
+function useDarkMode(): boolean {
+  const [dark, setDark] = useState(false);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const apply = () => setDark(root.classList.contains('dark'));
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  return dark;
+}
+
 export default function CostChart({
   data,
-  qOptimo,
+  optimalQ,
   costoTotalOptimo,
   unidad = 'unidades',
   moneda = 'USD',
+  formulaMantener,
+  formulaTotal,
 }: CostChartProps) {
-  const { dark } = useTheme();
+  const dark = useDarkMode();
   const [hover, setHover] = useState<PuntoCosto | null>(null);
 
   const handleMouseMove = (state: RechartState) => {
@@ -99,13 +118,15 @@ export default function CostChart({
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={data}
-            margin={{ top: 8, right: 16, bottom: 8, left: 8 }}
+            margin={{ top: 25, right: 20, left: 20, bottom: 5 }}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
           >
             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
             <XAxis
               dataKey="cantidad"
+              type="number"
+              domain={['dataMin', 'dataMax']}
               stroke={tickLineColor}
               tick={{ fill: tickColor, fontSize: 12 }}
               tickLine={{ stroke: tickLineColor }}
@@ -143,26 +164,22 @@ export default function CostChart({
               wrapperStyle={{ visibility: 'hidden', pointerEvents: 'none' }}
             />
 
+            {/* Línea estandarizada en Q*: marca el punto más bajo de la curva en U */}
             <ReferenceLine
-              x={qOptimo}
+              x={optimalQ}
+              ifOverflow="extendDomain"
               stroke="#2563eb"
               strokeDasharray="5 5"
               strokeWidth={1.5}
+              label={{ value: 'Q*', position: 'top', fill: 'currentColor', fontSize: 14, fontWeight: 700 }}
             />
             <ReferenceDot
-              x={qOptimo}
+              x={optimalQ}
               y={costoTotalOptimo}
-              r={7}
+              r={6}
               fill="#2563eb"
               stroke="#ffffff"
               strokeWidth={2}
-              label={{
-                value: 'Q*',
-                position: 'top',
-                fill: '#2563eb',
-                fontSize: 14,
-                fontWeight: 700,
-              }}
             />
 
             <Line
@@ -220,13 +237,13 @@ export default function CostChart({
             <Stat
               label="Costo de Mantener"
               value={fmt(hover?.mantener ?? 0, moneda)}
-              formula={SERIES_FORMULAS['Costo de Mantener']}
+              formula={formulaMantener ?? SERIES_FORMULAS['Costo de Mantener']}
               dot="#10b981"
             />
             <Stat
               label="Costo Relevante Total"
               value={fmt(hover?.total ?? 0, moneda)}
-              formula={SERIES_FORMULAS['Costo Relevante Total']}
+              formula={formulaTotal ?? SERIES_FORMULAS['Costo Relevante Total']}
               dot="#2563eb"
             />
           </div>

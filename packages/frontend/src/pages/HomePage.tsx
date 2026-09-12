@@ -1,8 +1,7 @@
 import { NavLink } from 'react-router-dom';
-import Formula from '../components/Formula';
+import Formula from '@shared/components/Formula';
 
 const proximos = [
-  'EPQ - Lote de Producción Económico',
   'Faltantes Planeados',
   'Descuentos por Cantidad',
   'Demanda Probabilística',
@@ -15,7 +14,7 @@ export default function HomePage() {
     <div className="mx-auto max-w-3xl space-y-8">
       <div className="text-center">
         <h1 className="text-3xl font-bold text-slate-800  dark:text-gray-100">
-          Plataforma de Modelos Matemáticos
+          Equilibria — Modelos de Investigación de Operaciones
         </h1>
         <p className="mt-2 text-slate-500  dark:text-gray-400">
           Resolución, visualización y análisis de modelos de Investigación de
@@ -38,6 +37,19 @@ export default function HomePage() {
             </p>
             <div className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-slate-600  dark:bg-blue-500/20 dark:text-blue-300">
               <Formula tex="Q^* = \sqrt{ \frac{2DS}{H} }" />
+            </div>
+          </NavLink>
+
+          <NavLink
+            to="/inventory/epq"
+            className="rounded-lg border border-blue-200 bg-white p-5 shadow-md  hover:scale-[1.02] dark:border-blue-900 dark:bg-gray-800"
+          >
+            <p className="text-base font-bold text-blue-600  dark:text-blue-400">EPQ</p>
+            <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
+              Lote Económico de Producción
+            </p>
+            <div className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-slate-600  dark:bg-blue-500/20 dark:text-blue-300">
+              <Formula tex="Q^* = \sqrt{ \frac{2DS}{H(1 - \frac{D}{P})} }" />
             </div>
           </NavLink>
 

@@ -110,6 +110,17 @@ describe('EOQ - Cantidad Económica de Pedido', () => {
     }).toThrow();
   });
 
+  test('debe lanzar error con diasLaborables mayor a 366 (año bisiesto)', () => {
+    expect(() => {
+      calcularEOQ({ ...inputBasico, diasLaborables: 400 });
+    }).toThrow('Los días laborales al año no pueden exceder los 366 días de un año bisiesto.');
+  });
+
+  test('debe aceptar el límite de 366 días laborables', () => {
+    const resultado = calcularEOQ({ ...inputBasico, diasLaborables: 366 });
+    expect(resultado.desglose.diasLaborables).toBe(366);
+  });
+
   test('debe calcular costo de adquisición = D × C', () => {
     const resultado = calcularEOQ(inputBasico);
 

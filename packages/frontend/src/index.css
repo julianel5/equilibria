@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "katex/dist/katex.min.css";
 
+/* Escanear los componentes compartidos del monorepo (fuera de packages/frontend) */
+@source "../../../shared/components";
+
 /* Modo oscuro por clase (estrategia darkMode: 'class' en Tailwind v4) */
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -8,12 +11,8 @@
   font-size: 1em;
 }
 
-/* KaTeX con alto contraste sobre fondos oscuros (cambio instantáneo) */
-.dark .katex {
-  color: #f1f5f9;
-}
-
-/* Controles nativos (spinners, scrollbars) coherentes con el tema */
+/* KaTeX hereda el color del contenedor (p. ej. chips de fórmulas con
+   text-gray-800 dark:text-gray-200) para mantener legibilidad en ambos temas */
 .dark {
   color-scheme: dark;
 }

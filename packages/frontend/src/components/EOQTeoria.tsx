@@ -1,4 +1,4 @@
-import Formula from './Formula';
+import Formula from '@shared/components/Formula';
 
 const SUPUESTOS: { titulo: string; detalle: string }[] = [
   {

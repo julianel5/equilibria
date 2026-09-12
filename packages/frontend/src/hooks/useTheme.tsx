@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
-const THEME_STORAGE_KEY = 'math-platform-theme';
+const THEME_STORAGE_KEY = 'equilibria-theme';
 
 export type Theme = 'light' | 'dark';
 
