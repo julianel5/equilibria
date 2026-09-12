@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import { calcularEOQ, type EOQResult } from '../services/api';
 import CostChart, { type PuntoCosto } from '../components/CostChart';
+import EOQTeoria from '../components/EOQTeoria';
 import Formula from '../components/Formula';
 import Glossary from '../components/Glossary';
 import KpiCard from '../components/KpiCard';
 import PrefsCard from '../components/PrefsCard';
+
+type Pestana = 'calculadora' | 'teoria';
+
+const PESTANAS: { clave: Pestana; etiqueta: string }[] = [
+  { clave: 'calculadora', etiqueta: 'Calculadora' },
+  { clave: 'teoria', etiqueta: 'Teoría y Supuestos' },
+];
 
 interface FormState {
   demandaAnual: string;
@@ -65,6 +73,7 @@ export default function EOQPage() {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [glosarioAbierto, setGlosarioAbierto] = useState(false);
+  const [pestana, setPestana] = useState<Pestana>('calculadora');
 
   const unidad = prefs.unidad.trim() || 'unidades';
   const moneda = prefs.moneda.trim() || 'USD';
@@ -144,6 +153,20 @@ export default function EOQPage() {
     return puntos;
   }, [resultado]);
 
+  if (pestana === 'teoria') {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <EOQHeader />
+          <GlossaryButton onClick={() => setGlosarioAbierto(true)} />
+        </div>
+        <EOQTabs activa={pestana} onCambio={setPestana} />
+        <EOQTeoria />
+        <Glossary abierto={glosarioAbierto} onClose={() => setGlosarioAbierto(false)} />
+      </div>
+    );
+  }
+
   if (!resultado) {
     return (
       <div className="space-y-6">
@@ -151,6 +174,7 @@ export default function EOQPage() {
           <EOQHeader />
           <GlossaryButton onClick={() => setGlosarioAbierto(true)} />
         </div>
+        <EOQTabs activa={pestana} onCambio={setPestana} />
         <div className="mx-auto flex max-w-md flex-col items-center gap-2 rounded-lg border border-slate-200 bg-white p-8 text-center shadow-md  dark:border-gray-700 dark:bg-gray-800">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
           <p className="text-sm text-slate-500  dark:text-gray-400">Calculando EOQ…</p>
@@ -166,6 +190,7 @@ export default function EOQPage() {
         <EOQHeader />
         <GlossaryButton onClick={() => setGlosarioAbierto(true)} />
       </div>
+      <EOQTabs activa={pestana} onCambio={setPestana} />
 
       {/* Preferencias de visualización (unidad y moneda) */}
       <PrefsCard
@@ -334,6 +359,35 @@ export default function EOQPage() {
       </section>
       <Glossary abierto={glosarioAbierto} onClose={() => setGlosarioAbierto(false)} />
     </div>
+  );
+}
+
+function EOQTabs({ activa, onCambio }: { activa: Pestana; onCambio: (p: Pestana) => void }) {
+  return (
+    <nav
+      className="flex gap-6 border-b border-slate-200 dark:border-gray-700"
+      aria-label="Secciones del modelo EOQ"
+      role="tablist"
+    >
+      {PESTANAS.map((p) => {
+        const esActiva = p.clave === activa;
+        return (
+          <button
+            key={p.clave}
+            role="tab"
+            aria-selected={esActiva}
+            onClick={() => onCambio(p.clave)}
+            className={`-mb-px border-b-2 pb-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400/60 ${
+              esActiva
+                ? 'border-blue-500 font-semibold text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                : 'border-transparent font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+            }`}
+          >
+            {p.etiqueta}
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
