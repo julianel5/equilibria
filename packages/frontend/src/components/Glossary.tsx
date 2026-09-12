@@ -51,6 +51,24 @@ const VARIABLES: VariableDef[] = [
     nombre: 'Ciclo de reposición',
     descripcion: 'Tiempo en días entre dos pedidos consecutivos (T = 365 / N).',
   },
+  {
+    simbolo: 'd',
+    nombre: 'Demanda diaria',
+    descripcion:
+      'Consumo promedio por día de trabajo, resultado de dividir la demanda anual entre los días laborables (d = D / diasLaborables).',
+  },
+  {
+    simbolo: 'L',
+    nombre: 'Tiempo de entrega (Lead Time)',
+    descripcion:
+      'Días que tarda el proveedor en entregar una orden después de emitirla.',
+  },
+  {
+    simbolo: 'ROP',
+    nombre: 'Punto de Reorden',
+    descripcion:
+      'Nivel de inventario en el que se debe emitir una nueva orden para no agotar el stock antes de que llegue el pedido (ROP = d × L).',
+  },
 ];
 
 interface GlossaryProps {

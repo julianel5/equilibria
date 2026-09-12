@@ -52,6 +52,64 @@ describe('EOQ - Cantidad Económica de Pedido', () => {
     expect(resultado.inventarioPromedio).toBe(141.5);
   });
 
+  test('ROP por defecto = 0 cuando no hay lead time', () => {
+    const resultado = calcularEOQ(inputBasico);
+
+    // Sin lead time no aplica punto de reorden
+    expect(resultado.puntoReorden).toBe(0);
+    expect(resultado.desglose.diasLaborables).toBe(365);
+    expect(resultado.desglose.leadTime).toBe(0);
+  });
+
+  test('ROP con diasLaborables y leadTime provistos', () => {
+    // d = 10000 / 250 = 40 unidades/día
+    // ROP = 40 × 5 = 200 unidades
+    const resultado = calcularEOQ({
+      ...inputBasico,
+      diasLaborables: 250,
+      leadTime: 5,
+    });
+
+    expect(resultado.desglose.demandaDiaria).toBe(40);
+    expect(resultado.puntoReorden).toBe(200);
+  });
+
+  test('ROP con leadTime fraccionario (días de entrega)', () => {
+    // d = 10000 / 365 ≈ 27.397
+    // ROP = 27.397 × 3.5 ≈ 95.89 → 96
+    const resultado = calcularEOQ({
+      ...inputBasico,
+      diasLaborables: 365,
+      leadTime: 3.5,
+    });
+
+    expect(resultado.puntoReorden).toBe(96);
+  });
+
+  test('ROP usa diasLaborables hijos (ej. 300 días → d mayor)', () => {
+    // d = 10000 / 300 = 33.33
+    // ROP = 33.33 × 10 = 333.33 → 333
+    const resultado = calcularEOQ({
+      ...inputBasico,
+      diasLaborables: 300,
+      leadTime: 10,
+    });
+
+    expect(resultado.puntoReorden).toBe(333);
+  });
+
+  test('debe lanzar error con leadTime negativo', () => {
+    expect(() => {
+      calcularEOQ({ ...inputBasico, leadTime: -1 });
+    }).toThrow();
+  });
+
+  test('debe lanzar error con diasLaborables cero', () => {
+    expect(() => {
+      calcularEOQ({ ...inputBasico, diasLaborables: 0 });
+    }).toThrow();
+  });
+
   test('debe calcular costo de adquisición = D × C', () => {
     const resultado = calcularEOQ(inputBasico);
 

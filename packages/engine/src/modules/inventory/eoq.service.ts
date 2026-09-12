@@ -29,6 +29,13 @@ import { z } from 'zod';
 //   T  = 365 / N
 //     T = Ciclo de reposición (días entre pedidos)
 //
+//   d  = D / diasLaborables
+//     d = Demanda diaria (unidades/día)
+//
+//   ROP = d × L
+//     ROP = Punto de reorden (unidades)
+//     L   = Tiempo de entrega en días (lead time)
+//
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // --- Schema de validación (Zod) ---
@@ -47,6 +54,15 @@ export const EOQInputSchema = z.object({
     .min(0, { message: 'El costo unitario no puede ser negativo' })
     .optional()
     .describe('Costo unitario del producto (C) - opcional, default 0'),
+  diasLaborables: z.number()
+    .int({ message: 'Los días laborables deben ser un número entero' })
+    .min(1, { message: 'Los días laborables deben ser al menos 1' })
+    .optional()
+    .describe('Días laborables al año (d), por defecto 365'),
+  leadTime: z.number()
+    .min(0, { message: 'El tiempo de entrega no puede ser negativo' })
+    .optional()
+    .describe('Tiempo de entrega en días (L) - opcional, default 0'),
 });
 
 export type EOQInput = z.infer<typeof EOQInputSchema>;
@@ -62,12 +78,15 @@ export interface EOQResult {
   costoAdquisicion: number;     // D × C - Costo de adquisición anual
   costoOrdenar: number;         // (D/Q) × S - Costo anual de ordenar
   costoMantener: number;        // (Q/2) × H - Costo anual de mantener
-  puntoReorden: number;         // Lead time demand (placeholder)
+  puntoReorden: number;         // ROP = d × L - Punto de reorden (unidades)
   desglose: {
     demandaAnual: number;
     costoFijoOrden: number;
     costoHoldingUnitario: number;
     costoUnitario: number;
+    diasLaborables: number;
+    leadTime: number;
+    demandaDiaria: number;      // d = D / diasLaborables
   };
 }
 
@@ -124,6 +143,21 @@ export function calcularEOQ(input: EOQInput): EOQResult {
   // Inventario promedio = Q* / 2
   const inventarioPromedio = cantidadOptima / 2;
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // d = D / diasLaborables
+  // Demanda diaria (días laborables por defecto = 365)
+  // ═══════════════════════════════════════════════════════════════════════════
+  const diasLaborables = validated.diasLaborables ?? 365;
+  const demandaDiaria = D / diasLaborables;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ROP = d × L
+  // Punto de reorden: nivel de inventario para emitir una nueva orden.
+  // Con leadTime ausente (default 0), el ROP es 0 (no aplica).
+  // ═══════════════════════════════════════════════════════════════════════════
+  const leadTime = validated.leadTime ?? 0;
+  const puntoReorden = Math.round(demandaDiaria * leadTime);
+
   return {
     cantidadOptima,
     costoTotalAnual: Math.round(costoTotalAnual * 100) / 100,
@@ -133,12 +167,15 @@ export function calcularEOQ(input: EOQInput): EOQResult {
     costoAdquisicion: Math.round(costoAdquisicion * 100) / 100,
     costoOrdenar: Math.round(costoOrdenar * 100) / 100,
     costoMantener: Math.round(costoMantenerAnual * 100) / 100,
-    puntoReorden: 0,
+    puntoReorden,
     desglose: {
       demandaAnual: D,
       costoFijoOrden: S,
       costoHoldingUnitario: H,
       costoUnitario: C,
+      diasLaborables,
+      leadTime,
+      demandaDiaria: Math.round(demandaDiaria * 100) / 100,
     },
   };
 }

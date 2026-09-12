@@ -11,6 +11,8 @@ interface FormState {
   costoOrdenar: string;
   costoMantener: string;
   costoUnitario: string;
+  diasLaborables: string;
+  leadTime: string;
 }
 
 interface PrefsState {
@@ -18,12 +20,24 @@ interface PrefsState {
   moneda: string;
 }
 
-const FORM_METADATA = [
-  { key: 'demandaAnual', label: 'Demanda anual', simbolo: 'D', unidadSufijo: (u: string, _m: string) => `${u} / año` },
-  { key: 'costoOrdenar', label: 'Costo de ordenar', simbolo: 'S', unidadSufijo: (_u: string, m: string) => `${m} / orden` },
-  { key: 'costoMantener', label: 'Costo de mantener', simbolo: 'H', unidadSufijo: (u: string, m: string) => `${m} / ${u}-año` },
-  { key: 'costoUnitario', label: 'Costo unitario (opcional)', simbolo: 'C', unidadSufijo: (u: string, m: string) => `${m} / ${u}` },
-] as const;
+interface CampoFormulario {
+  key: keyof FormState;
+  label: string;
+  simbolo?: string;
+  opcional?: boolean;
+  placeholder?: string;
+  min: number;
+  unidadSufijo: (u: string, m: string) => string;
+}
+
+const FORM_METADATA: CampoFormulario[] = [
+  { key: 'demandaAnual', label: 'Demanda anual', simbolo: 'D', min: 0.01, unidadSufijo: (u: string, _m: string) => `${u} / año` },
+  { key: 'costoOrdenar', label: 'Costo de ordenar', simbolo: 'S', min: 0.01, unidadSufijo: (_u: string, m: string) => `${m} / orden` },
+  { key: 'costoMantener', label: 'Costo de mantener', simbolo: 'H', min: 0.01, unidadSufijo: (u: string, m: string) => `${m} / ${u}-año` },
+  { key: 'costoUnitario', label: 'Costo unitario (opcional)', simbolo: 'C', opcional: true, min: 0, unidadSufijo: (u: string, m: string) => `${m} / ${u}` },
+  { key: 'diasLaborables', label: 'Días laborables al año', min: 1, unidadSufijo: () => 'días al año' },
+  { key: 'leadTime', label: 'Tiempo de entrega (L)', simbolo: 'L', opcional: true, placeholder: 'ej. días que tarda el proveedor', min: 0, unidadSufijo: () => 'días' },
+];
 
 const fmtMoneda = (n: number, moneda: string) =>
   `${moneda} ${n.toLocaleString('en-US', {
@@ -40,6 +54,8 @@ export default function EOQPage() {
     costoOrdenar: '20',
     costoMantener: '5',
     costoUnitario: '10',
+    diasLaborables: '365',
+    leadTime: '',
   });
   const [prefs, setPrefs] = useState<PrefsState>({
     unidad: 'unidades',
@@ -53,15 +69,27 @@ export default function EOQPage() {
   const unidad = prefs.unidad.trim() || 'unidades';
   const moneda = prefs.moneda.trim() || 'USD';
 
+  // El Punto de Reorden solo aplica si el usuario definió un tiempo de entrega (L > 0)
+  const leadTimeNum = Number(form.leadTime);
+  const mostrarROP = Number.isFinite(leadTimeNum) && leadTimeNum > 0;
+
   const calcular = useCallback(async (datos: FormState) => {
     setCargando(true);
     setError(null);
     try {
+      const diasLaborables = Number(datos.diasLaborables);
+      const leadTime = Number(datos.leadTime);
       const res = await calcularEOQ({
         demandaAnual: Number(datos.demandaAnual),
         costoOrdenar: Number(datos.costoOrdenar),
         costoMantener: Number(datos.costoMantener),
         costoUnitario: Number(datos.costoUnitario) || undefined,
+        diasLaborables:
+          Number.isFinite(diasLaborables) && diasLaborables > 0 ? diasLaborables : undefined,
+        leadTime:
+          datos.leadTime.trim() !== '' && Number.isFinite(leadTime) && leadTime >= 0
+            ? leadTime
+            : undefined,
       });
       setResultado(res);
     } catch (e) {
@@ -160,15 +188,18 @@ export default function EOQPage() {
               <label key={campo.key} className="block">
                 <span className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-600  dark:text-gray-300">
                   {campo.label}
-                  <span className="text-slate-400  dark:text-gray-500">
-                    <Formula tex={campo.simbolo} />
-                  </span>
+                  {campo.simbolo ? (
+                    <span className="text-slate-400  dark:text-gray-500">
+                      <Formula tex={campo.simbolo} />
+                    </span>
+                  ) : null}
                 </span>
                 <input
                   type="number"
-                  min={campo.key === 'costoUnitario' ? '0' : '0.01'}
+                  min={String(campo.min)}
                   step="any"
-                  required={campo.key !== 'costoUnitario'}
+                  placeholder={campo.placeholder}
+                  required={!campo.opcional}
                   value={form[campo.key]}
                   onChange={handleChange(campo.key)}
                   className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
@@ -270,6 +301,15 @@ export default function EOQPage() {
             tone="slate"
             descripcion="Costo de comprar la demanda anual al precio unitario."
           />
+          {mostrarROP ? (
+            <KpiCard
+              label="Punto de Reorden"
+              value={`${fmtDecimal(resultado.puntoReorden)} ${unidad}`}
+              formula={'ROP = d \\cdot L'}
+              tone="blue"
+              descripcion="Nivel de inventario en el que se debe emitir una nueva orden."
+            />
+          ) : null}
         </div>
       </section>
 

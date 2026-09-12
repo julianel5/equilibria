@@ -3,6 +3,8 @@ export interface EOQRequest {
   costoOrdenar: number;
   costoMantener: number;
   costoUnitario?: number;
+  diasLaborables?: number;
+  leadTime?: number;
 }
 
 export interface EOQResponse {
@@ -16,11 +18,15 @@ export interface EOQResponse {
     costoAdquisicion: number;
     costoOrdenar: number;
     costoMantener: number;
+    puntoReorden: number;
     desglose: {
       demandaAnual: number;
       costoFijoOrden: number;
       costoHoldingUnitario: number;
       costoUnitario: number;
+      diasLaborables: number;
+      leadTime: number;
+      demandaDiaria: number;
     };
   };
   error?: string;
