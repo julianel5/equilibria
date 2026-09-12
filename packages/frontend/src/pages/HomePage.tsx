@@ -2,8 +2,6 @@ import { NavLink } from 'react-router-dom';
 import Formula from '@shared/components/Formula';
 
 const proximos = [
-  'Faltantes Planeados',
-  'Descuentos por Cantidad',
   'Demanda Probabilística',
   'Toma de Decisiones',
   'Teoría de Colas',
@@ -50,6 +48,32 @@ export default function HomePage() {
             </p>
             <div className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-slate-600  dark:bg-blue-500/20 dark:text-blue-300">
               <Formula tex="Q^* = \sqrt{ \frac{2DS}{H(1 - \frac{D}{P})} }" />
+            </div>
+          </NavLink>
+
+          <NavLink
+            to="/inventory/eoq-faltantes"
+            className="rounded-lg border border-blue-200 bg-white p-5 shadow-md  hover:scale-[1.02] dark:border-blue-900 dark:bg-gray-800"
+          >
+            <p className="text-base font-bold text-blue-600  dark:text-blue-400">EOQ con Faltantes</p>
+            <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
+              Déficit autorizado (backorders)
+            </p>
+            <div className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-slate-600  dark:bg-blue-500/20 dark:text-blue-300">
+              <Formula tex="Q^* = \sqrt{ \frac{2DS}{H} } \times \sqrt{ \frac{H+B}{B} }" />
+            </div>
+          </NavLink>
+
+          <NavLink
+            to="/inventory/eoq-descuentos"
+            className="rounded-lg border border-blue-200 bg-white p-5 shadow-md  hover:scale-[1.02] dark:border-blue-900 dark:bg-gray-800"
+          >
+            <p className="text-base font-bold text-blue-600  dark:text-blue-400">EOQ con Descuentos</p>
+            <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
+              Descuentos por cantidad (niveles de precio)
+            </p>
+            <div className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-slate-600  dark:bg-blue-500/20 dark:text-blue-300">
+              <Formula tex="TC_j = \frac{D}{Q}S + \frac{Q}{2}H_j + DC_j" />
             </div>
           </NavLink>
 

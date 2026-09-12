@@ -3,6 +3,8 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import HomePage from './pages/HomePage';
 import EOQPage from './pages/EOQPage';
 import EPQPage from './pages/EPQPage';
+import EOQFaltantesPage from './pages/EOQFaltantesPage';
+import EOQDescuentosPage from './pages/EOQDescuentosPage';
 import ThemeToggle from './components/ThemeToggle';
 import { ThemeProvider } from './hooks/useTheme';
 
@@ -10,6 +12,8 @@ const TITULOS: Record<string, string> = {
   '/': 'Equilibria | Teoría de Inventarios',
   '/inventory/eoq': 'EOQ - Equilibria',
   '/inventory/epq': 'EPQ - Equilibria',
+  '/inventory/eoq-faltantes': 'EOQ con Faltantes - Equilibria',
+  '/inventory/eoq-descuentos': 'EOQ con Descuentos - Equilibria',
 };
 
 const linkClasses = ({ isActive }: { isActive: boolean }) =>
@@ -47,6 +51,12 @@ export default function App() {
               <NavLink to="/inventory/epq" className={linkClasses}>
                 EPQ
               </NavLink>
+              <NavLink to="/inventory/eoq-faltantes" className={linkClasses}>
+                Faltantes EOQ
+              </NavLink>
+              <NavLink to="/inventory/eoq-descuentos" className={linkClasses}>
+                Descuentos EOQ
+              </NavLink>
               <div className="ml-2 lg:ml-3">
                 <ThemeToggle />
               </div>
@@ -59,6 +69,8 @@ export default function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/inventory/eoq" element={<EOQPage />} />
             <Route path="/inventory/epq" element={<EPQPage />} />
+            <Route path="/inventory/eoq-faltantes" element={<EOQFaltantesPage />} />
+            <Route path="/inventory/eoq-descuentos" element={<EOQDescuentosPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

@@ -134,3 +134,137 @@ export const VARIABLES_EPQ: VariableDef[] = [
       'Nivel de inventario en el que se debe iniciar una nueva corrida (ROP = d × L).',
   },
 ];
+
+export const VARIABLES_EOQFALTANTES: VariableDef[] = [
+  {
+    simbolo: 'D',
+    nombre: 'Demanda anual',
+    descripcion:
+      'Cantidad de producto requerida durante un año, en las unidades de medida configuradas.',
+  },
+  {
+    simbolo: 'S',
+    nombre: 'Costo fijo por orden',
+    descripcion:
+      'Costo de preparar o emitir un pedido, independiente del tamaño del lote.',
+  },
+  {
+    simbolo: 'H',
+    nombre: 'Costo de mantener',
+    descripcion: 'Costo de almacenar una unidad de inventario durante un año.',
+  },
+  {
+    simbolo: 'B',
+    nombre: 'Costo de faltantes',
+    descripcion:
+      'Costo de escasez por unidad faltante durante un año. Representa el castigo por cada unidad que el cliente espera (venta diferida o backorder).',
+  },
+  {
+    simbolo: 'C',
+    nombre: 'Costo unitario',
+    descripcion: 'Precio de compra o producción de cada unidad del producto.',
+  },
+  {
+    simbolo: 'Q^*',
+    nombre: 'Lote óptimo de pedido',
+    descripcion:
+      'Pedido que minimiza el costo relevante total anual, ahora mayor que el EOQ puro porque tolerar faltantes reduce el costo de mantener.',
+  },
+  {
+    simbolo: 'S^*',
+    nombre: 'Faltante máximo (déficit óptimo)',
+    descripcion:
+      'Máxima cantidad de unidades pendientes de entrega al final de la fase de escasez (S* = Q*·H/(H+B)).',
+  },
+  {
+    simbolo: 'I_{max}',
+    nombre: 'Inventario máximo',
+    descripcion:
+      'Nivel máximo de stock en mano al recibir el lote, después de liquidar los backorders (Imax = Q* − S*).',
+  },
+  {
+    simbolo: 'TC',
+    nombre: 'Costo Relevante Total',
+    descripcion:
+      'Suma de los costos anuales de ordenar, mantener y faltantes. No incluye la adquisición (DC).',
+  },
+  {
+    simbolo: 'N',
+    nombre: 'Número de pedidos por año',
+    descripcion: 'Órdenes emitidas al año para cubrir la demanda (N = D / Q*).',
+  },
+  {
+    simbolo: 'd',
+    nombre: 'Demanda diaria',
+    descripcion:
+      'Consumo promedio por día de trabajo (d = D / días laborables).',
+  },
+  {
+    simbolo: 'L',
+    nombre: 'Tiempo de entrega (Lead Time)',
+    descripcion:
+      'Días que tarda el proveedor en entregar una orden después de emitirla.',
+  },
+  {
+    simbolo: 'ROP',
+    nombre: 'Punto de Reorden',
+    descripcion:
+      'Nivel de inventario en el que se debe emitir una nueva orden (ROP = d × L).',
+  },
+];
+
+export const VARIABLES_EOQDESCUENTOS: VariableDef[] = [
+  {
+    simbolo: 'D',
+    nombre: 'Demanda anual',
+    descripcion:
+      'Cantidad de producto requerida durante un año, en las unidades de medida configuradas.',
+  },
+  {
+    simbolo: 'S',
+    nombre: 'Costo fijo por orden',
+    descripcion:
+      'Costo de preparar o emitir un pedido, independiente del tamaño del lote.',
+  },
+  {
+    simbolo: 'H',
+    nombre: 'Costo de mantener (fijo)',
+    descripcion:
+      'Costo de almacenar una unidad durante un año, ingresado directamente en USD/unidad-año.',
+  },
+  {
+    simbolo: 'I',
+    nombre: 'Costo de mantener (porcentaje)',
+    descripcion:
+      'Tasa anual de manejo de inventario aplicada al precio del producto. En este modo H = I × C.',
+  },
+  {
+    simbolo: 'C_j',
+    nombre: 'Precio unitario del nivel j',
+    descripcion:
+      'Precio por unidad que aplica dentro del intervalo de cantidades [q_min, q_max] del nivel j. El precio es menor en los niveles con cantidades más grandes.',
+  },
+  {
+    simbolo: 'q_{min}',
+    nombre: 'Cantidad mínima del nivel',
+    descripcion: 'Menor cantidad de unidades que da derecho al precio del nivel.',
+  },
+  {
+    simbolo: 'q_{max}',
+    nombre: 'Cantidad máxima del nivel',
+    descripcion:
+      'Mayor cantidad que conserva el precio del nivel. El último nivel no tiene máximo (infinito).',
+  },
+  {
+    simbolo: 'Q^*',
+    nombre: 'Lote óptimo del nivel',
+    descripcion:
+      'Lote calculado con el precio del nivel: Q* = √(2DS/H_j). Si queda fuera del intervalo, se ajusta a q_min o el nivel se descarta.',
+  },
+  {
+    simbolo: 'TC_j',
+    nombre: 'Costo total del nivel',
+    descripcion:
+      'Costo anual del candidato del nivel: TC = (D/Q)S + (Q/2)H_j + D·C_j. El ganador es el nivel con el TC menor.',
+  },
+];

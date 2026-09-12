@@ -66,6 +66,91 @@ export interface EPQResult {
   desglose: EPQDesglose;
 }
 
+export interface EOQFaltantesInput {
+  demandaAnual: number;
+  costoOrdenar: number;
+  costoMantener: number;
+  costoFaltantes: number;
+  costoUnitario?: number;
+  diasLaborables?: number;
+  leadTime?: number;
+}
+
+export interface EOQFaltantesDesglose {
+  demandaAnual: number;
+  costoFijoOrden: number;
+  costoHoldingUnitario: number;
+  costoFaltantesUnitario: number;
+  factorFaltantes: number;
+  costoUnitario: number;
+  diasLaborables: number;
+  leadTime: number;
+  demandaDiaria: number;
+}
+
+export interface EOQFaltantesResult {
+  cantidadOptima: number;
+  faltanteMaximo: number;
+  inventarioMaximo: number;
+  costoTotalAnual: number;
+  numeroPedidos: number;
+  cicloReposicion: number;
+  costoAdquisicion: number;
+  costoOrdenar: number;
+  costoMantener: number;
+  costoFaltantes: number;
+  puntoReorden: number;
+  desglose: EOQFaltantesDesglose;
+}
+
+export interface RangoPrecioInput {
+  cantidadMinima: number;
+  cantidadMaxima?: number;
+  costoUnitario: number;
+}
+
+export interface EOQDescuentosInput {
+  demandaAnual: number;
+  costoOrdenar: number;
+  tipoCostoMantener: 'fijo' | 'porcentaje';
+  costoMantener?: number;
+  costoMantenerPorcentaje?: number;
+  rangos: RangoPrecioInput[];
+}
+
+export interface RangoEvaluacion {
+  cantidadMinima: number;
+  cantidadMaxima: number | null;
+  costoUnitario: number;
+  costoMantenerEfectivo: number;
+  qOriginal: number;
+  qAjustado: number | null;
+  descartado: boolean;
+  costoOrdenar: number | null;
+  costoMantener: number | null;
+  costoProducto: number | null;
+  costoTotal: number | null;
+  esGanador: boolean;
+}
+
+export interface EOQDescuentosResult {
+  loteOptimo: number;
+  costoTotalOptimo: number;
+  tipoCostoMantener: 'fijo' | 'porcentaje';
+  costoMantener: number | null;
+  costoMantenerPorcentaje: number | null;
+  rangoGanador: {
+    cantidadMinima: number;
+    cantidadMaxima: number | null;
+    costoUnitario: number;
+  };
+  rangos: RangoEvaluacion[];
+  desglose: {
+    demandaAnual: number;
+    costoFijoOrden: number;
+  };
+}
+
 const API_BASE = '/api';
 
 export interface ApiIssue {
@@ -117,4 +202,26 @@ export async function calcularEPQ(input: EPQInput): Promise<EPQResult> {
 
   const { data } = await parseResponse(res);
   return data as EPQResult;
+}
+
+export async function calcularEOQFaltantes(input: EOQFaltantesInput): Promise<EOQFaltantesResult> {
+  const res = await fetch(`${API_BASE}/inventory/eoq-faltantes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const { data } = await parseResponse(res);
+  return data as EOQFaltantesResult;
+}
+
+export async function calcularEOQDescuentos(input: EOQDescuentosInput): Promise<EOQDescuentosResult> {
+  const res = await fetch(`${API_BASE}/inventory/eoq-descuentos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const { data } = await parseResponse(res);
+  return data as EOQDescuentosResult;
 }

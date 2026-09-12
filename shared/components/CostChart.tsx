@@ -18,6 +18,8 @@ export interface PuntoCosto {
   ordenar: number;
   mantener: number;
   total: number;
+  /** Costo anual de faltantes (solo modelos con déficit autorizado, p. ej. EOQ con Faltantes). */
+  costoFaltante?: number;
 }
 
 interface CostChartProps {
@@ -28,6 +30,7 @@ interface CostChartProps {
   moneda?: string;
   formulaMantener?: string;
   formulaTotal?: string;
+  formulaFaltante?: string;
 }
 
 const fmt = (n: number, moneda: string) =>
@@ -40,6 +43,7 @@ interface RechartState {
 const SERIES_FORMULAS: Record<string, string> = {
   'Costo de Ordenar': '\\frac{D}{Q}S',
   'Costo de Mantener': '\\frac{Q}{2}H',
+  'Costo de Faltantes': '\\frac{Q}{2}B\\left(\\frac{H}{H+B}\\right)^2',
   'Costo Relevante Total': '\\frac{D}{Q}S + \\frac{Q}{2}H',
 };
 
@@ -95,6 +99,7 @@ export default function CostChart({
   moneda = 'USD',
   formulaMantener,
   formulaTotal,
+  formulaFaltante,
 }: CostChartProps) {
   const dark = useDarkMode();
   const [hover, setHover] = useState<PuntoCosto | null>(null);
@@ -104,6 +109,9 @@ export default function CostChart({
   };
 
   const handleMouseLeave = () => setHover(null);
+
+  // La curva de faltantes solo se dibuja si los datos la incluyen (modelos con déficit).
+  const tieneFaltante = data.some((p) => p.costoFaltante !== undefined);
 
   // Paleta de ejes y cuadrícula según el tema. Las curvas de costos NO cambian.
   const gridColor = dark ? '#334155' : '#e2e8f0';
@@ -118,7 +126,7 @@ export default function CostChart({
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={data}
-            margin={{ top: 25, right: 20, left: 20, bottom: 5 }}
+            margin={{ top: 25, right: 20, left: 10, bottom: 5 }}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
           >
@@ -147,12 +155,11 @@ export default function CostChart({
               label={{
                 value: `Costo (${moneda})`,
                 angle: -90,
-                position: 'insideLeft',
+                position: 'left',
                 fill: axisLabelColor,
                 fontSize: 13,
-                offset: 8,
               }}
-              width={70}
+              width={84}
             />
             <Legend wrapperStyle={{ fontSize: 13, color: tickColor }} />
 
@@ -202,6 +209,18 @@ export default function CostChart({
               dot={false}
               activeDot={{ r: 5, strokeWidth: 2, stroke: '#ffffff' }}
             />
+            {tieneFaltante ? (
+              <Line
+                isAnimationActive={false}
+                type="monotone"
+                dataKey="costoFaltante"
+                name="Costo de Faltantes"
+                stroke="#d97706"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 5, strokeWidth: 2, stroke: '#ffffff' }}
+              />
+            ) : null}
             <Line
               isAnimationActive={false}
               type="monotone"
@@ -222,7 +241,11 @@ export default function CostChart({
       */}
       <div className="relative mt-4 min-h-[7.5rem] overflow-hidden rounded-lg border border-slate-200 bg-slate-50 p-4 shadow-sm  dark:border-gray-700 dark:bg-gray-900">
         <div className={hover ? 'visible' : 'invisible'}>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div
+            className={`grid grid-cols-2 gap-3 ${
+              tieneFaltante ? 'lg:grid-cols-5' : 'lg:grid-cols-4'
+            }`}
+          >
             <Stat
               label="Cantidad"
               value={`${hover?.cantidad.toLocaleString('en-US') ?? 0} ${unidad}`}
@@ -240,6 +263,14 @@ export default function CostChart({
               formula={formulaMantener ?? SERIES_FORMULAS['Costo de Mantener']}
               dot="#10b981"
             />
+            {tieneFaltante ? (
+              <Stat
+                label="Costo de Faltantes"
+                value={fmt(hover?.costoFaltante ?? 0, moneda)}
+                formula={formulaFaltante ?? SERIES_FORMULAS['Costo de Faltantes']}
+                dot="#d97706"
+              />
+            ) : null}
             <Stat
               label="Costo Relevante Total"
               value={fmt(hover?.total ?? 0, moneda)}

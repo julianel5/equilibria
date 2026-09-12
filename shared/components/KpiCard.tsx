@@ -13,6 +13,8 @@ interface KpiCardProps {
   value: string;
   formula: string;
   tone?: Tone;
+  /** Resalta la tarjeta con el estilo ámbar de destino ("highlight") del modelo. */
+  highlight?: boolean;
   large?: boolean;
   description?: string;
 }
@@ -22,10 +24,11 @@ export default function KpiCard({
   value,
   formula,
   tone = 'slate',
+  highlight = false,
   large = false,
   description,
 }: KpiCardProps) {
-  const isHighlight = tone === 'amber';
+  const isHighlight = highlight === true || tone === 'amber';
 
   const shell = isHighlight
     ? 'rounded-lg border border-orange-500 bg-orange-50 p-5 shadow-sm  dark:border-amber-500/60 dark:bg-amber-500/10'
