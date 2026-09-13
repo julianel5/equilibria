@@ -325,3 +325,48 @@ export const VARIABLES_DEMANDAPROBABILISTICA: VariableDef[] = [
       'Nivel de inventario en el que se debe emitir una nueva orden, para cubrir la demanda esperada más el stock de seguridad (ROP = D_L + SS).',
   },
 ];
+
+export const VARIABLES_TEORIADECISIONES: VariableDef[] = [
+  {
+    simbolo: 'a_{ij}',
+    nombre: 'Pago',
+    descripcion:
+      'Beneficio (o ganancia) que obtiene la alternativa i si se presenta el estado de la naturaleza j.',
+  },
+  {
+    simbolo: 'p_j',
+    nombre: 'Probabilidad del estado',
+    descripcion:
+      'Probabilidad de que se presente el estado de la naturaleza j. Si se definen, deben aplicarse a todos los estados y sumar exactamente 1.',
+  },
+  {
+    simbolo: '\\alpha',
+    nombre: 'Coeficiente de optimismo',
+    descripcion:
+      'Coeficiente de optimismo de Hurwicz, entre 0 y 1. α = 1 es totalmente optimista y α = 0 totalmente pesimista.',
+  },
+  {
+    simbolo: '\\max_j a_{ij}',
+    nombre: 'Máximo de la fila',
+    descripcion:
+      'Mejor pago posible de la alternativa i, usado por Maximax y Hurwicz.',
+  },
+  {
+    simbolo: '\\min_j a_{ij}',
+    nombre: 'Mínimo de la fila',
+    descripcion:
+      'Peor pago posible de la alternativa i, usado por Maximin y Hurwicz.',
+  },
+  {
+    simbolo: 'r_{ij}',
+    nombre: 'Arrepentimiento',
+    descripcion:
+      'Diferencia entre el mejor pago del estado j y el pago de la alternativa i en ese estado. Mide cuánto se pierde por no haber elegido la mejor opción.',
+  },
+  {
+    simbolo: 'VME',
+    nombre: 'Valor Monetario Esperado',
+    descripcion:
+      'Promedio ponderado de los pagos de cada alternativa con las probabilidades de los estados (VME_i = Σ_j p_j · a_ij).',
+  },
+];

@@ -6,6 +6,7 @@ import EPQPage from './pages/EPQPage';
 import EOQFaltantesPage from './pages/EOQFaltantesPage';
 import EOQDescuentosPage from './pages/EOQDescuentosPage';
 import PuntoReordenPage from './pages/PuntoReordenPage';
+import TeoriaDecisionesPage from './pages/TeoriaDecisionesPage';
 import ThemeToggle from './components/ThemeToggle';
 import { ThemeProvider } from './hooks/useTheme';
 
@@ -16,6 +17,7 @@ const TITULOS: Record<string, string> = {
   '/inventory/eoq-faltantes': 'EOQ con Faltantes - Equilibria',
   '/inventory/eoq-descuentos': 'EOQ con Descuentos - Equilibria',
   '/stochastic/punto-reorden': 'Punto de Reorden - Equilibria',
+  '/decisiones/matriz-pagos': 'Matriz de Pagos - Equilibria',
 };
 
 const linkClasses = ({ isActive }: { isActive: boolean }) =>
@@ -62,6 +64,9 @@ export default function App() {
               <NavLink to="/stochastic/punto-reorden" className={linkClasses}>
                 Probabilística
               </NavLink>
+              <NavLink to="/decisiones/matriz-pagos" className={linkClasses}>
+                Decisiones
+              </NavLink>
               <div className="ml-2 lg:ml-3">
                 <ThemeToggle />
               </div>
@@ -77,6 +82,7 @@ export default function App() {
             <Route path="/inventory/eoq-faltantes" element={<EOQFaltantesPage />} />
             <Route path="/inventory/eoq-descuentos" element={<EOQDescuentosPage />} />
             <Route path="/stochastic/punto-reorden" element={<PuntoReordenPage />} />
+            <Route path="/decisiones/matriz-pagos" element={<TeoriaDecisionesPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

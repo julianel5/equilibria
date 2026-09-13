@@ -179,6 +179,40 @@ export interface DemandaProbabilisticaResult {
   };
 }
 
+export interface TeoriaDecisionesInput {
+  alternativas: { nombre: string; pagos: number[] }[];
+  estados: { nombre: string; probabilidad: number | null }[];
+  tipoAnalisis: 'maximizar' | 'minimizar';
+  alpha: number;
+}
+
+export interface CriterioValor {
+  indice: number;
+  alternativa: string;
+  valor: number;
+}
+
+export interface CriterioResult {
+  clave: 'maximax' | 'maximin' | 'laplace' | 'hurwicz' | 'savage' | 'vme';
+  nombre: string;
+  formula: string;
+  descripcion: string;
+  valores: CriterioValor[];
+  ganador: CriterioValor;
+  matrizArrepentimiento?: number[][];
+}
+
+export interface TeoriaDecisionesResult {
+  criterios: CriterioResult[];
+  vmeDisponible: boolean;
+  tipoAnalisis: 'maximizar' | 'minimizar';
+  maximoPorFila: number[];
+  minimoPorFila: number[];
+  maximoPorColumna: number[];
+  minimoPorColumna: number[];
+  matrizArrepentimiento: number[][];
+}
+
 const API_BASE = '/api';
 
 export interface ApiIssue {
@@ -265,4 +299,15 @@ export async function calcularDemandaProbabilistica(
 
   const { data } = await parseResponse(res);
   return data as DemandaProbabilisticaResult;
+}
+
+export async function calcularTeoriaDecisiones(input: TeoriaDecisionesInput): Promise<TeoriaDecisionesResult> {
+  const res = await fetch(`${API_BASE}/decisiones/evaluar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const { data } = await parseResponse(res);
+  return data as TeoriaDecisionesResult;
 }

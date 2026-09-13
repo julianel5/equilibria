@@ -20,3 +20,12 @@ export type {
   DemandaProbabilisticaResult,
 } from './modules/stochastic/demandaProbabilistica.service';
 export { DemandaProbabilisticaInputSchema } from './modules/stochastic/demandaProbabilistica.service';
+export { calcularTeoriaDecisiones } from './modules/decisions/teoriaDecisiones.service';
+export type {
+  TeoriaDecisionesInput,
+  TeoriaDecisionesResult,
+  CriterioResult,
+  CriterioValor,
+  CriterioClave,
+} from './modules/decisions/teoriaDecisiones.service';
+export { TeoriaDecisionesInputSchema } from './modules/decisions/teoriaDecisiones.service';
