@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { validarModoCostoMantener, resolverCostoMantener } from './costoMantenerCondicional';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EOQ (Economic Order Quantity) - Cantidad Económica de Pedido
@@ -48,12 +49,17 @@ export const EOQInputSchema = z.object({
     .positive({ message: 'El costo de ordenar debe ser un número positivo' })
     .describe('Costo fijo por cada orden (S)'),
   costoMantener: z.number()
-    .positive({ message: 'El costo de mantener debe ser un número positivo' })
-    .describe('Costo unitario de mantener inventario por año (H)'),
-  costoUnitario: z.number()
-    .min(0, { message: 'El costo unitario no puede ser negativo' })
     .optional()
-    .describe('Costo unitario del producto (C) - opcional, default 0'),
+    .describe('Costo unitario de mantener inventario por año (H) - modo fijo'),
+  costoUnitario: z.number()
+    .optional()
+    .describe('Costo unitario del producto (C) - opcional en modo fijo, obligatorio en modo porcentaje'),
+  tipoCostoMantener: z.enum(['fijo', 'porcentaje'])
+    .optional()
+    .describe('Forma de expresar el costo de mantener: "fijo" (H) o "porcentaje" (I × C)'),
+  costoMantenerPorcentaje: z.number()
+    .optional()
+    .describe('Porcentaje anual de manejo de inventario (I) aplicado al precio (modo porcentaje)'),
   diasLaborables: z.number()
     .int({ message: 'Los días laborables deben ser un número entero' })
     .min(1, { message: 'Los días laborables deben ser al menos 1' })
@@ -64,7 +70,7 @@ export const EOQInputSchema = z.object({
     .min(0, { message: 'El tiempo de entrega no puede ser negativo' })
     .optional()
     .describe('Tiempo de entrega en días (L) - opcional, default 0'),
-});
+}).superRefine(validarModoCostoMantener);
 
 export type EOQInput = z.infer<typeof EOQInputSchema>;
 
@@ -94,12 +100,13 @@ export interface EOQResult {
 // --- Servicio EOQ ---
 
 export function calcularEOQ(input: EOQInput): EOQResult {
-  // Validar inputs con Zod
+  // Validar inputs con Zod (incluye la regla condicional del costo de mantener)
   const validated = EOQInputSchema.parse(input);
 
   const D = validated.demandaAnual;
   const S = validated.costoOrdenar;
-  const H = validated.costoMantener;
+  // H efectivo: fijo o derivado como (I/100) × C según el modo seleccionado.
+  const H = resolverCostoMantener(validated);
   const C = validated.costoUnitario ?? 0;
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -200,7 +207,8 @@ export function generarCurvaTC(
   const validated = EOQInputSchema.parse(input);
   const D = validated.demandaAnual;
   const S = validated.costoOrdenar;
-  const H = validated.costoMantener;
+  // H efectivo (fijo o derivado de I × C), igual que en calcularEOQ.
+  const H = resolverCostoMantener(validated);
   const C = validated.costoUnitario ?? 0;
 
   const Qopt = Math.sqrt((2 * D * S) / H);

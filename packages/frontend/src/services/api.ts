@@ -1,8 +1,10 @@
 export interface EOQInput {
   demandaAnual: number;
   costoOrdenar: number;
-  costoMantener: number;
+  costoMantener?: number;
   costoUnitario?: number;
+  tipoCostoMantener?: 'fijo' | 'porcentaje';
+  costoMantenerPorcentaje?: number;
   diasLaborables?: number;
   leadTime?: number;
 }
@@ -34,8 +36,10 @@ export interface EPQInput {
   demandaAnual: number;
   tasaProduccion: number;
   costoOrdenar: number;
-  costoMantener: number;
+  costoMantener?: number;
   costoUnitario?: number;
+  tipoCostoMantener?: 'fijo' | 'porcentaje';
+  costoMantenerPorcentaje?: number;
   diasLaborables?: number;
   leadTime?: number;
 }
@@ -69,9 +73,11 @@ export interface EPQResult {
 export interface EOQFaltantesInput {
   demandaAnual: number;
   costoOrdenar: number;
-  costoMantener: number;
+  costoMantener?: number;
   costoFaltantes: number;
   costoUnitario?: number;
+  tipoCostoMantener?: 'fijo' | 'porcentaje';
+  costoMantenerPorcentaje?: number;
   diasLaborables?: number;
   leadTime?: number;
 }

@@ -111,3 +111,79 @@ describe('EPQ - Lote Económico de Producción', () => {
     expect(resultado.desglose.diasLaborables).toBe(366);
   });
 });
+
+describe('EPQ - Costo de mantener porcentual (H = I × C)', () => {
+  // I = 20% y C = 10 → H = (20/100) × 10 = 2
+  // D = 10000, P = 20000, S = 20, factor (1 - D/P) = 0.5
+  // Q* = √( 2DS / (H × factor) ) = √( 400000 / (2 × 0.5) ) = √400000 ≈ 632
+  test('debe derivar H = (I/100) × C y coincidir con el EPQ fijo equivalente', () => {
+    const porcentaje = calcularEPQ({
+      demandaAnual: 10000,
+      tasaProduccion: 20000,
+      costoOrdenar: 20,
+      tipoCostoMantener: 'porcentaje',
+      costoMantenerPorcentaje: 20,
+      costoUnitario: 10,
+    });
+    const fijo = calcularEPQ({
+      demandaAnual: 10000,
+      tasaProduccion: 20000,
+      costoOrdenar: 20,
+      costoMantener: 2,
+      costoUnitario: 10,
+    });
+
+    expect(porcentaje.desglose.costoHoldingUnitario).toBe(2);
+    expect(porcentaje.cantidadOptima).toBe(fijo.cantidadOptima);
+    expect(porcentaje.inventarioMaximo).toBe(fijo.inventarioMaximo);
+    expect(porcentaje.costoTotalAnual).toBe(fijo.costoTotalAnual);
+  });
+
+  test('debe lanzar error si el modo porcentaje no incluye el costo unitario (C)', () => {
+    expect(() => {
+      EPQValidatedSchema.parse({
+        demandaAnual: 10000,
+        tasaProduccion: 20000,
+        costoOrdenar: 20,
+        tipoCostoMantener: 'porcentaje',
+        costoMantenerPorcentaje: 20,
+      });
+    }).toThrow('El costo unitario (C) es obligatorio para calcular el costo de mantener porcentual');
+  });
+
+  test('debe lanzar error si el costo unitario (C) es cero en modo porcentaje', () => {
+    expect(() => {
+      EPQValidatedSchema.parse({
+        demandaAnual: 10000,
+        tasaProduccion: 20000,
+        costoOrdenar: 20,
+        tipoCostoMantener: 'porcentaje',
+        costoMantenerPorcentaje: 20,
+        costoUnitario: 0,
+      });
+    }).toThrow('El costo unitario (C) es obligatorio para calcular el costo de mantener porcentual');
+  });
+
+  test('debe lanzar error si el modo porcentaje no incluye el porcentaje (I)', () => {
+    expect(() => {
+      EPQValidatedSchema.parse({
+        demandaAnual: 10000,
+        tasaProduccion: 20000,
+        costoOrdenar: 20,
+        tipoCostoMantener: 'porcentaje',
+        costoUnitario: 10,
+      });
+    }).toThrow('El porcentaje (I) del costo de mantener debe ser un número positivo');
+  });
+
+  test('en modo fijo sin H se lanza un error claro', () => {
+    expect(() => {
+      EPQValidatedSchema.parse({
+        demandaAnual: 10000,
+        tasaProduccion: 20000,
+        costoOrdenar: 20,
+        costoMantener: undefined,
+      });
+    }).toThrow('El costo de mantener debe ser un número positivo');
+  });
+});

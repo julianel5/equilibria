@@ -140,3 +140,77 @@ describe('EOQ con Faltantes Planeados (Déficit Autorizado)', () => {
     expect(resultado.desglose.factorFaltantes).toBe(0.5);
   });
 });
+
+describe('EOQ con Faltantes - Costo de mantener porcentual (H = I × C)', () => {
+  // I = 40% y C = 10 → H = (40/100) × 10 = 4
+  test('debe derivar H = (I/100) × C y coincidir con el modelo fijo equivalente', () => {
+    const porcentaje = calcularEOQFaltantes({
+      demandaAnual: 10000,
+      costoOrdenar: 20,
+      tipoCostoMantener: 'porcentaje',
+      costoMantenerPorcentaje: 40,
+      costoFaltantes: 5,
+      costoUnitario: 10,
+    });
+    const fijo = calcularEOQFaltantes({
+      demandaAnual: 10000,
+      costoOrdenar: 20,
+      costoMantener: 4,
+      costoFaltantes: 5,
+      costoUnitario: 10,
+    });
+
+    expect(porcentaje.desglose.costoHoldingUnitario).toBe(4);
+    expect(porcentaje.cantidadOptima).toBe(fijo.cantidadOptima);
+    expect(porcentaje.faltanteMaximo).toBe(fijo.faltanteMaximo);
+    expect(porcentaje.costoTotalAnual).toBe(fijo.costoTotalAnual);
+  });
+
+  test('debe lanzar error si el modo porcentaje no incluye el costo unitario (C)', () => {
+    expect(() => {
+      EOQFaltantesInputSchema.parse({
+        demandaAnual: 10000,
+        costoOrdenar: 20,
+        tipoCostoMantener: 'porcentaje',
+        costoMantenerPorcentaje: 40,
+        costoFaltantes: 5,
+      });
+    }).toThrow('El costo unitario (C) es obligatorio para calcular el costo de mantener porcentual');
+  });
+
+  test('debe lanzar error si el costo unitario (C) es cero en modo porcentaje', () => {
+    expect(() => {
+      EOQFaltantesInputSchema.parse({
+        demandaAnual: 10000,
+        costoOrdenar: 20,
+        tipoCostoMantener: 'porcentaje',
+        costoMantenerPorcentaje: 40,
+        costoFaltantes: 5,
+        costoUnitario: 0,
+      });
+    }).toThrow('El costo unitario (C) es obligatorio para calcular el costo de mantener porcentual');
+  });
+
+  test('debe lanzar error si el modo porcentaje no incluye el porcentaje (I)', () => {
+    expect(() => {
+      EOQFaltantesInputSchema.parse({
+        demandaAnual: 10000,
+        costoOrdenar: 20,
+        tipoCostoMantener: 'porcentaje',
+        costoFaltantes: 5,
+        costoUnitario: 10,
+      });
+    }).toThrow('El porcentaje (I) del costo de mantener debe ser un número positivo');
+  });
+
+  test('en modo fijo sin H se lanza un error claro', () => {
+    expect(() => {
+      EOQFaltantesInputSchema.parse({
+        demandaAnual: 10000,
+        costoOrdenar: 20,
+        costoFaltantes: 5,
+        costoMantener: undefined,
+      });
+    }).toThrow('El costo de mantener debe ser un número positivo');
+  });
+});

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { validarModoCostoMantener, resolverCostoMantener } from './costoMantenerCondicional';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EPQ (Economic Production Quantity) - Lote Económico de Producción
@@ -46,12 +47,17 @@ export const EPQInputSchema = z.object({
     .positive({ message: 'El costo de preparación debe ser un número positivo' })
     .describe('Costo de preparación por corrida de producción (S)'),
   costoMantener: z.number()
-    .positive({ message: 'El costo de mantener debe ser un número positivo' })
-    .describe('Costo unitario de mantener inventario por año (H)'),
-  costoUnitario: z.number()
-    .min(0, { message: 'El costo unitario no puede ser negativo' })
     .optional()
-    .describe('Costo unitario del producto (C) - opcional, default 0'),
+    .describe('Costo unitario de mantener inventario por año (H) - modo fijo'),
+  costoUnitario: z.number()
+    .optional()
+    .describe('Costo unitario del producto (C) - opcional en modo fijo, obligatorio en modo porcentaje'),
+  tipoCostoMantener: z.enum(['fijo', 'porcentaje'])
+    .optional()
+    .describe('Forma de expresar el costo de mantener: "fijo" (H) o "porcentaje" (I × C)'),
+  costoMantenerPorcentaje: z.number()
+    .optional()
+    .describe('Porcentaje anual de manejo de inventario (I) aplicado al precio (modo porcentaje)'),
   diasLaborables: z.number()
     .int({ message: 'Los días laborables deben ser un número entero' })
     .min(1, { message: 'Los días laborables deben ser al menos 1' })
@@ -66,6 +72,7 @@ export const EPQInputSchema = z.object({
 
 // Validación de viabilidad: en el EPQ la producción debe cubrir la demanda.
 // Si P ≤ D el lote no consigue reponerse y el modelo es inviable.
+// También valida la forma condicional del costo de mantener (fijo o I × C).
 export const EPQValidatedSchema = EPQInputSchema.superRefine((data, ctx) => {
   if (data.tasaProduccion <= data.demandaAnual) {
     ctx.addIssue({
@@ -75,6 +82,8 @@ export const EPQValidatedSchema = EPQInputSchema.superRefine((data, ctx) => {
         'La tasa de producción (P) debe ser estrictamente mayor que la demanda anual (D). Si P ≤ D el modelo EPQ es inviable.',
     });
   }
+
+  validarModoCostoMantener(data, ctx);
 });
 
 export type EPQInput = z.infer<typeof EPQValidatedSchema>;
@@ -114,7 +123,8 @@ export function calcularEPQ(input: EPQInput): EPQResult {
   const D = validated.demandaAnual;
   const P = validated.tasaProduccion;
   const S = validated.costoOrdenar;
-  const H = validated.costoMantener;
+  // H efectivo: fijo o derivado como (I/100) × C según el modo seleccionado.
+  const H = resolverCostoMantener(validated);
   const C = validated.costoUnitario ?? 0;
   const diasLaborables = validated.diasLaborables ?? 365;
   const leadTime = validated.leadTime ?? 0;

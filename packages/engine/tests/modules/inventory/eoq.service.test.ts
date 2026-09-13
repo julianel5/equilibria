@@ -195,3 +195,86 @@ describe('Curva TC vs Q (Análisis de sensibilidad)', () => {
     expect(puntoMinimo.cantidad).toBeLessThanOrEqual(320);
   });
 });
+
+describe('EOQ - Costo de mantener porcentual (H = I × C)', () => {
+  const inputPorcentaje: EOQInput = {
+    demandaAnual: 10000,
+    costoOrdenar: 20,
+    tipoCostoMantener: 'porcentaje',
+    costoMantenerPorcentaje: 20,
+    costoUnitario: 10,
+  };
+
+  test('debe derivar H = (I/100) × C y dar el mismo resultado que el EOQ fijo equivalente', () => {
+    // I = 20% y C = 10 → H = (20/100) × 10 = 2
+    const porcentaje = calcularEOQ(inputPorcentaje);
+    const fijo = calcularEOQ({
+      demandaAnual: 10000,
+      costoOrdenar: 20,
+      costoMantener: 2,
+      costoUnitario: 10,
+    });
+
+    expect(porcentaje.desglose.costoHoldingUnitario).toBe(2);
+    expect(porcentaje.cantidadOptima).toBe(fijo.cantidadOptima);
+    expect(porcentaje.costoTotalAnual).toBe(fijo.costoTotalAnual);
+    expect(porcentaje.costoMantener).toBe(fijo.costoMantener);
+  });
+
+  test('debe exponer el H efectivo en el desglose para la curva de costos', () => {
+    const resultado = calcularEOQ(inputPorcentaje);
+
+    expect(resultado.desglose.costoHoldingUnitario).toBe(2);
+    expect(resultado.costoMantener).toBeCloseTo((resultado.cantidadOptima / 2) * 2, 1);
+  });
+
+  test('debe lanzar error si el modo porcentaje no incluye el costo unitario (C)', () => {
+    expect(() => {
+      calcularEOQ({ ...inputPorcentaje, costoUnitario: undefined });
+    }).toThrow('El costo unitario (C) es obligatorio para calcular el costo de mantener porcentual');
+  });
+
+  test('debe lanzar error si el costo unitario (C) es cero en modo porcentaje', () => {
+    expect(() => {
+      calcularEOQ({ ...inputPorcentaje, costoUnitario: 0 });
+    }).toThrow('El costo unitario (C) es obligatorio para calcular el costo de mantener porcentual');
+  });
+
+  test('debe lanzar error si el modo porcentaje no incluye el porcentaje (I)', () => {
+    expect(() => {
+      calcularEOQ({ ...inputPorcentaje, costoMantenerPorcentaje: undefined });
+    }).toThrow('El porcentaje (I) del costo de mantener debe ser un número positivo');
+  });
+
+  test('en modo fijo el costo unitario sigue siendo opcional', () => {
+    const resultado = calcularEOQ({
+      demandaAnual: 10000,
+      costoOrdenar: 20,
+      costoMantener: 5,
+    });
+
+    expect(resultado.cantidadOptima).toBe(283);
+  });
+
+  test('en modo fijo sin H se lanza un error claro', () => {
+    expect(() => {
+      calcularEOQ({
+        demandaAnual: 10000,
+        costoOrdenar: 20,
+        costoMantener: undefined,
+      });
+    }).toThrow('El costo de mantener debe ser un número positivo');
+  });
+
+  test('generarCurvaTC respeta el modo porcentaje con el H efectivo', () => {
+    const curvaPorcentaje = generarCurvaTC(inputPorcentaje);
+    const curvaFija = generarCurvaTC({
+      demandaAnual: 10000,
+      costoOrdenar: 20,
+      costoMantener: 2,
+    });
+
+    expect(curvaPorcentaje.length).toBe(curvaFija.length);
+    expect(curvaPorcentaje[0].costoMantener).toBeCloseTo(curvaFija[0].costoMantener, 1);
+  });
+});

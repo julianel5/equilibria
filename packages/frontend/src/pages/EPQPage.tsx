@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import { calcularEPQ, ApiError, type EPQResult } from '../services/api';
 import CostChart, { type PuntoCosto } from '@shared/components/CostChart';
+import CostoMantenerToggle, { type ModoMantener } from '@shared/components/CostoMantenerToggle';
 import EPQTeoria from '../components/EPQTeoria';
 import { VARIABLES_EPQ } from '../data/glosario';
 import Formula from '@shared/components/Formula';
@@ -21,6 +22,7 @@ interface FormState {
   tasaProduccion: string;
   costoOrdenar: string;
   costoMantener: string;
+  costoMantenerPorcentaje: string;
   costoUnitario: string;
   diasLaborables: string;
   leadTime: string;
@@ -45,7 +47,6 @@ const FORM_METADATA: CampoFormulario[] = [
   { key: 'demandaAnual', label: 'Demanda anual', simbolo: 'D', min: 0.01, unidadSufijo: (u: string, _m: string) => `${u} / año` },
   { key: 'tasaProduccion', label: 'Tasa de producción (P)', simbolo: 'P', min: 0.01, unidadSufijo: (u: string, _m: string) => `${u} / año` },
   { key: 'costoOrdenar', label: 'Costo de preparación', simbolo: 'S', min: 0.01, unidadSufijo: (_u: string, m: string) => `${m} / corrida` },
-  { key: 'costoMantener', label: 'Costo de mantener', simbolo: 'H', min: 0.01, unidadSufijo: (u: string, m: string) => `${m} / ${u}-año` },
   { key: 'costoUnitario', label: 'Costo unitario (opcional)', simbolo: 'C', opcional: true, min: 0, unidadSufijo: (u: string, m: string) => `${m} / ${u}` },
   { key: 'diasLaborables', label: 'Días laborables al año', min: 1, unidadSufijo: () => 'días al año' },
   { key: 'leadTime', label: 'Tiempo de entrega (L)', simbolo: 'L', opcional: true, placeholder: 'ej. días que tarda el proveedor', min: 0, unidadSufijo: () => 'días' },
@@ -66,10 +67,12 @@ export default function EPQPage() {
     tasaProduccion: '20000',
     costoOrdenar: '20',
     costoMantener: '5',
+    costoMantenerPorcentaje: '20',
     costoUnitario: '10',
     diasLaborables: '365',
     leadTime: '',
   });
+  const [tipoCostoMantener, setTipoCostoMantener] = useState<ModoMantener>('fijo');
   const [prefs, setPrefs] = useState<PrefsState>({
     unidad: 'unidades',
     moneda: 'USD',
@@ -88,7 +91,7 @@ export default function EPQPage() {
   const leadTimeNum = Number(form.leadTime);
   const mostrarROP = Number.isFinite(leadTimeNum) && leadTimeNum > 0;
 
-  const calcular = useCallback(async (datos: FormState) => {
+  const calcular = useCallback(async (datos: FormState, modo: ModoMantener) => {
     setCargando(true);
     setErrors([]);
     setFieldErrors({});
@@ -99,7 +102,10 @@ export default function EPQPage() {
         demandaAnual: Number(datos.demandaAnual),
         tasaProduccion: Number(datos.tasaProduccion),
         costoOrdenar: Number(datos.costoOrdenar),
-        costoMantener: Number(datos.costoMantener),
+        tipoCostoMantener: modo,
+        costoMantener: modo === 'fijo' ? Number(datos.costoMantener) : undefined,
+        costoMantenerPorcentaje:
+          modo === 'porcentaje' ? Number(datos.costoMantenerPorcentaje) : undefined,
         costoUnitario: Number(datos.costoUnitario) || undefined,
         diasLaborables:
           Number.isFinite(diasLaborables) && diasLaborables > 0 ? diasLaborables : undefined,
@@ -126,13 +132,13 @@ export default function EPQPage() {
   }, []);
 
   useEffect(() => {
-    void calcular(form);
+    void calcular(form, tipoCostoMantener);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    void calcular(form);
+    void calcular(form, tipoCostoMantener);
   };
 
   const handleChange =
@@ -249,37 +255,55 @@ export default function EPQPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {FORM_METADATA.map((campo) => (
-              <label key={campo.key} className="block">
-                <span className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-600  dark:text-gray-300">
-                  {campo.label}
-                  {campo.simbolo ? (
-                    <span className="text-slate-400  dark:text-gray-500">
-                      <Formula tex={campo.simbolo} />
+              <Fragment key={campo.key}>
+                <label className="block">
+                  <span className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-600  dark:text-gray-300">
+                    {campo.label}
+                    {campo.simbolo ? (
+                      <span className="text-slate-400  dark:text-gray-500">
+                        <Formula tex={campo.simbolo} />
+                      </span>
+                    ) : null}
+                  </span>
+                  <input
+                    type="number"
+                    min={String(campo.min)}
+                    step="any"
+                    placeholder={campo.placeholder}
+                    required={
+                      !campo.opcional ||
+                      (campo.key === 'costoUnitario' && tipoCostoMantener === 'porcentaje')
+                    }
+                    value={form[campo.key]}
+                    onChange={handleChange(campo.key)}
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
+                  />
+                  <span className="mt-0.5 block text-xs text-slate-400  dark:text-gray-500">
+                    {campo.unidadSufijo(unidad, moneda)}
+                  </span>
+                  {fieldErrors[campo.key] ? (
+                    <span
+                      role="alert"
+                      className="mt-1 block text-xs font-semibold text-red-600  dark:text-red-400"
+                    >
+                      {fieldErrors[campo.key]}
                     </span>
                   ) : null}
-                </span>
-                <input
-                  type="number"
-                  min={String(campo.min)}
-                  step="any"
-                  placeholder={campo.placeholder}
-                  required={!campo.opcional}
-                  value={form[campo.key]}
-                  onChange={handleChange(campo.key)}
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
-                />
-                <span className="mt-0.5 block text-xs text-slate-400  dark:text-gray-500">
-                  {campo.unidadSufijo(unidad, moneda)}
-                </span>
-                {fieldErrors[campo.key] ? (
-                  <span
-                    role="alert"
-                    className="mt-1 block text-xs font-semibold text-red-600  dark:text-red-400"
-                  >
-                    {fieldErrors[campo.key]}
-                  </span>
+                </label>
+                {campo.key === 'costoOrdenar' ? (
+                  <CostoMantenerToggle
+                    modo={tipoCostoMantener}
+                    onModoChange={setTipoCostoMantener}
+                    costoMantener={form.costoMantener}
+                    onCostoMantenerChange={handleChange('costoMantener')}
+                    costoMantenerPorcentaje={form.costoMantenerPorcentaje}
+                    onCostoMantenerPorcentajeChange={handleChange('costoMantenerPorcentaje')}
+                    unidad={unidad}
+                    moneda={moneda}
+                    fieldErrors={fieldErrors}
+                  />
                 ) : null}
-              </label>
+              </Fragment>
             ))}
 
             <button

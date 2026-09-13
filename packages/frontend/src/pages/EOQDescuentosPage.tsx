@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import { calcularEOQDescuentos, ApiError, type EOQDescuentosResult, type RangoEvaluacion } from '../services/api';
 import RangosPrecios, { type RangoPrecio } from '@shared/components/RangosPrecios';
+import CostoMantenerToggle, { type ModoMantener } from '@shared/components/CostoMantenerToggle';
 import EOQDescuentosTeoria from '../components/EOQDescuentosTeoria';
 import { VARIABLES_EOQDESCUENTOS } from '../data/glosario';
 import Formula from '@shared/components/Formula';
@@ -10,7 +11,6 @@ import PrefsCard from '@shared/components/PrefsCard';
 import TabsPanel from '@shared/components/TabsPanel';
 
 type Pestana = 'calculadora' | 'teoria';
-type ModoMantener = 'fijo' | 'porcentaje';
 
 const PESTANAS: { clave: Pestana; etiqueta: string }[] = [
   { clave: 'calculadora', etiqueta: 'Calculadora' },
@@ -64,9 +64,17 @@ export default function EOQDescuentosPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [glosarioAbierto, setGlosarioAbierto] = useState(false);
   const [pestana, setPestana] = useState<Pestana>('calculadora');
+  const [nivelActivo, setNivelActivo] = useState(0);
 
   const unidad = prefs.unidad.trim() || 'unidades';
   const moneda = prefs.moneda.trim() || 'USD';
+
+  // Al cargar (o recalcular) resultados, la pestaña activa del desglose es la del nivel ganador.
+  useEffect(() => {
+    if (!resultado) return;
+    const ganador = resultado.rangos.findIndex((r) => r.esGanador);
+    setNivelActivo(ganador >= 0 ? ganador : 0);
+  }, [resultado]);
 
   const calcular = useCallback(
     async (datos: FormState, modo: ModoMantener, niveles: RangoPrecio[]) => {
@@ -135,13 +143,6 @@ export default function EOQDescuentosPage() {
 
   const inputClases =
     'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30';
-
-  const botonModo = (activo: boolean) =>
-    `rounded px-3 py-1.5 text-sm ${
-      activo
-        ? 'bg-white font-semibold text-blue-600 shadow-sm dark:bg-gray-900 dark:text-blue-400'
-        : 'font-medium text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200'
-    }`;
 
   if (pestana === 'teoria') {
     return (
@@ -274,63 +275,18 @@ export default function EOQDescuentosPage() {
             </div>
 
             {/* Selector: costo de mantener fijo (H) o porcentaje del precio (I) */}
-            <div>
-              <p className="mb-1.5 text-sm font-medium text-slate-600  dark:text-gray-300">
-                Costo de mantener
-              </p>
-              <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1  dark:bg-gray-900">
-                <button
-                  type="button"
-                  onClick={() => setTipoCostoMantener('fijo')}
-                  className={botonModo(tipoCostoMantener === 'fijo')}
-                >
-                  Fijo (H)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTipoCostoMantener('porcentaje')}
-                  className={botonModo(tipoCostoMantener === 'porcentaje')}
-                >
-                  Porcentaje (I)
-                </button>
-              </div>
-              <div className="mt-3">
-                <label className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-600  dark:text-gray-300">
-                  {tipoCostoMantener === 'fijo' ? 'Costo de mantener' : 'Costo de mantener (%)'}
-                  <span className="text-slate-400  dark:text-gray-500">
-                    <Formula tex={tipoCostoMantener === 'fijo' ? 'H' : 'I'} />
-                  </span>
-                </label>
-                <input
-                  type="number"
-                  min="0.01"
-                  step="any"
-                  required
-                  value={
-                    tipoCostoMantener === 'fijo' ? form.costoMantener : form.costoMantenerPorcentaje
-                  }
-                  onChange={handleChange(
-                    tipoCostoMantener === 'fijo' ? 'costoMantener' : 'costoMantenerPorcentaje'
-                  )}
-                  className={inputClases}
-                />
-                <span className="mt-0.5 block text-xs text-slate-400  dark:text-gray-500">
-                  {tipoCostoMantener === 'fijo'
-                    ? `${moneda} / ${unidad}-año`
-                    : 'porcentaje anual del precio del nivel (H = I × C)'}
-                </span>
-                {fieldErrors.costoMantener ? (
-                  <span role="alert" className="mt-1 block text-xs font-semibold text-red-600  dark:text-red-400">
-                    {fieldErrors.costoMantener}
-                  </span>
-                ) : null}
-                {fieldErrors.costoMantenerPorcentaje ? (
-                  <span role="alert" className="mt-1 block text-xs font-semibold text-red-600  dark:text-red-400">
-                    {fieldErrors.costoMantenerPorcentaje}
-                  </span>
-                ) : null}
-              </div>
-            </div>
+            <CostoMantenerToggle
+              modo={tipoCostoMantener}
+              onModoChange={setTipoCostoMantener}
+              costoMantener={form.costoMantener}
+              onCostoMantenerChange={handleChange('costoMantener')}
+              costoMantenerPorcentaje={form.costoMantenerPorcentaje}
+              onCostoMantenerPorcentajeChange={handleChange('costoMantenerPorcentaje')}
+              unidad={unidad}
+              moneda={moneda}
+              fieldErrors={fieldErrors}
+              hintPorcentaje="porcentaje anual del precio del nivel (H = I × C)"
+            />
 
             {/* Constructor dinámico de niveles de precio */}
             <div>
@@ -404,6 +360,15 @@ export default function EOQDescuentosPage() {
           </div>
         </section>
       </div>
+
+      {/* Desglose pedagógico por nivel de precio (tabs + KPICards) */}
+      <DesgloseNiveles
+        resultado={resultado}
+        activo={nivelActivo}
+        onActivo={setNivelActivo}
+        unidad={unidad}
+        moneda={moneda}
+      />
 
       {/* Tabla de evaluación por nivel */}
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
@@ -565,5 +530,178 @@ function EOQDescuentosHeader() {
         Evaluación por niveles de precio con costo de mantener fijo o porcentual.
       </p>
     </header>
+  );
+}
+
+interface DesgloseNivelesProps {
+  resultado: EOQDescuentosResult;
+  activo: number;
+  onActivo: (idx: number) => void;
+  unidad: string;
+  moneda: string;
+}
+
+/** Desglose pedagógico por nivel de precio: tabs "Nivel j" + cuadrícula de KPICards. */
+function DesgloseNiveles({ resultado, activo, onActivo, unidad, moneda }: DesgloseNivelesProps) {
+  const rangoActivo = resultado.rangos[activo] ?? resultado.rangos[0];
+  const esFijo = resultado.tipoCostoMantener === 'fijo';
+  const demanda = resultado.desglose.demandaAnual;
+
+  const tabClases = (esActiva: boolean, descartado: boolean) =>
+    `inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400/60 ${
+      esActiva
+        ? 'border-blue-500 bg-blue-50 text-blue-600 dark:border-blue-400 dark:bg-blue-500/15 dark:text-blue-400'
+        : descartado
+          ? 'border-slate-200 bg-slate-50 text-slate-400 hover:text-slate-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-500 dark:hover:text-gray-300'
+          : 'border-slate-200 bg-white text-slate-500 hover:border-blue-300 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:text-blue-400'
+    }`;
+
+  // ¿El candidato se ajustó a q_min? (Q* original quedó fuera del intervalo)
+  const q = rangoActivo.descartado ? 0 : (rangoActivo.qAjustado ?? 0);
+  const ajustado = !rangoActivo.descartado && rangoActivo.qAjustado !== rangoActivo.qOriginal;
+  const numOrdenes = q > 0 ? demanda / q : 0;
+
+  const textoH = esFijo
+    ? `Costo fijo por ${unidad}-año: ${
+        resultado.costoMantener !== null ? fmtDecimal(resultado.costoMantener) : '—'
+      } ${moneda}.`
+    : `I = ${fmtDecimal(resultado.costoMantenerPorcentaje ?? 0)}% anual sobre el precio del nivel C_j = ${fmtDecimal(rangoActivo.costoUnitario)} → H_j = ${fmtDecimal(rangoActivo.costoMantenerEfectivo)} ${moneda}.`;
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
+      <h2 className="mb-1 text-lg font-semibold text-slate-700  dark:text-gray-100">
+        Desglose por Nivel
+      </h2>
+      <p className="mb-4 text-sm text-slate-400  dark:text-gray-500">
+        Haz clic en cada nivel de precio para ver, paso a paso, cómo se calculó su lote y cada uno de
+        sus costos anuales a partir de las fórmulas del modelo.
+      </p>
+
+      <div role="tablist" aria-label="Desglose por nivel de precio" className="mb-5 flex flex-wrap gap-2">
+        {resultado.rangos.map((r, idx) => {
+          const esActiva = idx === activo;
+          return (
+            <button
+              key={idx}
+              role="tab"
+              aria-selected={esActiva}
+              onClick={() => onActivo(idx)}
+              className={tabClases(esActiva, r.descartado)}
+            >
+              Nivel {idx + 1}
+              {r.esGanador ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-emerald-600  dark:text-emerald-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                  Ganador
+                </span>
+              ) : null}
+              {r.descartado ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-slate-400  dark:text-gray-500">
+                  <span className="h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden="true" />
+                  Descartado
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+
+      {rangoActivo.descartado ? (
+        <div
+          role="tabpanel"
+          className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600  dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
+        >
+          <svg
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden="true"
+            className="mt-0.5 h-5 w-5 shrink-0 text-slate-400  dark:text-gray-500"
+          >
+            <path
+              fillRule="evenodd"
+              d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <div className="space-y-1">
+            <p className="font-semibold text-slate-700  dark:text-gray-200">
+              Este nivel fue descartado
+            </p>
+            <p>
+              Este nivel fue descartado porque el lote óptimo supera la cantidad máxima permitida
+              por el proveedor.
+            </p>
+            <p className="mt-1 text-xs text-slate-500  dark:text-gray-400">
+              Q* local = {fmtDecimal(rangoActivo.qOriginal)} {unidad} &gt; q_max ={' '}
+              {rangoActivo.cantidadMaxima === null
+                ? '∞'
+                : fmtDecimal(rangoActivo.cantidadMaxima)}{' '}
+              {unidad}
+              {rangoActivo.costoTotal === null
+                ? ' — no se evalúa ningún costo porque no existe una cantidad pedible a este precio.'
+                : ''}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div role="tabpanel" className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <KpiCard
+            title="Cantidad a Pedir"
+            value={`${fmtDecimal(q)} ${unidad}`}
+            formula={
+              ajustado
+                ? 'Q = q_{min}  \\quad \\text{si } Q^* < q_{min}'
+                : 'Q^*_j = \\sqrt{ \\frac{2DS}{H_j} }'
+            }
+            tone="blue"
+            description={
+              ajustado
+                ? `El lote óptimo local (${fmtDecimal(rangoActivo.qOriginal)} ${unidad}) quedó debajo del mínimo del nivel; se compra la cantidad mínima para acceder al precio.`
+                : 'El lote óptimo local cayó dentro del intervalo de cantidades de este nivel, así que se aplica la raíz cuadrada clásica.'
+            }
+          />
+          <KpiCard
+            title="Costo de Mantener Aplicado"
+            value={fmtMoneda(rangoActivo.costoMantenerEfectivo, moneda)}
+            formula={esFijo ? 'H_j = H  \\quad (\\text{fijo})' : 'H_j = I \\times C_j'}
+            tone="slate"
+            description={textoH}
+          />
+          <KpiCard
+            title="Costo Anual de Ordenar"
+            value={fmtMoneda(rangoActivo.costoOrdenar ?? 0, moneda)}
+            formula={'C_o = \\frac{D}{Q} S'}
+            tone="slate"
+            description={`${fmtDecimal(numOrdenes)} órdenes/año × S = ${fmtDecimal(resultado.desglose.costoFijoOrden)} ${moneda} cada una.`}
+          />
+          <KpiCard
+            title="Costo Anual de Mantener"
+            value={fmtMoneda(rangoActivo.costoMantener ?? 0, moneda)}
+            formula={'C_h = \\frac{Q}{2} H_j'}
+            tone="emerald"
+            description={`Inventario promedio ${fmtDecimal(q / 2)} ${unidad} × H_j = ${fmtDecimal(rangoActivo.costoMantenerEfectivo)} ${moneda}.`}
+          />
+          <KpiCard
+            title="Costo Anual de Adquisición"
+            value={fmtMoneda(rangoActivo.costoProducto ?? 0, moneda)}
+            formula={'C_p = D \\times C_j'}
+            tone="slate"
+            description={`${fmtDecimal(demanda)} ${unidad} × precio C_j = ${fmtDecimal(rangoActivo.costoUnitario)} ${moneda}.`}
+          />
+          <KpiCard
+            title="Costo Total Anual"
+            value={fmtMoneda(rangoActivo.costoTotal ?? 0, moneda)}
+            formula={'TC_j = C_o + C_h + C_p'}
+            tone="emerald"
+            highlight={rangoActivo.esGanador}
+            description={
+              rangoActivo.esGanador
+                ? 'Este es el menor costo total entre los niveles válidos: es el lote óptimo final.'
+                : 'Suma de ordenar, mantener y adquirir; no es el más bajo, por eso este nivel no se elige.'
+            }
+          />
+        </div>
+      )}
+    </section>
   );
 }
