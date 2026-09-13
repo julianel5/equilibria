@@ -1,10 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import Formula from '@shared/components/Formula';
 
-const proximos = [
-  'Teoría de Colas',
-];
-
 export default function HomePage() {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
@@ -74,16 +70,6 @@ export default function HomePage() {
               <Formula tex="TC_j = \frac{D}{Q}S + \frac{Q}{2}H_j + DC_j" />
             </div>
           </NavLink>
-
-          {proximos.map((m) => (
-            <div
-              key={m}
-              className="cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 p-5 opacity-60  dark:border-gray-700 dark:bg-gray-800"
-            >
-              <p className="text-base font-semibold text-slate-500  dark:text-gray-400">{m}</p>
-              <p className="mt-1 text-xs text-slate-400  dark:text-gray-500">Próximamente</p>
-            </div>
-          ))}
         </div>
       </section>
 
@@ -102,6 +88,19 @@ export default function HomePage() {
             </p>
             <div className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-slate-600  dark:bg-blue-500/20 dark:text-blue-300">
               <Formula tex="ROP = \bar{d}L + Z\sigma_d\sqrt{L}" />
+            </div>
+          </NavLink>
+
+          <NavLink
+            to="/stochastic/teoria-colas"
+            className="rounded-lg border border-blue-200 bg-white p-5 shadow-md  hover:scale-[1.02] dark:border-blue-900 dark:bg-gray-800"
+          >
+            <p className="text-base font-bold text-blue-600  dark:text-blue-400">Teoría de Colas</p>
+            <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
+              Sistemas estocásticos M/M/1 y M/M/c
+            </p>
+            <div className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-slate-600  dark:bg-blue-500/20 dark:text-blue-300">
+              <Formula tex="L = L_q + \frac{\lambda}{\mu}" />
             </div>
           </NavLink>
         </div>

@@ -213,6 +213,31 @@ export interface TeoriaDecisionesResult {
   matrizArrepentimiento: number[][];
 }
 
+export interface TeoriaColasInput {
+  tasaLlegada: number;
+  tasaServicio: number;
+  servidores: number;
+}
+
+export interface EstadoProbabilidadColas {
+  n: number;
+  probabilidad: number;
+}
+
+export interface TeoriaColasResult {
+  modelo: 'MM1' | 'MMc';
+  lambda: number;
+  mu: number;
+  c: number;
+  rho: number;
+  p0: number;
+  lq: number;
+  l: number;
+  wq: number;
+  w: number;
+  distribucion: EstadoProbabilidadColas[];
+}
+
 const API_BASE = '/api';
 
 export interface ApiIssue {
@@ -310,4 +335,15 @@ export async function calcularTeoriaDecisiones(input: TeoriaDecisionesInput): Pr
 
   const { data } = await parseResponse(res);
   return data as TeoriaDecisionesResult;
+}
+
+export async function calcularTeoriaColas(input: TeoriaColasInput): Promise<TeoriaColasResult> {
+  const res = await fetch(`${API_BASE}/colas/evaluar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const { data } = await parseResponse(res);
+  return data as TeoriaColasResult;
 }

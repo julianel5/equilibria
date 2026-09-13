@@ -29,3 +29,11 @@ export type {
   CriterioClave,
 } from './modules/decisions/teoriaDecisiones.service';
 export { TeoriaDecisionesInputSchema } from './modules/decisions/teoriaDecisiones.service';
+export { calcularTeoriaColas, calcularMM1, calcularMMc } from './modules/colas/teoriaColas.service';
+export type {
+  TeoriaColasInput,
+  TeoriaColasResult,
+  ModeloColas,
+  EstadoProbabilidadColas,
+} from './modules/colas/teoriaColas.service';
+export { TeoriaColasInputSchema } from './modules/colas/teoriaColas.service';
