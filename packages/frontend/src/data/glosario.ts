@@ -268,3 +268,60 @@ export const VARIABLES_EOQDESCUENTOS: VariableDef[] = [
       'Costo anual del candidato del nivel: TC = (D/Q)S + (Q/2)H_j + D·C_j. El ganador es el nivel con el TC menor.',
   },
 ];
+
+export const VARIABLES_DEMANDAPROBABILISTICA: VariableDef[] = [
+  {
+    simbolo: '\\bar{d}',
+    nombre: 'Demanda promedio diaria',
+    descripcion:
+      'Cantidad promedio de unidades demandada por día de trabajo.',
+  },
+  {
+    simbolo: '\\sigma_d',
+    nombre: 'Desviación estándar de la demanda diaria',
+    descripcion:
+      'Medida de la variabilidad día a día de la demanda.',
+  },
+  {
+    simbolo: 'L',
+    nombre: 'Tiempo de entrega (Lead Time)',
+    descripcion:
+      'Días que tarda el proveedor en entregar una orden después de emitirla. Se asume fijo y conocido.',
+  },
+  {
+    simbolo: 'CSL',
+    nombre: 'Nivel de servicio',
+    descripcion:
+      'Probabilidad deseada de no agotar el inventario durante el tiempo de entrega, expresada en porcentaje y estrictamente entre 50% y 99.99%.',
+  },
+  {
+    simbolo: 'Z',
+    nombre: 'Valor Z',
+    descripcion:
+      'Cuantil de la distribución normal estándar para la probabilidad CSL (Z = Φ⁻¹(CSL)). Se obtiene numéricamente con la inversa de la normal.',
+  },
+  {
+    simbolo: 'D_L',
+    nombre: 'Demanda durante el tiempo de entrega',
+    descripcion:
+      'Cantidad esperada que se consume durante el lead time (D_L = d̄ × L).',
+  },
+  {
+    simbolo: '\\sigma_L',
+    nombre: 'Desviación estándar durante el tiempo de entrega',
+    descripcion:
+      'Variabilidad de la demanda acumulada en L días (σ_L = σ_d × √L). Al ser el lead time constante, basta multiplicar la desviación diaria por √L.',
+  },
+  {
+    simbolo: 'SS',
+    nombre: 'Stock de Seguridad',
+    descripcion:
+      'Inventario adicional que protege contra la variabilidad de la demanda durante el lead time (SS = Z × σ_L).',
+  },
+  {
+    simbolo: 'ROP',
+    nombre: 'Punto de Reorden',
+    descripcion:
+      'Nivel de inventario en el que se debe emitir una nueva orden, para cubrir la demanda esperada más el stock de seguridad (ROP = D_L + SS).',
+  },
+];

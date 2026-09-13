@@ -157,6 +157,28 @@ export interface EOQDescuentosResult {
   };
 }
 
+export interface DemandaProbabilisticaInput {
+  demandaPromedioDiaria: number;
+  desviacionEstandarDemandaDiaria: number;
+  tiempoEntrega: number;
+  nivelServicio: number;
+}
+
+export interface DemandaProbabilisticaResult {
+  valorZ: number;
+  demandaDuranteEntrega: number;
+  sigmaDuranteEntrega: number;
+  stockSeguridad: number;
+  puntoReorden: number;
+  desglose: {
+    demandaPromedioDiaria: number;
+    desviacionEstandarDemandaDiaria: number;
+    tiempoEntrega: number;
+    nivelServicio: number;
+    valorZExacto: number;
+  };
+}
+
 const API_BASE = '/api';
 
 export interface ApiIssue {
@@ -230,4 +252,17 @@ export async function calcularEOQDescuentos(input: EOQDescuentosInput): Promise<
 
   const { data } = await parseResponse(res);
   return data as EOQDescuentosResult;
+}
+
+export async function calcularDemandaProbabilistica(
+  input: DemandaProbabilisticaInput
+): Promise<DemandaProbabilisticaResult> {
+  const res = await fetch(`${API_BASE}/stochastic/punto-reorden`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const { data } = await parseResponse(res);
+  return data as DemandaProbabilisticaResult;
 }

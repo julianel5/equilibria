@@ -14,3 +14,9 @@ export type {
   RangoEvaluacion,
 } from './modules/inventory/eoqDescuentos.service';
 export { EOQDescuentosInputSchema, RangoPrecioSchema } from './modules/inventory/eoqDescuentos.service';
+export { calcularDemandaProbabilistica, inversaNormalEstandar } from './modules/stochastic/demandaProbabilistica.service';
+export type {
+  DemandaProbabilisticaInput,
+  DemandaProbabilisticaResult,
+} from './modules/stochastic/demandaProbabilistica.service';
+export { DemandaProbabilisticaInputSchema } from './modules/stochastic/demandaProbabilistica.service';
