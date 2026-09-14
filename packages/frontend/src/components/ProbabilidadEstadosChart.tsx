@@ -54,9 +54,9 @@ export default function ProbabilidadEstadosChart({
 
   return (
     <div>
-      <div className="h-[360px] w-full">
+      <div className="h-[360px] w-full pl-8">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={datos} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+          <BarChart data={datos} margin={{ top: 20, right: 20, bottom: 30, left: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
             <XAxis
               dataKey="n"
@@ -66,6 +66,7 @@ export default function ProbabilidadEstadosChart({
               tick={{ fill: tickColor, fontSize: 12 }}
               tickLine={{ stroke: tickLineColor }}
               allowDecimals={false}
+              padding={{ left: 30 }}
               label={{
                 value: 'Clientes en el sistema (n)',
                 position: 'insideBottom',
@@ -87,7 +88,6 @@ export default function ProbabilidadEstadosChart({
                 fill: axisLabelColor,
                 fontSize: 13,
               }}
-              width={70}
             />
             <Tooltip
               content={({ active, payload }) => {
