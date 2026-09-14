@@ -3,6 +3,8 @@ import {
   calcularTeoriaColas,
   ApiError,
   type TeoriaColasResult,
+  type TiempoConUnidadColas,
+  type UnidadTiempoColas,
 } from '../services/api';
 import TeoriaColasTeoria from '../components/TeoriaColasTeoria';
 import ProbabilidadEstadosChart from '../components/ProbabilidadEstadosChart';
@@ -25,6 +27,24 @@ const MODELOS: { clave: Modelo; etiqueta: string; descripcion: string }[] = [
   { clave: 'MMc', etiqueta: 'Múltiples Servidores (M/M/c)', descripcion: 'c servidores en paralelo y una única cola.' },
 ];
 
+const UNIDADES_TIEMPO: { clave: UnidadTiempoColas; etiqueta: string }[] = [
+  { clave: 'horas', etiqueta: 'Horas (por defecto)' },
+  { clave: 'minutos', etiqueta: 'Minutos' },
+  { clave: 'dias', etiqueta: 'Días' },
+];
+
+const ETIQUETA_UNIDAD: Record<UnidadTiempoColas, string> = {
+  horas: 'horas',
+  minutos: 'minutos',
+  dias: 'días',
+};
+
+const TASA_INPUTS: Record<UnidadTiempoColas, { llegada: string; servicio: string }> = {
+  horas: { llegada: 'Clientes por hora', servicio: 'Clientes atendidos por servidor y por hora' },
+  minutos: { llegada: 'Clientes por minuto', servicio: 'Clientes atendidos por servidor y por minuto' },
+  dias: { llegada: 'Clientes por día', servicio: 'Clientes atendidos por servidor y por día' },
+};
+
 interface FormState {
   tasaLlegada: string;
   tasaServicio: string;
@@ -37,6 +57,7 @@ const fmtDecimal = (n: number, max = 4) =>
 export default function TeoriaColasPage() {
   const [pestana, setPestana] = useState<Pestana>('calculadora');
   const [modelo, setModelo] = useState<Modelo>('MM1');
+  const [unidadTiempo, setUnidadTiempo] = useState<UnidadTiempoColas>('horas');
   const [form, setForm] = useState<FormState>({
     tasaLlegada: '10',
     tasaServicio: '12',
@@ -48,7 +69,7 @@ export default function TeoriaColasPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [glosarioAbierto, setGlosarioAbierto] = useState(false);
 
-  const calcular = useCallback(async (datos: FormState, modo: Modelo) => {
+  const calcular = useCallback(async (datos: FormState, modo: Modelo, unidad: UnidadTiempoColas) => {
     setCargando(true);
     setErrors([]);
     setFieldErrors({});
@@ -58,6 +79,7 @@ export default function TeoriaColasPage() {
         tasaServicio: Number(datos.tasaServicio),
         // En M/M/1 el campo c se oculta y se fija internamente en 1.
         servidores: modo === 'MM1' ? 1 : Math.max(1, Math.floor(Number(datos.servidores)) || 1),
+        unidadTiempo: unidad,
       });
       setResultado(res);
     } catch (e) {
@@ -81,19 +103,29 @@ export default function TeoriaColasPage() {
       setModelo(modo);
       setFieldErrors({});
       setErrors([]);
-      void calcular(form, modo);
+      void calcular(form, modo, unidadTiempo);
     },
-    [calcular, form]
+    [calcular, form, unidadTiempo]
+  );
+
+  const cambiarUnidad = useCallback(
+    (unidad: UnidadTiempoColas) => {
+      setUnidadTiempo(unidad);
+      setFieldErrors({});
+      setErrors([]);
+      void calcular(form, modelo, unidad);
+    },
+    [calcular, form, modelo]
   );
 
   useEffect(() => {
-    void calcular(form, modelo);
+    void calcular(form, modelo, unidadTiempo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    void calcular(form, modelo);
+    void calcular(form, modelo, unidadTiempo);
   };
 
   const handleChange =
@@ -150,8 +182,10 @@ export default function TeoriaColasPage() {
   }
 
   const esMM1 = resultado.modelo === 'MM1';
-  const unidadTiempoW =
-    'Tiempo promedio en las mismas unidades de tiempo de λ y μ (por ejemplo, por hora, por día…).';
+  const descripcionTiempo = (item: TiempoConUnidadColas) =>
+    item.conversion
+      ? `Equivale a ${item.conversion.texto} (conversión pedagógica para valores menores a 1 ${ETIQUETA_UNIDAD[unidadTiempo]}).`
+      : `Medido en las unidades seleccionadas (${ETIQUETA_UNIDAD[unidadTiempo]}).`;
 
   return (
     <div className="space-y-6">
@@ -209,6 +243,27 @@ export default function TeoriaColasPage() {
             </fieldset>
 
             <label className="block">
+              <span className="mb-1 block text-sm font-medium text-slate-600  dark:text-gray-300">
+                Unidad de tiempo base
+              </span>
+              <select
+                aria-label="Unidad de tiempo base"
+                value={unidadTiempo}
+                onChange={(e) => cambiarUnidad(e.target.value as UnidadTiempoColas)}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
+              >
+                {UNIDADES_TIEMPO.map((u) => (
+                  <option key={u.clave} value={u.clave}>
+                    {u.etiqueta}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-0.5 block text-xs text-slate-400  dark:text-gray-500">
+                Unidad de tiempo con la que se expresan λ, μ y los tiempos W_q y W.
+              </span>
+            </label>
+
+            <label className="block">
               <span className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-600  dark:text-gray-300">
                 Tasa de llegada
                 <span className="text-slate-400  dark:text-gray-500">
@@ -226,7 +281,7 @@ export default function TeoriaColasPage() {
                 className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
               />
               <span className="mt-0.5 block text-xs text-slate-400  dark:text-gray-500">
-                Clientes por unidad de tiempo
+                {TASA_INPUTS[unidadTiempo].llegada}
               </span>
               {fieldErrors.tasaLlegada ? (
                 <span
@@ -256,7 +311,7 @@ export default function TeoriaColasPage() {
                 className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
               />
               <span className="mt-0.5 block text-xs text-slate-400  dark:text-gray-500">
-                Clientes atendidos por servidor y por unidad de tiempo
+                {TASA_INPUTS[unidadTiempo].servicio}
               </span>
               {fieldErrors.tasaServicio ? (
                 <span
@@ -379,23 +434,23 @@ export default function TeoriaColasPage() {
             />
             <KpiCard
               title="Tiempo de espera en cola"
-              value={fmtDecimal(resultado.wq)}
+              value={resultado.unidadTiempo.wq.texto}
               formula={'W_q = \\frac{L_q}{\\lambda}'}
               tone="slate"
-              description={unidadTiempoW}
+              description={descripcionTiempo(resultado.unidadTiempo.wq)}
             />
             <KpiCard
               title="Tiempo en el sistema"
-              value={fmtDecimal(resultado.w)}
+              value={resultado.unidadTiempo.w.texto}
               formula={'W = W_q + \\frac{1}{\\mu}'}
               tone="slate"
-              description={unidadTiempoW}
+              description={descripcionTiempo(resultado.unidadTiempo.w)}
             />
           </div>
           <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500  dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-            Los tiempos <strong>W_q</strong> y <strong>W</strong> se miden en las mismas unidades de
-            tiempo con las que definiste <strong>λ</strong> y <strong>μ</strong> (por ejemplo, por
-            hora, por día…).
+            Los tiempos <strong>W_q</strong> y <strong>W</strong> se expresan en las unidades
+            seleccionadas (<strong>{ETIQUETA_UNIDAD[unidadTiempo]}</strong>). Si el valor es menor a 1
+            se agrega su equivalente en minutos o segundos.
           </p>
         </section>
       </div>

@@ -220,3 +220,68 @@ describe('Teoría de Colas — validaciones (Zod)', () => {
     ).not.toThrow();
   });
 });
+
+describe('Teoría de Colas — Unidad de tiempo y conversiones', () => {
+  test('usa "horas" por defecto con su etiqueta de tasas', () => {
+    const r = calcularTeoriaColas({ tasaLlegada: 10, tasaServicio: 12, servidores: 1 });
+    expect(r.unidadTiempo.unidad).toBe('horas');
+    expect(r.unidadTiempo.tasa).toBe('clientes / hora');
+  });
+
+  test('Wq y W muestran el valor con la unidad base (horas)', () => {
+    // λ=10, μ=12 → Wq=0.416667, W=0.5
+    const r = calcularTeoriaColas({ tasaLlegada: 10, tasaServicio: 12, servidores: 1 });
+    expect(r.unidadTiempo.wq.texto).toBe('0.4167 horas');
+    expect(r.unidadTiempo.w.texto).toBe('0.5 horas');
+  });
+
+  test('convierte Wq y W < 1 hora a su equivalente en minutos', () => {
+    const r = calcularTeoriaColas({ tasaLlegada: 10, tasaServicio: 12, servidores: 1 });
+    expect(r.unidadTiempo.wq.conversion?.texto).toBe('25 min');
+    expect(r.unidadTiempo.w.conversion?.texto).toBe('30 min');
+  });
+
+  test('convierte tiempos muy pequeños a segundos', () => {
+    // λ=10, μ=100 → Wq=0.001111 h (4 s), W=0.011111 h (40 s)
+    const r = calcularTeoriaColas({ tasaLlegada: 10, tasaServicio: 100, servidores: 1 });
+    expect(r.unidadTiempo.wq.conversion?.unidad).toBe('seg');
+    expect(r.unidadTiempo.wq.conversion?.texto).toBe('4 seg');
+    expect(r.unidadTiempo.w.conversion?.texto).toBe('40 seg');
+  });
+
+  test('no muestra conversión si W ≥ 1 en la unidad base y usa singular', () => {
+    // λ=4, μ=5 → W=1 hora exacta, Wq=0.8 horas (48 min)
+    const r = calcularTeoriaColas({ tasaLlegada: 4, tasaServicio: 5, servidores: 1 });
+    expect(r.unidadTiempo.w.texto).toBe('1 hora');
+    expect(r.unidadTiempo.w.conversion).toBeNull();
+    expect(r.unidadTiempo.wq.conversion?.texto).toBe('48 min');
+  });
+
+  test('con unidad minutos convierte los valores < 1 a segundos', () => {
+    // λ=0.25, μ=1 → Wq=0.3333 min (20 s), W=1.3333 min (sin conversión)
+    const r = calcularTeoriaColas({
+      tasaLlegada: 0.25,
+      tasaServicio: 1,
+      servidores: 1,
+      unidadTiempo: 'minutos',
+    });
+    expect(r.unidadTiempo.tasa).toBe('clientes / minuto');
+    expect(r.unidadTiempo.wq.texto).toBe('0.3333 minutos');
+    expect(r.unidadTiempo.wq.conversion?.texto).toBe('20 seg');
+    expect(r.unidadTiempo.w.texto).toBe('1.3333 minutos');
+    expect(r.unidadTiempo.w.conversion).toBeNull();
+  });
+
+  test('con unidad días no se genera conversión a subunidades', () => {
+    const r = calcularTeoriaColas({
+      tasaLlegada: 10,
+      tasaServicio: 5,
+      servidores: 3,
+      unidadTiempo: 'dias',
+    });
+    expect(r.unidadTiempo.tasa).toBe('clientes / día');
+    expect(r.unidadTiempo.wq.texto).toBe('0.0889 días');
+    expect(r.unidadTiempo.wq.conversion).toBeNull();
+    expect(r.unidadTiempo.w.conversion).toBeNull();
+  });
+});

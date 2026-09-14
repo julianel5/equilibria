@@ -47,6 +47,7 @@ export const TeoriaColasInputSchema = z
       .number()
       .int({ message: 'El número de servidores (c) debe ser un entero.' })
       .min(1, { message: 'El número de servidores (c) debe ser mayor o igual a 1.' }),
+    unidadTiempo: z.enum(['horas', 'minutos', 'dias']).default('horas'),
   })
   .superRefine((data, ctx) => {
     // Regla de estabilidad crítica: la capacidad total (c·μ) debe superar la
@@ -67,9 +68,30 @@ export type TeoriaColasInput = z.input<typeof TeoriaColasInputSchema>;
 
 export type ModeloColas = 'MM1' | 'MMc';
 
+export type UnidadTiempoColas = 'horas' | 'minutos' | 'dias';
+
 export interface EstadoProbabilidadColas {
   n: number;
   probabilidad: number;
+}
+
+/** Conversión pedagógica de un tiempo < 1 a una subunidad (min o seg). */
+export interface ConversionTiempoColas {
+  valor: number;
+  unidad: 'min' | 'seg';
+  texto: string;
+}
+
+export interface TiempoConUnidadColas {
+  texto: string; // p. ej. "0.4167 horas" (valor + unidad base)
+  conversion: ConversionTiempoColas | null; // p. ej. { texto: "25 min" }
+}
+
+export interface UnidadTiempoColasResult {
+  unidad: UnidadTiempoColas;
+  tasa: string; // p. ej. "clientes / hora"
+  wq: TiempoConUnidadColas;
+  w: TiempoConUnidadColas;
 }
 
 export interface TeoriaColasResult {
@@ -84,6 +106,7 @@ export interface TeoriaColasResult {
   wq: number;            // tiempo promedio de espera en la cola Wq
   w: number;             // tiempo promedio en el sistema W
   distribucion: EstadoProbabilidadColas[]; // P_n para n = 0..N_MAX
+  unidadTiempo: UnidadTiempoColasResult;   // etiquetas y conversiones para la UI
 }
 
 // --- Servicio ---
@@ -92,6 +115,47 @@ const N_MAX = 15;
 
 const redondear = (n: number, decimales = 6): number =>
   Math.round(n * 10 ** decimales) / 10 ** decimales;
+
+const fmtCorto = (n: number, max = 4): string =>
+  n.toLocaleString('en-US', { maximumFractionDigits: max });
+
+const ETIQUETAS_UNIDAD: Record<
+  UnidadTiempoColas,
+  { base: string; baseSingular: string; tasa: string }
+> = {
+  horas: { base: 'horas', baseSingular: 'hora', tasa: 'clientes / hora' },
+  minutos: { base: 'minutos', baseSingular: 'minuto', tasa: 'clientes / minuto' },
+  dias: { base: 'días', baseSingular: 'día', tasa: 'clientes / día' },
+};
+
+const textoBase = (valor: number, unidad: UnidadTiempoColas): string => {
+  const etiqueta = valor === 1 ? ETIQUETAS_UNIDAD[unidad].baseSingular : ETIQUETAS_UNIDAD[unidad].base;
+  return `${fmtCorto(valor)} ${etiqueta}`;
+};
+
+const textoSubUnidad = (valor: number): string => `${fmtCorto(valor, 1)}`;
+
+function convertirSubUnidad(valor: number, unidad: UnidadTiempoColas): ConversionTiempoColas | null {
+  if (unidad === 'horas') {
+    if (valor >= 1) return null;
+    const minutos = valor * 60;
+    if (minutos >= 1) {
+      const v = redondear(minutos, 1);
+      return { valor: v, unidad: 'min', texto: `${textoSubUnidad(v)} min` };
+    }
+    const segundos = valor * 3600;
+    const v = redondear(segundos, 1);
+    return { valor: v, unidad: 'seg', texto: `${textoSubUnidad(v)} seg` };
+  }
+  if (unidad === 'minutos') {
+    if (valor >= 1) return null;
+    const segundos = valor * 60;
+    const v = redondear(segundos, 1);
+    return { valor: v, unidad: 'seg', texto: `${textoSubUnidad(v)} seg` };
+  }
+  // 'dias': no se indica conversión (la subunidad natural sería las horas y no se pide).
+  return null;
+}
 
 function factorial(n: number): number {
   let resultado = 1;
@@ -169,6 +233,10 @@ export function calcularTeoriaColas(input: TeoriaColasInput): TeoriaColasResult 
   const distribucion =
     modelo === 'MM1' ? distribucionMM1(metricas.rho) : distribucionMMc(metricas.p0, c, metricas.rho);
 
+  const unidad = validated.unidadTiempo;
+  const wq = redondear(metricas.wq);
+  const w = redondear(metricas.w);
+
   return {
     modelo,
     lambda,
@@ -178,8 +246,14 @@ export function calcularTeoriaColas(input: TeoriaColasInput): TeoriaColasResult 
     p0: redondear(metricas.p0),
     lq: redondear(metricas.lq),
     l: redondear(metricas.l),
-    wq: redondear(metricas.wq),
-    w: redondear(metricas.w),
+    wq,
+    w,
     distribucion,
+    unidadTiempo: {
+      unidad,
+      tasa: ETIQUETAS_UNIDAD[unidad].tasa,
+      wq: { texto: textoBase(wq, unidad), conversion: convertirSubUnidad(wq, unidad) },
+      w: { texto: textoBase(w, unidad), conversion: convertirSubUnidad(w, unidad) },
+    },
   };
 }

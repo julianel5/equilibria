@@ -213,15 +213,36 @@ export interface TeoriaDecisionesResult {
   matrizArrepentimiento: number[][];
 }
 
+export type UnidadTiempoColas = 'horas' | 'minutos' | 'dias';
+
 export interface TeoriaColasInput {
   tasaLlegada: number;
   tasaServicio: number;
   servidores: number;
+  unidadTiempo?: UnidadTiempoColas;
 }
 
 export interface EstadoProbabilidadColas {
   n: number;
   probabilidad: number;
+}
+
+export interface ConversionTiempoColas {
+  valor: number;
+  unidad: 'min' | 'seg';
+  texto: string;
+}
+
+export interface TiempoConUnidadColas {
+  texto: string;
+  conversion: ConversionTiempoColas | null;
+}
+
+export interface UnidadTiempoColasResult {
+  unidad: UnidadTiempoColas;
+  tasa: string;
+  wq: TiempoConUnidadColas;
+  w: TiempoConUnidadColas;
 }
 
 export interface TeoriaColasResult {
@@ -236,6 +257,7 @@ export interface TeoriaColasResult {
   wq: number;
   w: number;
   distribucion: EstadoProbabilidadColas[];
+  unidadTiempo: UnidadTiempoColasResult;
 }
 
 const API_BASE = '/api';
