@@ -37,3 +37,14 @@ export type {
   EstadoProbabilidadColas,
 } from './modules/colas/teoriaColas.service';
 export { TeoriaColasInputSchema } from './modules/colas/teoriaColas.service';
+export { calcularMetodoGrafico } from './modules/pl/metodoGrafico.service';
+export type {
+  MetodoGraficoInput,
+  MetodoGraficoResult,
+  TipoOptimizacionPL,
+  FuncionObjetivoPL,
+  RestriccionPL,
+  VerticePL,
+  InterseccionDescartadaPL,
+} from './modules/pl/metodoGrafico.service';
+export { MetodoGraficoInputSchema } from './modules/pl/metodoGrafico.service';

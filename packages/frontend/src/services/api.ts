@@ -260,6 +260,52 @@ export interface TeoriaColasResult {
   unidadTiempo: UnidadTiempoColasResult;
 }
 
+export type TipoOptimizacionPL = 'MAX' | 'MIN';
+
+export interface FuncionObjetivoPL {
+  tipo: TipoOptimizacionPL;
+  c1: number;
+  c2: number;
+}
+
+export type OperadorPL = '<=' | '>=' | '=';
+
+export interface RestriccionPL {
+  id: string;
+  x1: number;
+  x2: number;
+  operador: OperadorPL;
+  rhs: number;
+}
+
+export interface MetodoGraficoInput {
+  funcionObjetivo: FuncionObjetivoPL;
+  restricciones: RestriccionPL[];
+}
+
+export interface VerticePL {
+  x1: number;
+  x2: number;
+  z: number;
+  esVerticeOptimo: boolean;
+}
+
+export interface InterseccionDescartadaPL {
+  restriccionA: string;
+  restriccionB: string;
+  motivo: string;
+  punto?: { x1: number; x2: number };
+}
+
+export interface MetodoGraficoResult {
+  funcionObjetivo: FuncionObjetivoPL;
+  verticeOptimo: VerticePL | VerticePL[];
+  valorZ: number;
+  multiplesOptimos: boolean;
+  verticesFactibles: VerticePL[];
+  interseccionesDescartadas: InterseccionDescartadaPL[];
+}
+
 const API_BASE = '/api';
 
 export interface ApiIssue {
@@ -368,4 +414,15 @@ export async function calcularTeoriaColas(input: TeoriaColasInput): Promise<Teor
 
   const { data } = await parseResponse(res);
   return data as TeoriaColasResult;
+}
+
+export async function calcularMetodoGrafico(input: MetodoGraficoInput): Promise<MetodoGraficoResult> {
+  const res = await fetch(`${API_BASE}/pl/grafico`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const { data } = await parseResponse(res);
+  return data as MetodoGraficoResult;
 }

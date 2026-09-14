@@ -8,6 +8,7 @@ import EOQDescuentosPage from './pages/EOQDescuentosPage';
 import PuntoReordenPage from './pages/PuntoReordenPage';
 import TeoriaDecisionesPage from './pages/TeoriaDecisionesPage';
 import TeoriaColasPage from './pages/TeoriaColasPage';
+import MetodoGraficoPage from './pages/MetodoGraficoPage';
 import ThemeToggle from './components/ThemeToggle';
 import { ThemeProvider } from './hooks/useTheme';
 
@@ -20,6 +21,7 @@ const TITULOS: Record<string, string> = {
   '/stochastic/punto-reorden': 'Punto de Reorden - Equilibria',
   '/decisiones/matriz-pagos': 'Matriz de Pagos - Equilibria',
   '/stochastic/teoria-colas': 'Teoría de Colas - Equilibria',
+  '/pl/metodo-grafico': 'Método Gráfico - Equilibria',
 };
 
 const linkClasses = ({ isActive }: { isActive: boolean }) =>
@@ -38,6 +40,7 @@ const NAV_LINKS: { to: string; label: string; end?: boolean }[] = [
   { to: '/stochastic/punto-reorden', label: 'Probabilística' },
   { to: '/decisiones/matriz-pagos', label: 'Decisiones' },
   { to: '/stochastic/teoria-colas', label: 'Colas' },
+  { to: '/pl/metodo-grafico', label: 'Mét. Gráfico' },
 ];
 
 export default function App() {
@@ -141,6 +144,7 @@ export default function App() {
             <Route path="/stochastic/punto-reorden" element={<PuntoReordenPage />} />
             <Route path="/decisiones/matriz-pagos" element={<TeoriaDecisionesPage />} />
             <Route path="/stochastic/teoria-colas" element={<TeoriaColasPage />} />
+            <Route path="/pl/metodo-grafico" element={<MetodoGraficoPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
