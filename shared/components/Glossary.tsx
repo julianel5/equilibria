@@ -41,7 +41,7 @@ export default function Glossary({ abierto, onClose, variables }: GlossaryProps)
         className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-2xl  dark:border-gray-700 dark:bg-gray-800"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 flex items-center justify-between gap-4 border-b border-slate-100 bg-white px-5 py-4  dark:border-gray-700 dark:bg-gray-800">
+        <div className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 dark:border-gray-700 dark:bg-gray-800">
           <h2 className="text-lg font-semibold text-slate-700  dark:text-gray-100">
             Glosario de Nomenclatura
           </h2>
