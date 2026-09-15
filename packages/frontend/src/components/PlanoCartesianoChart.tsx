@@ -38,26 +38,31 @@ const SIMBOLO_OPERADOR: Record<RectaRestriccionPL['operador'], string> = {
   '=': '=',
 };
 
-/** Restricciones inyectadas por el motor (perímetro y caja límite) → nombres de exhibición. */
+/** Restricciones inyectadas por el motor (perímetro) → nombres de exhibición. */
 const NOMBRES_INTERNOS: Record<string, string> = {
   'x2 >= 0': 'Eje X₁',
   'x1 >= 0': 'Eje X₂',
-  'x1 <= 10000': 'Límite M',
-  'x2 <= 10000': 'Límite M',
 };
 
+/** Id generado por el motor para la caja límite dinámica (x1 <= M, x2 <= M). */
+const esCajaLimite = (id: string): boolean => /^x[12] <= \d+(?:\.\d+)?$/.test(id);
+
 /** Nombre legible de una restricción para el tooltip (p. ej. "r2" → "R2", "x2 >= 0" → "Eje X₁"). */
-function nombreRestriccion(id: string): string {
-  return NOMBRES_INTERNOS[id] ?? id.toUpperCase();
+export function nombreRestriccion(id: string): string {
+  if (NOMBRES_INTERNOS[id]) return NOMBRES_INTERNOS[id];
+  if (esCajaLimite(id)) return 'Límite M';
+  return id.toUpperCase();
 }
 
 /** Traduce los ids internos que puedan filtrarse dentro de textos libres (p. ej. el motivo). */
-function traducirNombres(texto: string): string {
+export function traducirNombres(texto: string): string {
   let resultado = texto;
   Object.entries(NOMBRES_INTERNOS).forEach(([interno, legible]) => {
     resultado = resultado.split(interno).join(legible);
   });
-  return resultado.replace(/"r(\d+)"/g, '"R$1"');
+  return resultado
+    .replace(/x[12] <= \d+(?:\.\d+)?/g, 'Límite M')
+    .replace(/"r(\d+)"/g, '"R$1"');
 }
 
 /** Formato algebraico de una restricción para la leyenda, p. ej. "R1: 2x₁ + 1x₂ ≤ 18". */
@@ -187,7 +192,7 @@ export default function PlanoCartesianoChart({
     optimos.some((o) => Math.abs(o.x1 - v.x1) < 1e-6 && Math.abs(o.x2 - v.x2) < 1e-6);
 
   // Puntos de descartes visibles: solo los que quedan cerca de la región real.
-  // Los cruces contra la caja límite de 10000 (coordenadas del orden de 10⁴) se
+  // Los cruces contra la caja límite dinámica (coordenadas del orden de M) se
   // omiten para no deformar la escala del plano.
   const rxMin = Math.min(...verticesFactibles.map((v) => v.x1));
   const rxMax = Math.max(...verticesFactibles.map((v) => v.x1));

@@ -111,6 +111,8 @@ describe('Método Gráfico — casos especiales', () => {
     expect(par).toBeDefined();
     expect(par!.motivo).toContain('paralelas');
     expect(par!.punto).toBeUndefined();
+    expect(par!.violada).toBeNull();
+    expect(par!.lineas).toEqual(['r1', 'redund']);
   });
 
   test('el óptimo tocando la caja límite lanza el error de solución no acotada', () => {
@@ -122,7 +124,7 @@ describe('Método Gráfico — casos especiales', () => {
   });
 
   test('MIN no acotado hacia abajo también se detecta con la caja', () => {
-    // Minimizar Z = −x1 si x1 >= 0 empuja el óptimo hacia x1 = 10000.
+    // Minimizar Z = −x1 si x1 >= 0 empuja el óptimo hacia x1 = M (caja dinámica).
     const r: MetodoGraficoInput = {
       funcionObjetivo: { tipo: 'MIN', c1: -1, c2: 0 },
       restricciones: [{ id: 'r1', x1: 1, x2: 0, operador: '>=', rhs: 0 }],
@@ -196,5 +198,106 @@ describe('Método Gráfico — geometría para UI y descartes pedagógicos', () 
     const conViolacion = r.interseccionesDescartadas.filter((d) => d.motivo.includes('restricción'));
     expect(conViolacion.length).toBeGreaterThan(0);
     expect(conViolacion.some((d) => d.punto !== undefined)).toBe(true);
+    conViolacion.forEach((d) => {
+      expect(d.violada).not.toBeNull();
+      expect(d.lineas).toHaveLength(2);
+    });
+  });
+});
+
+describe('Método Gráfico — metadata pedagógica (referencias de rectas)', () => {
+  test('cada vértice factible referencia las dos rectas que lo generaron', () => {
+    const r = calcularMetodoGrafico(caso1);
+    const ids = new Set(r.lineasEfectivas.map((l) => l.id));
+    r.verticesFactibles.forEach((v) => {
+      expect(v.lineas).toHaveLength(2);
+      v.lineas.forEach((id) => expect(ids.has(id)).toBe(true));
+    });
+  });
+
+  test('lineasEfectivas incluye las restricciones del usuario y el perímetro inyectado', () => {
+    const r = calcularMetodoGrafico(caso1);
+    const ids = r.lineasEfectivas.map((l) => l.id);
+    expect(ids).toContain('r1');
+    expect(ids).toContain('r2');
+    expect(ids).toContain('x1 >= 0');
+    expect(ids).toContain('x2 >= 0');
+    // Caja dinámica: caso 1 → R_max = 6 → M = max(10⁶, 600) = 1.000.000.
+    expect(ids).toContain('x1 <= 1000000');
+    expect(ids).toContain('x2 <= 1000000');
+    // Coeficientes coherentes con la restricción inyectada x2 >= 0.
+    const eje = r.lineasEfectivas.find((l) => l.id === 'x2 >= 0')!;
+    expect(eje).toMatchObject({ x1: 0, x2: 1, operador: '>=', rhs: 0 });
+  });
+
+  test('todo descarte registro de intersección con punto lleva su referencia recta1/recta2', () => {
+    const r = calcularMetodoGrafico(caso1);
+    r.interseccionesDescartadas
+      .filter((d) => d.punto !== undefined)
+      .forEach((d) => {
+        expect(d.lineas).toHaveLength(2);
+      });
+  });
+
+  test('el payload de descartes omite el artificio de la caja límite (Límite M)', () => {
+    // La caja M dinámica es solo una defensa computacional; no debe
+    // filtrarse a la interfaz pedagógica.
+    const r = calcularMetodoGrafico(caso1);
+    const r1 = caso1.restricciones[0]; // r1: x1+x2 <= 4
+    for (const d of r.interseccionesDescartadas) {
+      expect(d.restriccionA).not.toBe('x1 <= 1000000');
+      expect(d.restriccionA).not.toBe('x2 <= 1000000');
+      expect(d.restriccionB).not.toBe('x1 <= 1000000');
+      expect(d.restriccionB).not.toBe('x2 <= 1000000');
+    }
+    // Los cruces con los ejes de no negatividad (Eje X₁ / Eje X₂) sí permanecen
+    // como parte del análisis estándar: r1 ∩ (x1 >= 0) viola r2 y (x2 >= 0) ∩ r2 viola r1.
+    expect(
+      r.interseccionesDescartadas.some(
+        (d) =>
+          (d.restriccionA === 'r1' && d.restriccionB === 'x1 >= 0') ||
+          (d.restriccionA === 'x1 >= 0' && d.restriccionB === 'r1')
+      )
+    ).toBe(true);
+    expect(
+      r.interseccionesDescartadas.some(
+        (d) =>
+          (d.restriccionA === 'r2' && d.restriccionB === 'x2 >= 0') ||
+          (d.restriccionA === 'x2 >= 0' && d.restriccionB === 'r2')
+      )
+    ).toBe(true);
+  });
+
+  test('la caja límite se adapta a la escala de los datos (M dinámico)', () => {
+    // Interceptos: r1: 25.000, r2: 30.000 y 30.000, r3: 25.000 → R_max = 30.000
+    // → M = max(10⁶, 3.000.000) = 3.000.000 (no queda en 10.000 como antes).
+    const r = calcularMetodoGrafico({
+      funcionObjetivo: { tipo: 'MAX', c1: 2, c2: 1 },
+      restricciones: [
+        { id: 'r1', x1: 1, x2: 0, operador: '<=', rhs: 25000 },
+        { id: 'r2', x1: 1, x2: 1, operador: '<=', rhs: 30000 },
+        { id: 'r3', x1: 0, x2: 1, operador: '<=', rhs: 25000 },
+      ],
+    });
+    const ids = r.lineasEfectivas.map((l) => l.id);
+    expect(ids).toContain('x1 <= 3000000');
+    expect(ids).toContain('x2 <= 3000000');
+    // El filtro pedagógico excluye los cruces con la caja dinámica.
+    r.interseccionesDescartadas.forEach((d) => {
+      expect(d.restriccionA).not.toBe('x1 <= 3000000');
+      expect(d.restriccionA).not.toBe('x2 <= 3000000');
+      expect(d.restriccionB).not.toBe('x1 <= 3000000');
+      expect(d.restriccionB).not.toBe('x2 <= 3000000');
+      expect(d.lineas).not.toContain('x1 <= 3000000');
+      expect(d.lineas).not.toContain('x2 <= 3000000');
+    });
+    // Los cruces con los ejes de no negatividad siguen presentes (r1 ∥ Eje X₂).
+    expect(
+      r.interseccionesDescartadas.some((d) => d.restriccionA === 'r1' && d.restriccionB === 'x1 >= 0')
+    ).toBe(true);
+    // Los vértices reales viven muy por debajo de M.
+    r.verticesFactibles.forEach((v) => {
+      expect(Math.max(v.x1, v.x2)).toBeLessThan(100000);
+    });
   });
 });

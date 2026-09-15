@@ -288,13 +288,27 @@ export interface VerticePL {
   x2: number;
   z: number;
   esVerticeOptimo: boolean;
+  /** Referencia de las dos rectas (id) cuya intersección genera este vértice. */
+  lineas: [string, string];
 }
 
 export interface InterseccionDescartadaPL {
   restriccionA: string;
   restriccionB: string;
+  /** Referencia de las dos rectas (id) del cruce (recta1, recta2). */
+  lineas: [string, string];
+  /** Id de la restricción violada por el punto; null si no hubo intersección única. */
+  violada: string | null;
   motivo: string;
   punto?: { x1: number; x2: number };
+}
+
+export interface LineaEfectivaPL {
+  id: string;
+  x1: number;
+  x2: number;
+  operador: OperadorPL;
+  rhs: number;
 }
 
 export interface MetodoGraficoResult {
@@ -304,6 +318,7 @@ export interface MetodoGraficoResult {
   multiplesOptimos: boolean;
   verticesFactibles: VerticePL[];
   interseccionesDescartadas: InterseccionDescartadaPL[];
+  lineasEfectivas: LineaEfectivaPL[];
 }
 
 const API_BASE = '/api';

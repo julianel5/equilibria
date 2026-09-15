@@ -10,6 +10,7 @@ import {
 import PlanoCartesianoChart, {
   type RectaRestriccionPL,
 } from '../components/PlanoCartesianoChart';
+import AnalisisAlgebraicoMetodoGrafico from '../components/AnalisisAlgebraicoMetodoGrafico';
 import MetodoGraficoTeoria from '../components/MetodoGraficoTeoria';
 import Formula from '@shared/components/Formula';
 import KpiCard from '@shared/components/KpiCard';
@@ -593,6 +594,10 @@ export default function MetodoGraficoPage() {
                 problema se reporta como no acotado; los cruces contra la caja pueden aparecer como
                 puntos descartados lejanos, que la gráfica omite para conservar la escala.
               </p>
+
+              <div className="mt-4">
+                <AnalisisAlgebraicoMetodoGrafico resultado={resultado} />
+              </div>
             </>
           ) : null}
         </section>
