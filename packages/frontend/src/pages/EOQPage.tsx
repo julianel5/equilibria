@@ -169,7 +169,22 @@ export default function EOQPage() {
         total: ordenar + mantener,
       });
     }
-    return puntos;
+
+    // Inyección explícita de Q*: la secuencia debe incluir la cantidad óptima
+    // exacta con sus costos evaluados en el Q* continuo, donde la línea de
+    // ordenar y la de mantener se cruzan (D/Q*·S = Q*/2·H).
+    const qOptimo = resultado.cantidadOptima;
+    const qExacto = Math.sqrt((2 * D * S) / H);
+    const ordenarOpt = (D / qExacto) * S;
+    const mantenerOpt = (qExacto / 2) * H;
+    const sinDuplicado = puntos.filter((p) => p.cantidad !== qOptimo);
+    sinDuplicado.push({
+      cantidad: qOptimo,
+      ordenar: ordenarOpt,
+      mantener: mantenerOpt,
+      total: ordenarOpt + mantenerOpt,
+    });
+    return sinDuplicado.sort((a, b) => a.cantidad - b.cantidad);
   }, [resultado]);
 
   if (pestana === 'teoria') {

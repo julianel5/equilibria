@@ -194,6 +194,28 @@ describe('Curva TC vs Q (Análisis de sensibilidad)', () => {
     expect(puntoMinimo.cantidad).toBeGreaterThanOrEqual(250);
     expect(puntoMinimo.cantidad).toBeLessThanOrEqual(320);
   });
+
+  test('la curva incluye el punto exacto Q* con costos en equilibrio', () => {
+    const data = generarCurvaTC({
+      demandaAnual: 10000,
+      costoOrdenar: 20,
+      costoMantener: 5,
+    });
+
+    const puntoOptimo = data.find((p) => p.cantidad === 283);
+    expect(puntoOptimo).toBeDefined();
+    // En el Q* continuo el costo de ordenar y el de mantener coinciden:
+    // D/Q·S = (Q/2)·H = √(D·S·H/2) ≈ 707.11.
+    expect(puntoOptimo!.costoOrdenar).toBeCloseTo(707.11, 2);
+    expect(puntoOptimo!.costoMantener).toBeCloseTo(707.11, 2);
+    expect(Math.abs(puntoOptimo!.costoOrdenar - puntoOptimo!.costoMantener)).toBeLessThan(0.01);
+    expect(puntoOptimo!.costoTotal).toBeCloseTo(707.11 * 2, 1);
+
+    // La secuencia queda ordenada y sin cantidades duplicadas.
+    const cantidades = data.map((p) => p.cantidad);
+    expect(cantidades).toEqual([...cantidades].sort((a, b) => a - b));
+    expect(new Set(cantidades).size).toBe(cantidades.length);
+  });
 });
 
 describe('EOQ - Costo de mantener porcentual (H = I × C)', () => {

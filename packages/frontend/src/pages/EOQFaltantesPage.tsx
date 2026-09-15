@@ -179,7 +179,23 @@ export default function EOQFaltantesPage() {
         costoFaltante: faltantes,
       });
     }
-    return puntos;
+
+    // Inyección explícita de Q*: costos evaluados en el Q* continuo, donde se
+    // cruzan ordenar con mantener+faltantes (equilibrio del modelo con déficit).
+    const qOptimo = resultado.cantidadOptima;
+    const qExacto = Math.sqrt((2 * D * S) / (kMantener + kFaltantes));
+    const ordenarOpt = (D / qExacto) * S;
+    const mantenerOpt = (qExacto / 2) * kMantener;
+    const faltantesOpt = (qExacto / 2) * kFaltantes;
+    const sinDuplicado = puntos.filter((p) => p.cantidad !== qOptimo);
+    sinDuplicado.push({
+      cantidad: qOptimo,
+      ordenar: ordenarOpt,
+      mantener: mantenerOpt,
+      total: ordenarOpt + mantenerOpt + faltantesOpt,
+      costoFaltante: faltantesOpt,
+    });
+    return sinDuplicado.sort((a, b) => a.cantidad - b.cantidad);
   }, [resultado]);
 
   if (pestana === 'teoria') {

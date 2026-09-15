@@ -52,11 +52,21 @@ interface StatProps {
   value: string;
   formula?: string;
   dot?: string;
+  /** Resalta la tarjeta cuando el cursor PASA por Q* (punto de equilibrio). */
+  resaltado?: boolean;
+  /** Texto de la insignia de equilibrio (fórmula específica del modelo). */
+  badge?: string;
 }
 
-function Stat({ label, value, formula, dot }: StatProps) {
+function Stat({ label, value, formula, dot, resaltado, badge }: StatProps) {
   return (
-    <div className="rounded-md bg-white px-3 py-2 shadow-sm  dark:bg-gray-800">
+    <div
+      className={`rounded-md px-3 py-2 shadow-sm transition-all duration-200 ${
+        resaltado
+          ? 'border border-emerald-500/50 bg-emerald-500/10 dark:border-emerald-500/50 dark:bg-emerald-500/10'
+          : 'bg-white dark:bg-gray-800'
+      }`}
+    >
       <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500  dark:text-gray-400">
         {dot ? (
           <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dot }} />
@@ -65,6 +75,15 @@ function Stat({ label, value, formula, dot }: StatProps) {
       </p>
       <p className="mt-0.5 text-lg font-bold tabular-nums text-slate-800  dark:text-gray-100">
         {value}
+      </p>
+      <p
+        className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-all duration-200 ${
+          resaltado
+            ? 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+            : 'bg-transparent text-transparent'
+        }`}
+      >
+        {badge ?? ''}
       </p>
       {formula ? (
         <p className="mt-0.5 text-xs text-slate-400  dark:text-gray-500">
@@ -112,6 +131,26 @@ export default function CostChart({
 
   // La curva de faltantes solo se dibuja si los datos la incluyen (modelos con déficit).
   const tieneFaltante = data.some((p) => p.costoFaltante !== undefined);
+
+  // Redondeo consistente: si el cursor está sobre (o muy cerca de) Q*, se fuerza
+  // la tarjeta a mostrar el punto exacto de Q* del dataset, evitando que Recharts
+  // elija el vecino más cercano (p. ej. 284 cuando Q* = 283).
+  const qOptimoExacto = Math.round(optimalQ);
+  const puntoOptimo = data.find((p) => p.cantidad === qOptimoExacto);
+  const mostrado =
+    hover && puntoOptimo && Math.abs(hover.cantidad - qOptimoExacto) < 1 ? puntoOptimo : hover;
+  // Estado de equilibrio: true cuando se está inspeccionando el punto Q*, donde
+  // los costos satisfacen la condición matemática del modelo. En el EOQ clásico
+  // C_o = C_h; con déficit autorizado el equilibrio es C_o = C_h + C_f.
+  const esEquilibrio =
+    mostrado !== null &&
+    Math.abs(mostrado.cantidad - qOptimoExacto) < 1 &&
+    (tieneFaltante
+      ? Math.abs(mostrado.ordenar - (mostrado.mantener + (mostrado.costoFaltante ?? 0))) < 1
+      : Math.abs(mostrado.ordenar - mostrado.mantener) < 1);
+  const textoEquilibrio = tieneFaltante
+    ? 'C_o = C_h + C_f · Punto de Equilibrio'
+    : 'C_o = C_h · Punto de Equilibrio';
 
   // Paleta de ejes y cuadrícula según el tema. Las curvas de costos NO cambian.
   const gridColor = dark ? '#334155' : '#e2e8f0';
@@ -240,7 +279,7 @@ export default function CostChart({
         para reservar la misma altura y evitar layout shift al pasar el cursor.
       */}
       <div className="relative mt-4 min-h-[7.5rem] overflow-hidden rounded-lg border border-slate-200 bg-slate-50 p-4 shadow-sm  dark:border-gray-700 dark:bg-gray-900">
-        <div className={hover ? 'visible' : 'invisible'}>
+        <div className={mostrado ? 'visible' : 'invisible'}>
           <div
             className={`grid grid-cols-2 gap-3 ${
               tieneFaltante ? 'lg:grid-cols-5' : 'lg:grid-cols-4'
@@ -248,39 +287,45 @@ export default function CostChart({
           >
             <Stat
               label="Cantidad"
-              value={`${hover?.cantidad.toLocaleString('en-US') ?? 0} ${unidad}`}
+              value={`${mostrado?.cantidad.toLocaleString('en-US') ?? 0} ${unidad}`}
               formula="Q"
             />
             <Stat
               label="Costo de Ordenar"
-              value={fmt(hover?.ordenar ?? 0, moneda)}
+              value={fmt(mostrado?.ordenar ?? 0, moneda)}
               formula={SERIES_FORMULAS['Costo de Ordenar']}
               dot="#ef4444"
+              resaltado={esEquilibrio}
+              badge={textoEquilibrio}
             />
             <Stat
               label="Costo de Mantener"
-              value={fmt(hover?.mantener ?? 0, moneda)}
+              value={fmt(mostrado?.mantener ?? 0, moneda)}
               formula={formulaMantener ?? SERIES_FORMULAS['Costo de Mantener']}
               dot="#10b981"
+              resaltado={esEquilibrio}
+              badge={textoEquilibrio}
             />
             {tieneFaltante ? (
               <Stat
                 label="Costo de Faltantes"
-                value={fmt(hover?.costoFaltante ?? 0, moneda)}
+                value={fmt(mostrado?.costoFaltante ?? 0, moneda)}
                 formula={formulaFaltante ?? SERIES_FORMULAS['Costo de Faltantes']}
                 dot="#d97706"
+                resaltado={esEquilibrio}
+                badge={textoEquilibrio}
               />
             ) : null}
             <Stat
               label="Costo Relevante Total"
-              value={fmt(hover?.total ?? 0, moneda)}
+              value={fmt(mostrado?.total ?? 0, moneda)}
               formula={formulaTotal ?? SERIES_FORMULAS['Costo Relevante Total']}
               dot="#2563eb"
             />
           </div>
         </div>
 
-        {!hover ? (
+        {!mostrado ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <p className="text-sm italic text-slate-400  dark:text-gray-500">
               Pasa el cursor sobre la gráfica para inspeccionar los costos detallados.

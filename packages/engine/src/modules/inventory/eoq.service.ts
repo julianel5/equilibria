@@ -232,5 +232,20 @@ export function generarCurvaTC(
     });
   }
 
-  return data;
+  // Inyección explícita del punto Q*: el arreglo debe contener la cantidad
+  // óptima exacta (redondeada a entero) con sus costos evaluados en el Q*
+  // continuo, donde se cumple el equilibrio D/Q·S = Q/2·H.
+  const qOptimo = Math.round(Qopt);
+  const ordenarOpt = (D / Qopt) * S;
+  const mantenerOpt = (Qopt / 2) * H;
+  const sinDuplicado = data.filter((p) => p.cantidad !== qOptimo);
+  sinDuplicado.push({
+    cantidad: qOptimo,
+    costoTotal: Math.round((ordenarOpt + mantenerOpt + D * C) * 100) / 100,
+    costoOrdenar: Math.round(ordenarOpt * 100) / 100,
+    costoMantener: Math.round(mantenerOpt * 100) / 100,
+  });
+  sinDuplicado.sort((a, b) => a.cantidad - b.cantidad);
+
+  return sinDuplicado;
 }

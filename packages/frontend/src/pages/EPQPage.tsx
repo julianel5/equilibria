@@ -172,7 +172,21 @@ export default function EPQPage() {
         total: ordenar + mantener,
       });
     }
-    return puntos;
+
+    // Inyección explícita de Q*: costos evaluados en el Q* continuo, donde se
+    // cruzan ordenar y mantener considerando el factor de producción (1 - D/P).
+    const qOptimo = resultado.cantidadOptima;
+    const qExacto = Math.sqrt((2 * D * S) / (H * factor));
+    const ordenarOpt = (D / qExacto) * S;
+    const mantenerOpt = (qExacto / 2) * H * factor;
+    const sinDuplicado = puntos.filter((p) => p.cantidad !== qOptimo);
+    sinDuplicado.push({
+      cantidad: qOptimo,
+      ordenar: ordenarOpt,
+      mantener: mantenerOpt,
+      total: ordenarOpt + mantenerOpt,
+    });
+    return sinDuplicado.sort((a, b) => a.cantidad - b.cantidad);
   }, [resultado]);
 
   if (pestana === 'teoria') {
