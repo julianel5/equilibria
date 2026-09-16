@@ -11,11 +11,16 @@ import { VARIABLES_TEORIADECISIONES } from '../data/glosario';
 import Formula from '@shared/components/Formula';
 import Glossary, { GlossaryButton } from '@shared/components/Glossary';
 import TabsPanel from '@shared/components/TabsPanel';
+import ProcesosView from '@shared/components/ProcesosView';
+import ArbolDecision from '../components/ArbolDecision';
 
-type Pestana = 'calculadora' | 'teoria';
+type Pestana = 'calculadora' | 'procesos' | 'teoria';
+
+type ClaveCriterio = 'maximax' | 'maximin' | 'laplace' | 'hurwicz' | 'savage' | 'vme';
 
 const PESTANAS: { clave: Pestana; etiqueta: string }[] = [
   { clave: 'calculadora', etiqueta: 'Calculadora' },
+  { clave: 'procesos', etiqueta: 'Procesos' },
   { clave: 'teoria', etiqueta: 'Teoría y Supuestos' },
 ];
 
@@ -44,6 +49,8 @@ export default function TeoriaDecisionesPage() {
   const [tipoAnalisis, setTipoAnalisis] = useState<'maximizar' | 'minimizar'>('maximizar');
   const [matriz, setMatriz] = useState<MatrizEdit | null>(null);
   const [resultado, setResultado] = useState<TeoriaDecisionesResult | null>(null);
+  const [ultimoInput, setUltimoInput] = useState<TeoriaDecisionesInput | null>(null);
+  const [criterioActivo, setCriterioActivo] = useState<ClaveCriterio>('maximax');
   const [resultadoNombres, setResultadoNombres] = useState<{
     alternativas: string[];
     estados: string[];
@@ -139,6 +146,7 @@ export default function TeoriaDecisionesPage() {
     setMatriz(null);
     setResultado(null);
     setResultadoNombres(null);
+    setUltimoInput(null);
     setErrors([]);
   };
 
@@ -203,6 +211,8 @@ export default function TeoriaDecisionesPage() {
     try {
       const res = await calcularTeoriaDecisiones(input);
       setResultado(res);
+      setUltimoInput(input);
+      setCriterioActivo(res.vmeDisponible ? 'vme' : 'maximax');
       setResultadoNombres({
         alternativas: input.alternativas.map((a) => a.nombre),
         estados: input.estados.map((e) => e.nombre),
@@ -224,6 +234,45 @@ export default function TeoriaDecisionesPage() {
       .reduce((acc, p) => acc + (Number(p) || 0), 0) ?? null;
   const probsIngresadas = matriz?.probabilidades.some((p) => p.trim() !== '') ?? false;
   const probOk = sumaProbs !== null ? Math.abs(sumaProbs - 1) < 1e-6 : true;
+
+  if (pestana === 'procesos') {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <TeoriaDecisionesHeader />
+          <GlossaryButton onClick={() => setGlosarioAbierto(true)} />
+        </div>
+        <TabsPanel
+          pestanas={PESTANAS}
+          activa={pestana}
+          onCambio={(c) => setPestana(c as Pestana)}
+          ariaLabel="Secciones de la matriz de pagos"
+        />
+        {resultado ? (
+          <ProcesosView
+            procesos={resultado.procesos}
+            encabezado="Procesos paso a paso"
+            descripcion="Cada criterio de decisión se desglosa alternativa por alternativa, con su ecuación, la sustitución numérica y el resultado."
+          />
+        ) : (
+          <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-md  dark:border-gray-700 dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-slate-700  dark:text-gray-100">
+              Aún no hay procesos
+            </h2>
+            <p className="text-sm text-slate-400  dark:text-gray-500">
+              Regresa a la pestaña Calculadora, configura la matriz y presiona{' '}
+              <strong>Calcular criterios</strong> para ver aquí el paso a paso de cada criterio.
+            </p>
+          </section>
+        )}
+        <Glossary
+          abierto={glosarioAbierto}
+          onClose={() => setGlosarioAbierto(false)}
+          variables={VARIABLES_TEORIADECISIONES}
+        />
+      </div>
+    );
+  }
 
   if (pestana === 'teoria') {
     return (
@@ -596,6 +645,56 @@ export default function TeoriaDecisionesPage() {
           alternativas={resultadoNombres.alternativas}
           estados={resultadoNombres.estados}
         />
+      ) : null}
+
+      {/* Árbol de decisión dinámico */}
+      {resultado && ultimoInput ? (
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold text-slate-700  dark:text-gray-100">
+              Árbol de decisión
+            </h2>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-medium text-slate-400  dark:text-gray-500">
+                Resolver según:
+              </span>
+              {resultado.criterios.map((c) => {
+                const activo = c.clave === criterioActivo;
+                return (
+                  <button
+                    key={c.clave}
+                    type="button"
+                    onClick={() => setCriterioActivo(c.clave as ClaveCriterio)}
+                    aria-pressed={activo}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                      activo
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700  dark:border-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300'
+                        : 'border-slate-300 bg-white text-slate-500  hover:border-emerald-300 hover:text-emerald-600 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-400 dark:hover:border-emerald-500'
+                    }`}
+                  >
+                    {c.nombre}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <p className="mb-3 text-sm text-slate-400  dark:text-gray-500">
+            Primero observa el árbol en su estado neutro. Activa el interruptor{' '}
+            <strong>Mostrar decisión recomendada (Poda)</strong> de abajo para resaltar la
+            alternativa ganadora del criterio seleccionado y podar las demás. Si la matriz es
+            grande, desplázate horizontalmente.
+          </p>
+          <div className="overflow-x-auto">
+            <ArbolDecision
+              alternativas={ultimoInput.alternativas.map((a) => a.nombre)}
+              estados={ultimoInput.estados.map((e) => e.nombre)}
+              matriz={ultimoInput.alternativas.map((a) => a.pagos)}
+              indiceOptimo={
+                resultado.criterios.find((c) => c.clave === criterioActivo)?.ganador.indice ?? null
+              }
+            />
+          </div>
+        </section>
       ) : null}
 
       <Glossary

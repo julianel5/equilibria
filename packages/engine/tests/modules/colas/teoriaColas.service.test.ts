@@ -285,3 +285,122 @@ describe('Teoría de Colas — Unidad de tiempo y conversiones', () => {
     expect(r.unidadTiempo.w.conversion).toBeNull();
   });
 });
+
+describe('Teoría de Colas — Procesos paso a paso', () => {
+  test('M/M/1 devuelve los 7 procesos en orden (tasas, ρ, P0, Lq, L, Wq, W)', () => {
+    const r = calcularTeoriaColas(mm1);
+    expect(r.procesos.map((p) => p.id)).toEqual([
+      'colas-tasas',
+      'colas-rho',
+      'colas-p0',
+      'colas-lq',
+      'colas-l',
+      'colas-wq',
+      'colas-w',
+    ]);
+    for (const p of r.procesos) {
+      expect(typeof p.titulo).toBe('string');
+      expect(typeof p.formula).toBe('string');
+      expect(typeof p.sustitucion).toBe('string');
+      expect(typeof p.resultado).toBe('string');
+    }
+  });
+
+  test('M/M/1 — tasas efectivas con su unidad de tiempo en la base', () => {
+    const r = calcularTeoriaColas(mm1);
+    const tasas = r.procesos.find((p) => p.id === 'colas-tasas')!;
+    expect(tasas.sustitucion).toBe('\\lambda = 4, \\quad \\mu = 5');
+    expect(tasas.formula).toContain('\\frac{\\text{clientes}}{\\text{hora}}');
+    expect(tasas.resultado).toContain('4');
+    expect(tasas.tipoResultado).toBe('texto');
+  });
+
+  test('M/M/1 — ρ se sustituye con λ y μ numéricos', () => {
+    const r = calcularTeoriaColas(mm1);
+    const rho = r.procesos.find((p) => p.id === 'colas-rho')!;
+    expect(rho.sustitucion).toBe('\\rho = \\frac{4}{1 \\cdot 5}');
+    expect(rho.resultado).toBe('\\rho = 0.8');
+  });
+
+  test('M/M/1 — P0 = 1 − ρ con su sustitución numérica', () => {
+    const r = calcularTeoriaColas(mm1);
+    const p0 = r.procesos.find((p) => p.id === 'colas-p0')!;
+    expect(p0.formula).toBe('P_0 = 1 - \\rho');
+    expect(p0.sustitucion).toBe('P_0 = 1 - 0.8');
+    expect(p0.resultado).toBe('P_0 = 0.2');
+  });
+
+  test('M/M/1 — Lq, L, Wq y W combinan las métricas de forma consistente', () => {
+    const r = calcularTeoriaColas(mm1);
+    const lq = r.procesos.find((p) => p.id === 'colas-lq')!;
+    const l = r.procesos.find((p) => p.id === 'colas-l')!;
+    const wq = r.procesos.find((p) => p.id === 'colas-wq')!;
+    const w = r.procesos.find((p) => p.id === 'colas-w')!;
+    expect(lq.sustitucion).toBe('L_q = \\frac{4^{2}}{5\\,\\left(5 - 4\\right)}');
+    expect(lq.resultado).toBe('L_q = 3.2');
+    expect(l.sustitucion).toBe('L = 3.2 + \\frac{4}{5}');
+    expect(l.resultado).toBe('L = 4');
+    expect(wq.sustitucion).toBe('W_q = \\frac{3.2}{4}');
+    expect(wq.resultado).toBe('W_q = 0.8');
+    expect(w.sustitucion).toBe('W = 0.8 + \\frac{1}{5}');
+    expect(w.resultado).toBe('W = 1');
+    expect(lq.tipoResultado).toBe('cantidad');
+    expect(l.tipoResultado).toBe('cantidad');
+    expect(wq.tipoResultado).toBe('tiempo');
+    expect(wq.unidad).toBe('horas');
+    expect(w.unidad).toBe('horas');
+  });
+
+  test('M/M/c — P0 expande la sumatoria término a término (c = 3) y colapsa en el resultado', () => {
+    const r = calcularTeoriaColas(mmc);
+    const p0 = r.procesos.find((p) => p.id === 'colas-p0')!;
+    expect(p0.formula).toContain('\\sum_{n=0}^{c-1}');
+    expect(p0.sustitucion).toBe(
+      'P_0 = \\left[ \\frac{2^{0}}{0!} + \\frac{2^{1}}{1!} + \\frac{2^{2}}{2!} + \\frac{2^{3}}{3!\\left(1-0.666667\\right)} \\right]^{-1}'
+    );
+    expect(p0.resultado).toBe('P_0 = \\frac{1}{1 + 2 + 2 + 4} = 0.111111');
+  });
+
+  test('M/M/c — Lq sustituye P0, (cρ)^c y ρ; el resultado coincide con el KPI', () => {
+    const r = calcularTeoriaColas(mmc);
+    const lq = r.procesos.find((p) => p.id === 'colas-lq')!;
+    expect(lq.sustitucion).toBe(
+      'L_q = \\frac{0.111111 \\cdot 2^{3} \\cdot 0.666667}{3!\\,(1-0.666667)^2}'
+    );
+    expect(lq.resultado).toBe('L_q = 0.888889');
+  });
+
+  test('M/M/c — las tasas usan la unidad base y Wq/W su unidad de tiempo', () => {
+    const r = calcularTeoriaColas(mmc);
+    const tasas = r.procesos.find((p) => p.id === 'colas-tasas')!;
+    const wq = r.procesos.find((p) => p.id === 'colas-wq')!;
+    const w = r.procesos.find((p) => p.id === 'colas-w')!;
+    expect(tasas.formula).toContain('\\text{hora}');
+    expect(wq.resultado).toBe('W_q = 0.088889');
+    expect(wq.unidad).toBe('horas');
+    expect(w.unidad).toBe('horas');
+  });
+
+  test('con unidad "minutos" las tasas y los tiempos usan esa unidad', () => {
+    const r = calcularTeoriaColas({
+      tasaLlegada: 0.25,
+      tasaServicio: 1,
+      servidores: 1,
+      unidadTiempo: 'minutos',
+    });
+    const tasas = r.procesos.find((p) => p.id === 'colas-tasas')!;
+    const wq = r.procesos.find((p) => p.id === 'colas-wq')!;
+    expect(tasas.formula).toContain('\\text{minuto}');
+    expect(wq.unidad).toBe('minutos');
+  });
+
+  test('c > 5 colapsa la sumatoria con \cdots sin perder el término de Erlang C', () => {
+    // c = 8, λ = 30, μ = 5 → cμ = 40 > 30, sistema estable.
+    const r = calcularTeoriaColas({ tasaLlegada: 30, tasaServicio: 5, servidores: 8 });
+    const p0 = r.procesos.find((p) => p.id === 'colas-p0')!;
+    expect(p0.sustitucion).toContain('\\cdots');
+    expect(p0.sustitucion).toContain('\\frac{6^{8}}{8!');
+    expect(p0.sustitucion).not.toContain('\\frac{6^{3}}{3!');
+    expect(p0.resultado).toContain('= ');
+  });
+});

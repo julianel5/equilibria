@@ -1,5 +1,20 @@
 import { z } from 'zod';
-import { validarModoCostoMantener, resolverCostoMantener } from './costoMantenerCondicional';
+import { validarModoCostoMantener } from './costoMantenerCondicional';
+import {
+  normalizarDemandaYH,
+  UNIDADES_TIEMPO,
+  type NormalizacionUnidades,
+} from './unidadesTiempo';
+import {
+  fmtProceso,
+  proceso,
+  procesoCiclo,
+  procesoDemandaDiaria,
+  procesoMantenerPorcentaje,
+  procesoROP,
+  procesosDeConversion,
+  type ProcesoCalculo,
+} from './procesos';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EOQ (Economic Order Quantity) - Cantidad Económica de Pedido
@@ -70,6 +85,12 @@ export const EOQInputSchema = z.object({
     .min(0, { message: 'El tiempo de entrega no puede ser negativo' })
     .optional()
     .describe('Tiempo de entrega en días (L) - opcional, default 0'),
+  unidadDemanda: z.enum(UNIDADES_TIEMPO)
+    .optional()
+    .describe('Unidad de tiempo de la demanda (D). Por defecto "anual".'),
+  unidadCostoMantener: z.enum(UNIDADES_TIEMPO)
+    .optional()
+    .describe('Unidad de tiempo del costo de mantener (H o I). Por defecto "anual".'),
 }).superRefine(validarModoCostoMantener);
 
 export type EOQInput = z.infer<typeof EOQInputSchema>;
@@ -86,6 +107,8 @@ export interface EOQResult {
   costoOrdenar: number;         // (D/Q) × S - Costo anual de ordenar
   costoMantener: number;        // (Q/2) × H - Costo anual de mantener
   puntoReorden: number;         // ROP = d × L - Punto de reorden (unidades)
+  conversionUnidades: NormalizacionUnidades; // Fase 0 - pasos a base anual
+  procesos: ProcesoCalculo[];   // Pestaña "Procesos": desglose paso a paso
   desglose: {
     demandaAnual: number;
     costoFijoOrden: number;
@@ -103,10 +126,13 @@ export function calcularEOQ(input: EOQInput): EOQResult {
   // Validar inputs con Zod (incluye la regla condicional del costo de mantener)
   const validated = EOQInputSchema.parse(input);
 
-  const D = validated.demandaAnual;
+  // Fase 0: estandarización de unidades (D, H/I).
+  // Caso mixto → base anual (con metadata pedagógica). Caso homogéneo → la
+  // unidad compartida (semestral, mensual…): D y H quedan en ese período y los
+  // costos y el número de pedidos se expresan respecto a esa base.
+  const { D, H, conversionUnidades } = normalizarDemandaYH(validated);
+  const { factorBase } = conversionUnidades;
   const S = validated.costoOrdenar;
-  // H efectivo: fijo o derivado como (I/100) × C según el modo seleccionado.
-  const H = resolverCostoMantener(validated);
   const C = validated.costoUnitario ?? 0;
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -122,29 +148,31 @@ export function calcularEOQ(input: EOQInput): EOQResult {
   const numeroPedidos = D / cantidadOptima;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // T = 365 / N
-  // Ciclo de reposición en días
+  // T = (días del período) / N
+  // Ciclo de reposición en días (período = año/factorBase de la unidad base)
   // ═══════════════════════════════════════════════════════════════════════════
-  const cicloReposicion = 365 / numeroPedidos;
+  const diasLaborables = validated.diasLaborables ?? 365;
+  const diasDelBase = diasLaborables / factorBase;
+  const cicloReposicion = diasDelBase / numeroPedidos;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Costo de ordenar anual = (D / Q) × S
+  // Costo de ordenar (período base) = (D / Q) × S
   // ═══════════════════════════════════════════════════════════════════════════
   const costoOrdenar = (D / cantidadOptima) * S;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Costo de mantener anual = (Q / 2) × H
+  // Costo de mantener (período base) = (Q / 2) × H
   // ═══════════════════════════════════════════════════════════════════════════
   const costoMantenerAnual = (cantidadOptima / 2) * H;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Costo de adquisición anual = D × C
+  // Costo de adquisición (período base) = D × C
   // ═══════════════════════════════════════════════════════════════════════════
   const costoAdquisicion = D * C;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // TC = (D/Q)S + (Q/2)H + DC
-  // Costo total anual
+  // Costo total del período base
   // ═══════════════════════════════════════════════════════════════════════════
   const costoTotalAnual = costoOrdenar + costoMantenerAnual + costoAdquisicion;
 
@@ -152,11 +180,10 @@ export function calcularEOQ(input: EOQInput): EOQResult {
   const inventarioPromedio = cantidadOptima / 2;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // d = D / diasLaborables
+  // d = D / (días del período base)
   // Demanda diaria (días laborables por defecto = 365)
   // ═══════════════════════════════════════════════════════════════════════════
-  const diasLaborables = validated.diasLaborables ?? 365;
-  const demandaDiaria = D / diasLaborables;
+  const demandaDiaria = D / diasDelBase;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ROP = d × L
@@ -165,6 +192,32 @@ export function calcularEOQ(input: EOQInput): EOQResult {
   // ═══════════════════════════════════════════════════════════════════════════
   const leadTime = validated.leadTime ?? 0;
   const puntoReorden = Math.round(demandaDiaria * leadTime);
+
+  // Tasa I en modo porcentaje (anualizada por la Fase 0 si hizo falta).
+  const pasoI = [...conversionUnidades.pasos].reverse().find((p) => p.variable === 'I');
+  const tasaAnual = pasoI ? pasoI.valorAnual : (validated.costoMantenerPorcentaje ?? 0);
+
+  // Procesos paso a paso (valores homogeneizados de D y H).
+  const procesos = construirProcesosEOQ({
+    conversionUnidades,
+    D,
+    H,
+    S,
+    C,
+    esPorcentaje: validated.tipoCostoMantener === 'porcentaje',
+    tasaAnual,
+    cantidadOptima,
+    numeroPedidos,
+    diasDelBase,
+    cicloReposicion,
+    costoOrdenar,
+    costoMantener: costoMantenerAnual,
+    costoAdquisicion,
+    costoTotal: costoTotalAnual,
+    demandaDiaria,
+    leadTime,
+    puntoReorden,
+  });
 
   return {
     cantidadOptima,
@@ -176,6 +229,8 @@ export function calcularEOQ(input: EOQInput): EOQResult {
     costoOrdenar: Math.round(costoOrdenar * 100) / 100,
     costoMantener: Math.round(costoMantenerAnual * 100) / 100,
     puntoReorden,
+    conversionUnidades,
+    procesos,
     desglose: {
       demandaAnual: D,
       costoFijoOrden: S,
@@ -186,6 +241,124 @@ export function calcularEOQ(input: EOQInput): EOQResult {
       demandaDiaria: Math.round(demandaDiaria * 100) / 100,
     },
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Procesos paso a paso calculados por `calcularEOQ`. Las sustituciones usan los
+// valores de D y H ya homogeneizados (base única de la Fase 0).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+interface DatosProcesosEOQ {
+  conversionUnidades: NormalizacionUnidades;
+  D: number;
+  H: number;
+  S: number;
+  C: number;
+  esPorcentaje: boolean;
+  tasaAnual: number;
+  cantidadOptima: number;
+  numeroPedidos: number;
+  diasDelBase: number;
+  cicloReposicion: number;
+  costoOrdenar: number;
+  costoMantener: number;
+  costoAdquisicion: number;
+  costoTotal: number;
+  demandaDiaria: number;
+  leadTime: number;
+  puntoReorden: number;
+}
+
+function construirProcesosEOQ(datos: DatosProcesosEOQ): ProcesoCalculo[] {
+  const procesos: ProcesoCalculo[] = procesosDeConversion(datos.conversionUnidades.pasos);
+
+  if (datos.esPorcentaje) {
+    procesos.push(procesoMantenerPorcentaje(datos.tasaAnual, datos.C, datos.H, 'eoq'));
+  }
+
+  const D = fmtProceso(datos.D);
+  const S = fmtProceso(datos.S);
+  const H = fmtProceso(datos.H);
+  const Q = fmtProceso(datos.cantidadOptima);
+  const N = fmtProceso(round2(datos.numeroPedidos));
+
+  procesos.push(
+    proceso({
+      id: 'eoq-q-optimo',
+      titulo: 'Cantidad óptima de pedido',
+      simbolo: 'Q^*',
+      formula: 'Q^* = \\sqrt{\\frac{2DS}{H}}',
+      sustitucion: `Q^* = \\sqrt{\\frac{2(${D})(${S})}{${H}}}`,
+      resultado: `Q^* = ${Q}`,
+      tipoResultado: 'cantidad',
+    }),
+    proceso({
+      id: 'eoq-numero-pedidos',
+      titulo: 'Número de pedidos',
+      simbolo: 'N',
+      formula: 'N = \\frac{D}{Q^*}',
+      sustitucion: `N = \\frac{${D}}{${Q}}`,
+      resultado: `N = ${N}`,
+      tipoResultado: 'cantidad',
+      unidad: 'pedidos',
+    }),
+    procesoCiclo(datos.diasDelBase, round2(datos.numeroPedidos), datos.cicloReposicion, 'reposicion'),
+    procesoDemandaDiaria(datos.D, datos.diasDelBase, round2(datos.demandaDiaria))
+  );
+
+  const costoOrdenar = round2(datos.costoOrdenar);
+  const costoMantener = round2(datos.costoMantener);
+  const costoAdquisicion = round2(datos.costoAdquisicion);
+  const costoTotal = round2(datos.costoTotal);
+
+  procesos.push(
+    proceso({
+      id: 'eoq-costo-ordenar',
+      titulo: 'Costo de ordenar',
+      simbolo: 'C_o',
+      formula: 'C_o = \\frac{D}{Q^*} \\cdot S',
+      sustitucion: `C_o = \\frac{${D}}{${Q}} \\cdot ${S}`,
+      resultado: `C_o = ${fmtProceso(costoOrdenar)}`,
+      tipoResultado: 'moneda',
+    }),
+    proceso({
+      id: 'eoq-costo-mantener',
+      titulo: 'Costo de mantener',
+      simbolo: 'C_h',
+      formula: 'C_h = \\frac{Q^*}{2} \\cdot H',
+      sustitucion: `C_h = \\frac{${Q}}{2} \\cdot ${H}`,
+      resultado: `C_h = ${fmtProceso(costoMantener)}`,
+      tipoResultado: 'moneda',
+    }),
+    proceso({
+      id: 'eoq-costo-adquisicion',
+      titulo: 'Costo de adquisición',
+      simbolo: 'C_c',
+      formula: 'C_c = D \\cdot C',
+      sustitucion: `C_c = ${D} \\cdot ${fmtProceso(datos.C)}`,
+      resultado: `C_c = ${fmtProceso(costoAdquisicion)}`,
+      tipoResultado: 'moneda',
+    }),
+    proceso({
+      id: 'eoq-costo-total',
+      titulo: 'Costo total',
+      simbolo: 'TC',
+      formula: 'TC = C_o + C_h + C_c',
+      sustitucion: `TC = (${fmtProceso(costoOrdenar)}) + (${fmtProceso(costoMantener)}) + (${fmtProceso(
+        costoAdquisicion
+      )})`,
+      resultado: `TC = ${fmtProceso(costoTotal)}`,
+      tipoResultado: 'moneda',
+    })
+  );
+
+  if (datos.leadTime > 0) {
+    procesos.push(procesoROP(datos.demandaDiaria, datos.leadTime, datos.puntoReorden));
+  }
+
+  return procesos;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -205,10 +378,9 @@ export function generarCurvaTC(
   puntos: number = 50
 ): SensitivityDataPoint[] {
   const validated = EOQInputSchema.parse(input);
-  const D = validated.demandaAnual;
+  // Fase 0: normalizar a base anual (misma lógica que calcularEOQ).
+  const { D, H } = normalizarDemandaYH(validated);
   const S = validated.costoOrdenar;
-  // H efectivo (fijo o derivado de I × C), igual que en calcularEOQ.
-  const H = resolverCostoMantener(validated);
   const C = validated.costoUnitario ?? 0;
 
   const Qopt = Math.sqrt((2 * D * S) / H);

@@ -1,5 +1,20 @@
 import { z } from 'zod';
-import { validarModoCostoMantener, resolverCostoMantener } from './costoMantenerCondicional';
+import { validarModoCostoMantener } from './costoMantenerCondicional';
+import {
+  normalizarDemandaYH,
+  UNIDADES_TIEMPO,
+  type NormalizacionUnidades,
+} from './unidadesTiempo';
+import {
+  fmtProceso,
+  proceso,
+  procesoCiclo,
+  procesoDemandaDiaria,
+  procesoMantenerPorcentaje,
+  procesoROP,
+  procesosDeConversion,
+  type ProcesoCalculo,
+} from './procesos';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EPQ (Economic Production Quantity) - Lote Económico de Producción
@@ -68,6 +83,12 @@ export const EPQInputSchema = z.object({
     .min(0, { message: 'El tiempo de entrega no puede ser negativo' })
     .optional()
     .describe('Tiempo de entrega en días (L) - opcional, default 0'),
+  unidadDemanda: z.enum(UNIDADES_TIEMPO)
+    .optional()
+    .describe('Unidad de tiempo de la demanda (D). Por defecto "anual".'),
+  unidadCostoMantener: z.enum(UNIDADES_TIEMPO)
+    .optional()
+    .describe('Unidad de tiempo del costo de mantener (H o I). Por defecto "anual".'),
 });
 
 // Validación de viabilidad: en el EPQ la producción debe cubrir la demanda.
@@ -101,6 +122,8 @@ export interface EPQResult {
   costoOrdenar: number;         // (D/Q*) × S - Costo anual de preparación
   costoMantener: number;        // (Imax/2) × H - Costo anual de mantener
   puntoReorden: number;         // ROP = d × L - Punto de reorden (unidades)
+  conversionUnidades: NormalizacionUnidades; // Fase 0 - pasos a base anual
+  procesos: ProcesoCalculo[];   // Pestaña "Procesos": desglose paso a paso
   desglose: {
     demandaAnual: number;
     tasaProduccion: number;
@@ -120,11 +143,12 @@ export function calcularEPQ(input: EPQInput): EPQResult {
   // Validar inputs con Zod (incluye la regla P > D)
   const validated = EPQValidatedSchema.parse(input);
 
-  const D = validated.demandaAnual;
+  // Fase 0: estandarización de unidades (D, H/I). En el caso homogéneo D y H
+  // quedan en la unidad compartida y los costos/pedidos se expresan en ese período.
+  const { D, H, conversionUnidades } = normalizarDemandaYH(validated);
+  const { factorBase } = conversionUnidades;
   const P = validated.tasaProduccion;
   const S = validated.costoOrdenar;
-  // H efectivo: fijo o derivado como (I/100) × C según el modo seleccionado.
-  const H = resolverCostoMantener(validated);
   const C = validated.costoUnitario ?? 0;
   const diasLaborables = validated.diasLaborables ?? 365;
   const leadTime = validated.leadTime ?? 0;
@@ -160,12 +184,42 @@ export function calcularEPQ(input: EPQInput): EPQResult {
   // N = D / Q* (corridas de producción por año)
   const numeroProducciones = D / cantidadOptima;
 
-  // T = diasLaborables / N (días de operación entre corridas)
-  const cicloProduccion = diasLaborables / numeroProducciones;
+  // T = (días del período base) / N (días de operación entre corridas)
+  const diasDelBase = diasLaborables / factorBase;
+  const cicloProduccion = diasDelBase / numeroProducciones;
 
-  // d = D / diasLaborables  y  ROP = d × L
-  const demandaDiaria = D / diasLaborables;
+  // d = D / (días del período base)  y  ROP = d × L
+  const demandaDiaria = D / diasDelBase;
   const puntoReorden = Math.round(demandaDiaria * leadTime);
+
+  // Tasa I en modo porcentaje (anualizada por la Fase 0 si hizo falta).
+  const pasoI = [...conversionUnidades.pasos].reverse().find((p) => p.variable === 'I');
+  const tasaAnual = pasoI ? pasoI.valorAnual : (validated.costoMantenerPorcentaje ?? 0);
+
+  // Procesos paso a paso (valores homogeneizados de D y H).
+  const procesos = construirProcesosEPQ({
+    conversionUnidades,
+    D,
+    H,
+    S,
+    C,
+    P,
+    esPorcentaje: validated.tipoCostoMantener === 'porcentaje',
+    tasaAnual,
+    factorProduccion,
+    cantidadOptima,
+    inventarioMaximo,
+    numeroProducciones,
+    diasDelBase,
+    cicloProduccion,
+    costoOrdenar: costoOrdenarAnual,
+    costoMantener: costoMantenerAnual,
+    costoAdquisicion,
+    costoTotal: costoTotalAnual,
+    demandaDiaria,
+    leadTime,
+    puntoReorden,
+  });
 
   return {
     cantidadOptima,
@@ -178,6 +232,8 @@ export function calcularEPQ(input: EPQInput): EPQResult {
     costoOrdenar: Math.round(costoOrdenarAnual * 100) / 100,
     costoMantener: Math.round(costoMantenerAnual * 100) / 100,
     puntoReorden,
+    conversionUnidades,
+    procesos,
     desglose: {
       demandaAnual: D,
       tasaProduccion: P,
@@ -190,4 +246,141 @@ export function calcularEPQ(input: EPQInput): EPQResult {
       demandaDiaria: Math.round(demandaDiaria * 100) / 100,
     },
   };
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+interface DatosProcesosEPQ {
+  conversionUnidades: NormalizacionUnidades;
+  D: number;
+  H: number;
+  S: number;
+  C: number;
+  P: number;
+  esPorcentaje: boolean;
+  tasaAnual: number;
+  factorProduccion: number;
+  cantidadOptima: number;
+  inventarioMaximo: number;
+  numeroProducciones: number;
+  diasDelBase: number;
+  cicloProduccion: number;
+  costoOrdenar: number;
+  costoMantener: number;
+  costoAdquisicion: number;
+  costoTotal: number;
+  demandaDiaria: number;
+  leadTime: number;
+  puntoReorden: number;
+}
+
+function construirProcesosEPQ(datos: DatosProcesosEPQ): ProcesoCalculo[] {
+  const procesos: ProcesoCalculo[] = procesosDeConversion(datos.conversionUnidades.pasos);
+
+  if (datos.esPorcentaje) {
+    procesos.push(procesoMantenerPorcentaje(datos.tasaAnual, datos.C, datos.H, 'epq'));
+  }
+
+  const D = fmtProceso(datos.D);
+  const S = fmtProceso(datos.S);
+  const H = fmtProceso(datos.H);
+  const P = fmtProceso(datos.P);
+  const Q = fmtProceso(datos.cantidadOptima);
+  const Imax = fmtProceso(datos.inventarioMaximo);
+  const factor = fmtProceso(datos.factorProduccion);
+  const N = fmtProceso(round2(datos.numeroProducciones));
+
+  procesos.push(
+    proceso({
+      id: 'epq-q-optimo',
+      titulo: 'Lote óptimo de producción',
+      simbolo: 'Q^*',
+      formula: 'Q^* = \\sqrt{ \\frac{2DS}{H \\cdot (1 - \\frac{D}{P})} }',
+      sustitucion: `Q^* = \\sqrt{ \\frac{2(${D})(${S})}{${H} \\cdot (1 - \\frac{${D}}{${P}})} }`,
+      resultado: `Q^* = ${Q}`,
+      tipoResultado: 'cantidad',
+    }),
+    proceso({
+      id: 'epq-inventario-maximo',
+      titulo: 'Inventario máximo',
+      simbolo: 'I_{max}',
+      formula: 'I_{max} = Q^* \\cdot (1 - \\frac{D}{P})',
+      sustitucion: `I_{max} = ${Q} \\cdot ${factor}`,
+      resultado: `I_{max} = ${Imax}`,
+      tipoResultado: 'cantidad',
+    }),
+    proceso({
+      id: 'epq-inventario-promedio',
+      titulo: 'Inventario promedio',
+      simbolo: 'I_{media}',
+      formula: 'I_{media} = \\frac{I_{max}}{2}',
+      sustitucion: `I_{media} = \\frac{${Imax}}{2}`,
+      resultado: `I_{media} = ${fmtProceso(round2(datos.inventarioMaximo / 2))}`,
+      tipoResultado: 'cantidad',
+    }),
+    proceso({
+      id: 'epq-numero-producciones',
+      titulo: 'Número de corridas de producción',
+      simbolo: 'N',
+      formula: 'N = \\frac{D}{Q^*}',
+      sustitucion: `N = \\frac{${D}}{${Q}}`,
+      resultado: `N = ${N}`,
+      tipoResultado: 'cantidad',
+      unidad: 'corridas de producción',
+    }),
+    procesoCiclo(datos.diasDelBase, round2(datos.numeroProducciones), datos.cicloProduccion, 'produccion'),
+    procesoDemandaDiaria(datos.D, datos.diasDelBase, round2(datos.demandaDiaria))
+  );
+
+  const costoOrdenar = round2(datos.costoOrdenar);
+  const costoMantener = round2(datos.costoMantener);
+  const costoAdquisicion = round2(datos.costoAdquisicion);
+  const costoTotal = round2(datos.costoTotal);
+
+  procesos.push(
+    proceso({
+      id: 'epq-costo-mantener',
+      titulo: 'Costo de mantener',
+      simbolo: 'C_h',
+      formula: 'C_h = \\frac{I_{max}}{2} \\cdot H',
+      sustitucion: `C_h = \\frac{${Imax}}{2} \\cdot ${H}`,
+      resultado: `C_h = ${fmtProceso(costoMantener)}`,
+      tipoResultado: 'moneda',
+    }),
+    proceso({
+      id: 'epq-costo-preparacion',
+      titulo: 'Costo de preparación',
+      simbolo: 'C_o',
+      formula: 'C_o = \\frac{D}{Q^*} \\cdot S',
+      sustitucion: `C_o = \\frac{${D}}{${Q}} \\cdot ${S}`,
+      resultado: `C_o = ${fmtProceso(costoOrdenar)}`,
+      tipoResultado: 'moneda',
+    }),
+    proceso({
+      id: 'epq-costo-adquisicion',
+      titulo: 'Costo de adquisición',
+      simbolo: 'C_c',
+      formula: 'C_c = D \\cdot C',
+      sustitucion: `C_c = ${D} \\cdot ${fmtProceso(datos.C)}`,
+      resultado: `C_c = ${fmtProceso(costoAdquisicion)}`,
+      tipoResultado: 'moneda',
+    }),
+    proceso({
+      id: 'epq-costo-total',
+      titulo: 'Costo total',
+      simbolo: 'TC',
+      formula: 'TC = C_o + C_h + C_c',
+      sustitucion: `TC = (${fmtProceso(costoOrdenar)}) + (${fmtProceso(costoMantener)}) + (${fmtProceso(
+        costoAdquisicion
+      )})`,
+      resultado: `TC = ${fmtProceso(costoTotal)}`,
+      tipoResultado: 'moneda',
+    })
+  );
+
+  if (datos.leadTime > 0) {
+    procesos.push(procesoROP(datos.demandaDiaria, datos.leadTime, datos.puntoReorden));
+  }
+
+  return procesos;
 }

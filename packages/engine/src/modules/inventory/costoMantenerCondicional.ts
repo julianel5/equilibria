@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizarAAño, type UnidadTiempo } from './unidadesTiempo';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Costo de mantener condicional (H fijo vs. H = I × C)
@@ -19,6 +20,7 @@ export interface CostoMantenerCondicional {
   costoMantener?: number;          // H (modo fijo)
   costoMantenerPorcentaje?: number; // I (modo porcentaje)
   costoUnitario?: number;          // C
+  unidadCostoMantener?: UnidadTiempo; // Unidad de tiempo del valor ingresado
 }
 
 /**
@@ -69,11 +71,17 @@ export function validarModoCostoMantener(
 /**
  * Deriva el costo de mantener efectivo H a partir del modo seleccionado:
  * fijo → H tal cual; porcentaje → (I / 100) × C.
+ * Ambos valores ingresados se normalizan a su equivalente ANUAL según la
+ * unidad de tiempo elegida (por defecto "anual" ⇒ factor 1, sin cambio).
  * La validación previa garantiza que los campos necesarios existan.
  */
-export function resolverCostoMantener(data: CostoMantenerCondicional): number {
+export function resolverCostoMantener(
+  data: CostoMantenerCondicional & { unidadCostoMantener?: UnidadTiempo } = {}
+): number {
+  const unidad = data.unidadCostoMantener ?? 'anual';
   if (data.tipoCostoMantener === 'porcentaje') {
-    return ((data.costoMantenerPorcentaje ?? 0) / 100) * (data.costoUnitario ?? 0);
+    const I = normalizarAAño(data.costoMantenerPorcentaje ?? 0, unidad);
+    return (I / 100) * (data.costoUnitario ?? 0);
   }
-  return data.costoMantener ?? 0;
+  return normalizarAAño(data.costoMantener ?? 0, unidad);
 }

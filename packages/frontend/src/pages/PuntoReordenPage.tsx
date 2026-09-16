@@ -10,12 +10,14 @@ import Formula from '@shared/components/Formula';
 import Glossary, { GlossaryButton } from '@shared/components/Glossary';
 import KpiCard from '@shared/components/KpiCard';
 import NormalDistributionChart from '@shared/components/NormalDistributionChart';
+import ProcesosView from '@shared/components/ProcesosView';
 import TabsPanel from '@shared/components/TabsPanel';
 
-type Pestana = 'calculadora' | 'teoria';
+type Pestana = 'calculadora' | 'procesos' | 'teoria';
 
 const PESTANAS: { clave: Pestana; etiqueta: string }[] = [
   { clave: 'calculadora', etiqueta: 'Calculadora' },
+  { clave: 'procesos', etiqueta: 'Procesos' },
   { clave: 'teoria', etiqueta: 'Teoría y Supuestos' },
 ];
 
@@ -115,6 +117,38 @@ export default function PuntoReordenPage() {
           ariaLabel="Secciones del modelo de punto de reorden"
         />
         <PuntoReordenTeoria />
+        <Glossary
+          abierto={glosarioAbierto}
+          onClose={() => setGlosarioAbierto(false)}
+          variables={VARIABLES_DEMANDAPROBABILISTICA}
+        />
+      </div>
+    );
+  }
+
+  if (pestana === 'procesos') {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <PuntoReordenHeader />
+          <GlossaryButton onClick={() => setGlosarioAbierto(true)} />
+        </div>
+        <TabsPanel
+          pestanas={PESTANAS}
+          activa={pestana}
+          onCambio={(c) => setPestana(c as Pestana)}
+          ariaLabel="Secciones del modelo de punto de reorden"
+        />
+        {resultado ? (
+          <ProcesosView procesos={resultado.procesos} unidad="unidades" />
+        ) : (
+          <div className="mx-auto flex max-w-md flex-col items-center gap-2 rounded-lg border border-slate-200 bg-white p-8 text-center shadow-md  dark:border-gray-700 dark:bg-gray-800">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
+            <p className="text-sm text-slate-500  dark:text-gray-400">
+              Calculando el punto de reorden…
+            </p>
+          </div>
+        )}
         <Glossary
           abierto={glosarioAbierto}
           onClose={() => setGlosarioAbierto(false)}

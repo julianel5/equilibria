@@ -1,5 +1,20 @@
 import { z } from 'zod';
-import { validarModoCostoMantener, resolverCostoMantener } from './costoMantenerCondicional';
+import { validarModoCostoMantener } from './costoMantenerCondicional';
+import {
+  normalizarDemandaYH,
+  UNIDADES_TIEMPO,
+  type NormalizacionUnidades,
+} from './unidadesTiempo';
+import {
+  fmtProceso,
+  proceso,
+  procesoCiclo,
+  procesoDemandaDiaria,
+  procesoMantenerPorcentaje,
+  procesoROP,
+  procesosDeConversion,
+  type ProcesoCalculo,
+} from './procesos';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EOQ con Faltantes Planeados (Déficit Autorizado)
@@ -83,6 +98,12 @@ export const EOQFaltantesInputSchema = z.object({
     .min(0, { message: 'El tiempo de entrega no puede ser negativo' })
     .optional()
     .describe('Tiempo de entrega en días (L) - opcional, default 0'),
+  unidadDemanda: z.enum(UNIDADES_TIEMPO)
+    .optional()
+    .describe('Unidad de tiempo de la demanda (D). Por defecto "anual".'),
+  unidadCostoMantener: z.enum(UNIDADES_TIEMPO)
+    .optional()
+    .describe('Unidad de tiempo del costo de mantener (H o I). Por defecto "anual".'),
 }).superRefine(validarModoCostoMantener);
 
 export type EOQFaltantesInput = z.infer<typeof EOQFaltantesInputSchema>;
@@ -101,6 +122,8 @@ export interface EOQFaltantesResult {
   costoMantener: number;        // Imax²/(2Q*) × H - Costo anual de mantener
   costoFaltantes: number;       // S*²/(2Q*) × B - Costo anual de faltantes
   puntoReorden: number;         // ROP = d × L - Punto de reorden (unidades)
+  conversionUnidades: NormalizacionUnidades; // Fase 0 - pasos a base anual
+  procesos: ProcesoCalculo[];   // Pestaña "Procesos": desglose paso a paso
   desglose: {
     demandaAnual: number;
     costoFijoOrden: number;
@@ -120,10 +143,11 @@ export function calcularEOQFaltantes(input: EOQFaltantesInput): EOQFaltantesResu
   // Validar inputs con Zod
   const validated = EOQFaltantesInputSchema.parse(input);
 
-  const D = validated.demandaAnual;
+  // Fase 0: estandarización de unidades (D, H/I). En el caso homogéneo D y H
+  // quedan en la unidad compartida y los costos/pedidos se expresan en ese período.
+  const { D, H, conversionUnidades } = normalizarDemandaYH(validated);
+  const { factorBase } = conversionUnidades;
   const S = validated.costoOrdenar;
-  // H efectivo: fijo o derivado como (I/100) × C según el modo seleccionado.
-  const H = resolverCostoMantener(validated);
   const B = validated.costoFaltantes;
   const C = validated.costoUnitario ?? 0;
 
@@ -160,14 +184,45 @@ export function calcularEOQFaltantes(input: EOQFaltantesInput): EOQFaltantesResu
   // N = D / Q* (pedidos al año)
   const numeroPedidos = D / cantidadOptima;
 
-  // T = diasLaborables / N (ciclo de reposición en días)
+  // T = (días del período base) / N (ciclo de reposición en días)
   const diasLaborables = validated.diasLaborables ?? 365;
-  const cicloReposicion = diasLaborables / numeroPedidos;
+  const diasDelBase = diasLaborables / factorBase;
+  const cicloReposicion = diasDelBase / numeroPedidos;
 
-  // d = D / diasLaborables  y  ROP = d × L
+  // d = D / (días del período base)  y  ROP = d × L
   const leadTime = validated.leadTime ?? 0;
-  const demandaDiaria = D / diasLaborables;
+  const demandaDiaria = D / diasDelBase;
   const puntoReorden = Math.round(demandaDiaria * leadTime);
+
+  // Tasa I en modo porcentaje (anualizada por la Fase 0 si hizo falta).
+  const pasoI = [...conversionUnidades.pasos].reverse().find((p) => p.variable === 'I');
+  const tasaAnual = pasoI ? pasoI.valorAnual : (validated.costoMantenerPorcentaje ?? 0);
+
+  // Procesos paso a paso (valores homogeneizados de D y H).
+  const procesos = construirProcesosFaltantes({
+    conversionUnidades,
+    D,
+    H,
+    S,
+    B,
+    C,
+    esPorcentaje: validated.tipoCostoMantener === 'porcentaje',
+    tasaAnual,
+    cantidadOptima,
+    faltanteMaximo,
+    inventarioMaximo,
+    numeroPedidos,
+    diasDelBase,
+    cicloReposicion,
+    costoOrdenar: costoOrdenarAnual,
+    costoMantener: costoMantenerAnual,
+    costoFaltantes: costoFaltantesAnual,
+    costoAdquisicion,
+    costoTotal: costoTotalAnual,
+    demandaDiaria,
+    leadTime,
+    puntoReorden,
+  });
 
   return {
     cantidadOptima,
@@ -181,6 +236,8 @@ export function calcularEOQFaltantes(input: EOQFaltantesInput): EOQFaltantesResu
     costoMantener: Math.round(costoMantenerAnual * 100) / 100,
     costoFaltantes: Math.round(costoFaltantesAnual * 100) / 100,
     puntoReorden,
+    conversionUnidades,
+    procesos,
     desglose: {
       demandaAnual: D,
       costoFijoOrden: S,
@@ -193,4 +250,152 @@ export function calcularEOQFaltantes(input: EOQFaltantesInput): EOQFaltantesResu
       demandaDiaria: Math.round(demandaDiaria * 100) / 100,
     },
   };
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+interface DatosProcesosFaltantes {
+  conversionUnidades: NormalizacionUnidades;
+  D: number;
+  H: number;
+  S: number;
+  B: number;
+  C: number;
+  esPorcentaje: boolean;
+  tasaAnual: number;
+  cantidadOptima: number;
+  faltanteMaximo: number;
+  inventarioMaximo: number;
+  numeroPedidos: number;
+  diasDelBase: number;
+  cicloReposicion: number;
+  costoOrdenar: number;
+  costoMantener: number;
+  costoFaltantes: number;
+  costoAdquisicion: number;
+  costoTotal: number;
+  demandaDiaria: number;
+  leadTime: number;
+  puntoReorden: number;
+}
+
+function construirProcesosFaltantes(datos: DatosProcesosFaltantes): ProcesoCalculo[] {
+  const procesos: ProcesoCalculo[] = procesosDeConversion(datos.conversionUnidades.pasos);
+
+  if (datos.esPorcentaje) {
+    procesos.push(procesoMantenerPorcentaje(datos.tasaAnual, datos.C, datos.H, 'faltantes'));
+  }
+
+  const D = fmtProceso(datos.D);
+  const S = fmtProceso(datos.S);
+  const H = fmtProceso(datos.H);
+  const B = fmtProceso(datos.B);
+  const Q = fmtProceso(datos.cantidadOptima);
+  const Sstar = fmtProceso(datos.faltanteMaximo);
+  const Imax = fmtProceso(datos.inventarioMaximo);
+  const N = fmtProceso(round2(datos.numeroPedidos));
+
+  procesos.push(
+    proceso({
+      id: 'faltantes-q-optimo',
+      titulo: 'Cantidad óptima de pedido con faltantes',
+      simbolo: 'Q^*',
+      formula: 'Q^* = \\sqrt{ \\frac{2DS}{H} \\cdot \\frac{H+B}{B} }',
+      sustitucion: `Q^* = \\sqrt{ \\frac{2(${D})(${S})}{${H}} \\cdot \\frac{${H}+${B}}{${B}} }`,
+      resultado: `Q^* = ${Q}`,
+      tipoResultado: 'cantidad',
+    }),
+    proceso({
+      id: 'faltantes-faltante-maximo',
+      titulo: 'Faltante máximo (déficit óptimo)',
+      simbolo: 'S^*',
+      formula: 'S^* = Q^* \\cdot \\frac{H}{H+B}',
+      sustitucion: `S^* = ${Q} \\cdot \\frac{${H}}{${H}+${B}}`,
+      resultado: `S^* = ${Sstar}`,
+      tipoResultado: 'cantidad',
+    }),
+    proceso({
+      id: 'faltantes-inventario-maximo',
+      titulo: 'Inventario máximo en mano',
+      simbolo: 'I_{max}',
+      formula: 'I_{max} = Q^* - S^*',
+      sustitucion: `I_{max} = ${Q} - ${Sstar}`,
+      resultado: `I_{max} = ${Imax}`,
+      tipoResultado: 'cantidad',
+    }),
+    proceso({
+      id: 'faltantes-numero-pedidos',
+      titulo: 'Número de pedidos',
+      simbolo: 'N',
+      formula: 'N = \\frac{D}{Q^*}',
+      sustitucion: `N = \\frac{${D}}{${Q}}`,
+      resultado: `N = ${N}`,
+      tipoResultado: 'cantidad',
+      unidad: 'pedidos',
+    }),
+    procesoCiclo(datos.diasDelBase, round2(datos.numeroPedidos), datos.cicloReposicion, 'reposicion'),
+    procesoDemandaDiaria(datos.D, datos.diasDelBase, round2(datos.demandaDiaria))
+  );
+
+  const costoOrdenar = round2(datos.costoOrdenar);
+  const costoMantener = round2(datos.costoMantener);
+  const costoFaltantes = round2(datos.costoFaltantes);
+  const costoAdquisicion = round2(datos.costoAdquisicion);
+  const costoTotal = round2(datos.costoTotal);
+
+  procesos.push(
+    proceso({
+      id: 'faltantes-costo-mantener',
+      titulo: 'Costo de mantener',
+      simbolo: 'C_h',
+      formula: 'C_h = \\frac{I_{max}^2}{2 \\cdot Q^*} \\cdot H',
+      sustitucion: `C_h = \\frac{${Imax}^2}{2 \\cdot ${Q}} \\cdot ${H}`,
+      resultado: `C_h = ${fmtProceso(costoMantener)}`,
+      tipoResultado: 'moneda',
+    }),
+    proceso({
+      id: 'faltantes-costo-faltantes',
+      titulo: 'Costo de faltantes',
+      simbolo: 'C_f',
+      formula: 'C_f = \\frac{(S^*)^2}{2 \\cdot Q^*} \\cdot B',
+      sustitucion: `C_f = \\frac{${Sstar}^2}{2 \\cdot ${Q}} \\cdot ${B}`,
+      resultado: `C_f = ${fmtProceso(costoFaltantes)}`,
+      tipoResultado: 'moneda',
+    }),
+    proceso({
+      id: 'faltantes-costo-ordenar',
+      titulo: 'Costo de ordenar',
+      simbolo: 'C_o',
+      formula: 'C_o = \\frac{D}{Q^*} \\cdot S',
+      sustitucion: `C_o = \\frac{${D}}{${Q}} \\cdot ${S}`,
+      resultado: `C_o = ${fmtProceso(costoOrdenar)}`,
+      tipoResultado: 'moneda',
+    }),
+    proceso({
+      id: 'faltantes-costo-adquisicion',
+      titulo: 'Costo de adquisición (informativo)',
+      simbolo: 'C_c',
+      formula: 'C_c = D \\cdot C',
+      sustitucion: `C_c = ${D} \\cdot ${fmtProceso(datos.C)}`,
+      resultado: `C_c = ${fmtProceso(costoAdquisicion)}`,
+      tipoResultado: 'moneda',
+    }),
+    proceso({
+      id: 'faltantes-costo-total',
+      titulo: 'Costo total relevante',
+      simbolo: 'TC',
+      formula: 'TC = C_o + C_h + C_f',
+      sustitucion: `TC = (${fmtProceso(costoOrdenar)}) + (${fmtProceso(costoMantener)}) + (${fmtProceso(
+        costoFaltantes
+      )})`,
+      resultado: `TC = ${fmtProceso(costoTotal)}`,
+      tipoResultado: 'moneda',
+    })
+  );
+
+  if (datos.leadTime > 0) {
+    procesos.push(procesoROP(datos.demandaDiaria, datos.leadTime, datos.puntoReorden));
+  }
+
+  return procesos;
 }

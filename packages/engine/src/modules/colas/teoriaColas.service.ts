@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { proceso, type ProcesoCalculo } from '../procesos';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Teoría de Colas - M/M/1 y M/M/c
@@ -107,6 +108,7 @@ export interface TeoriaColasResult {
   w: number;             // tiempo promedio en el sistema W
   distribucion: EstadoProbabilidadColas[]; // P_n para n = 0..N_MAX
   unidadTiempo: UnidadTiempoColasResult;   // etiquetas y conversiones para la UI
+  procesos: ProcesoCalculo[];              // Pestaña "Procesos": desglose paso a paso
 }
 
 // --- Servicio ---
@@ -201,6 +203,188 @@ export function calcularMMc(lambda: number, mu: number, c: number): MetricasCola
   return { rho, p0, lq, l, wq, w };
 }
 
+// ───────────────────────────────────────────────────────────────────────────────
+// Procesos paso a paso (contrato global `PasoProceso` → `ProcesoCalculo`)
+// ───────────────────────────────────────────────────────────────────────────────
+//
+// Genera los pasos de las métricas base de la cola:
+//   λ, μ (tasas efectivas), ρ (utilización), P0 (Erlang C), Lq, L, Wq y W.
+// La sustitución de P0 en M/M/c expande la sumatoria término a término cuando
+// c es pequeño (c ≤ 5) para que se aprecie la aritmética del denominador.
+
+/** Formatea con hasta 6 decimales para reflejar los valores redondeados. */
+const fmt = (n: number): string => String(Math.round(n * 1_000_000) / 1_000_000);
+
+interface DatosProcesosColas {
+  modelo: ModeloColas;
+  lambda: number;
+  mu: number;
+  c: number;
+  rho: number;
+  p0: number;
+  lq: number;
+  l: number;
+  wq: number;
+  w: number;
+  unidad: UnidadTiempoColas;
+}
+
+/** Fracción KaTeX que expresa una tasa "clientes por unidad de tiempo". */
+function tasaTexto(unidadSingular: string): string {
+  return `\\frac{\\text{clientes}}{\\text{${unidadSingular}}}`;
+}
+
+/**
+ * Expande el denominador de P0 para M/M/c:
+ *  - c ≤ 5: todos los términos de la sumatoria + el término de Erlang C.
+ *  - c  > 5: los primeros términos + \cdots + el término de Erlang C.
+ */
+function expansionP0(c: number, rho: number): { sustitucion: string; denominador: string } {
+  const cRho = c * rho;
+  const r = fmt(cRho);
+  const terminos: string[] = [];
+  const valores: string[] = [];
+  for (let k = 0; k < c; k += 1) {
+    terminos.push(`\\frac{${r}^{${k}}}{${k}!}`);
+    valores.push(fmt(Math.pow(cRho, k) / factorial(k)));
+  }
+  const ultimo = `\\frac{${r}^{${c}}}{${c}!\\left(1-${fmt(rho)}\\right)}`;
+  valores.push(fmt(Math.pow(cRho, c) / (factorial(c) * (1 - rho))));
+
+  const visibles = c <= 5 ? terminos.concat([ultimo]) : terminos.slice(0, 3).concat(['\\cdots', ultimo]);
+  const valoresVisibles = c <= 5 ? valores : valores.slice(0, 3).concat(['\\cdots', valores[valores.length - 1]]);
+  const sustitucion = `P_0 = \\left[ ${visibles.join(' + ')} \\right]^{-1}`;
+  const denominador = `P_0 = \\frac{1}{${valoresVisibles.join(' + ')}}`;
+  return { sustitucion, denominador };
+}
+
+/** Construye el arreglo de procesos de la cola (λ/μ, ρ, P0, Lq, L, Wq, W). */
+export function construirProcesosColas(d: DatosProcesosColas): ProcesoCalculo[] {
+  const etiqueta = ETIQUETAS_UNIDAD[d.unidad];
+  const tasa = tasaTexto(etiqueta.baseSingular);
+  const unidadTiempoResultado = etiqueta.base;
+  const esMM1 = d.modelo === 'MM1';
+  const cRho = d.c * d.rho;
+  const cRhoTexto = fmt(cRho);
+
+  const procesos: ProcesoCalculo[] = [];
+
+  // 1. Tasas efectivas λ y μ (ya en la unidad base seleccionada).
+  procesos.push(
+    proceso({
+      id: 'colas-tasas',
+      titulo: 'Tasas efectivas',
+      simbolo: '\\lambda, \\mu',
+      formula: `\\lambda = ${tasa}, \\quad \\mu = ${tasa}`,
+      sustitucion: `\\lambda = ${fmt(d.lambda)}, \\quad \\mu = ${fmt(d.mu)}`,
+      resultado: `\\lambda = ${fmt(d.lambda)}\\, ${tasa}, \\quad \\mu = ${fmt(d.mu)}\\, ${tasa}`,
+      tipoResultado: 'texto',
+    })
+  );
+
+  // 2. Factor de utilización ρ = λ / (c·μ).
+  procesos.push(
+    proceso({
+      id: 'colas-rho',
+      titulo: 'Factor de utilización',
+      simbolo: '\\rho',
+      formula: '\\rho = \\frac{\\lambda}{c\\, \\mu}',
+      sustitucion: `\\rho = \\frac{${fmt(d.lambda)}}{${d.c} \\cdot ${fmt(d.mu)}}`,
+      resultado: `\\rho = ${fmt(d.rho)}`,
+      tipoResultado: 'texto',
+    })
+  );
+
+  // 3. Probabilidad de sistema vacío P0.
+  if (esMM1) {
+    procesos.push(
+      proceso({
+        id: 'colas-p0',
+        titulo: 'Probabilidad de sistema vacío',
+        simbolo: 'P_0',
+        formula: 'P_0 = 1 - \\rho',
+        sustitucion: `P_0 = 1 - ${fmt(d.rho)}`,
+        resultado: `P_0 = ${fmt(d.p0)}`,
+        tipoResultado: 'texto',
+      })
+    );
+  } else {
+    const { sustitucion, denominador } = expansionP0(d.c, d.rho);
+    procesos.push(
+      proceso({
+        id: 'colas-p0',
+        titulo: 'Probabilidad de sistema vacío',
+        simbolo: 'P_0',
+        formula:
+          'P_0 = \\left[ \\sum_{n=0}^{c-1} \\frac{(c\\rho)^{n}}{n!} + \\frac{(c\\rho)^{c}}{c!\\,(1-\\rho)} \\right]^{-1}',
+        sustitucion,
+        resultado: `${denominador} = ${fmt(d.p0)}`,
+        tipoResultado: 'texto',
+      })
+    );
+  }
+
+  // 4. Clientes en cola Lq.
+  procesos.push(
+    proceso({
+      id: 'colas-lq',
+      titulo: 'Clientes en cola',
+      simbolo: 'L_q',
+      formula: esMM1
+        ? 'L_q = \\frac{\\lambda^2}{\\mu\\,(\\mu - \\lambda)}'
+        : 'L_q = \\frac{P_0\\, (c\\rho)^{c}\\, \\rho}{c!\\,(1-\\rho)^2}',
+      sustitucion: esMM1
+        ? `L_q = \\frac{${fmt(d.lambda)}^{2}}{${fmt(d.mu)}\\,\\left(${fmt(d.mu)} - ${fmt(d.lambda)}\\right)}`
+        : `L_q = \\frac{${fmt(d.p0)} \\cdot ${cRhoTexto}^{${d.c}} \\cdot ${fmt(d.rho)}}{${d.c}!\\,(1-${fmt(d.rho)})^2}`,
+      resultado: `L_q = ${fmt(d.lq)}`,
+      tipoResultado: 'cantidad',
+    })
+  );
+
+  // 5. Clientes en el sistema L.
+  procesos.push(
+    proceso({
+      id: 'colas-l',
+      titulo: 'Clientes en el sistema',
+      simbolo: 'L',
+      formula: 'L = L_q + \\frac{\\lambda}{\\mu}',
+      sustitucion: `L = ${fmt(d.lq)} + \\frac{${fmt(d.lambda)}}{${fmt(d.mu)}}`,
+      resultado: `L = ${fmt(d.l)}`,
+      tipoResultado: 'cantidad',
+    })
+  );
+
+  // 6. Tiempo de espera en cola Wq.
+  procesos.push(
+    proceso({
+      id: 'colas-wq',
+      titulo: 'Tiempo de espera en cola',
+      simbolo: 'W_q',
+      formula: 'W_q = \\frac{L_q}{\\lambda}',
+      sustitucion: `W_q = \\frac{${fmt(d.lq)}}{${fmt(d.lambda)}}`,
+      resultado: `W_q = ${fmt(d.wq)}`,
+      tipoResultado: 'tiempo',
+      unidad: unidadTiempoResultado,
+    })
+  );
+
+  // 7. Tiempo en el sistema W.
+  procesos.push(
+    proceso({
+      id: 'colas-w',
+      titulo: 'Tiempo en el sistema',
+      simbolo: 'W',
+      formula: 'W = W_q + \\frac{1}{\\mu}',
+      sustitucion: `W = ${fmt(d.wq)} + \\frac{1}{${fmt(d.mu)}}`,
+      resultado: `W = ${fmt(d.w)}`,
+      tipoResultado: 'tiempo',
+      unidad: unidadTiempoResultado,
+    })
+  );
+
+  return procesos;
+}
+
 function distribucionMM1(rho: number): EstadoProbabilidadColas[] {
   return Array.from({ length: N_MAX + 1 }, (_, n) => ({
     n,
@@ -255,5 +439,18 @@ export function calcularTeoriaColas(input: TeoriaColasInput): TeoriaColasResult 
       wq: { texto: textoBase(wq, unidad), conversion: convertirSubUnidad(wq, unidad) },
       w: { texto: textoBase(w, unidad), conversion: convertirSubUnidad(w, unidad) },
     },
+    procesos: construirProcesosColas({
+      modelo,
+      lambda,
+      mu,
+      c,
+      rho: metricas.rho,
+      p0: metricas.p0,
+      lq: metricas.lq,
+      l: metricas.l,
+      wq: metricas.wq,
+      w: metricas.w,
+      unidad,
+    }),
   };
 }

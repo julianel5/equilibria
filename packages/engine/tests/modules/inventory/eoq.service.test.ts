@@ -299,4 +299,330 @@ describe('EOQ - Costo de mantener porcentual (H = I × C)', () => {
     expect(curvaPorcentaje.length).toBe(curvaFija.length);
     expect(curvaPorcentaje[0].costoMantener).toBeCloseTo(curvaFija[0].costoMantener, 1);
   });
+
+  describe('Fase 0 - Estandarización de Unidades', () => {
+    test('reconoce demanda mensual y la convierte a demanda anual (D × 12)', () => {
+      // D = 800 unidades/mes → 9,600 unidades/año
+      // Q* = √(2 × 9600 × 20 / 5) = √76800 ≈ 277
+      const resultado = calcularEOQ({
+        demandaAnual: 800,
+        unidadDemanda: 'mensual',
+        costoOrdenar: 20,
+        costoMantener: 5,
+      });
+
+      expect(resultado.desglose.demandaAnual).toBe(9600);
+      expect(resultado.cantidadOptima).toBe(277);
+
+      expect(resultado.conversionUnidades.activa).toBe(true);
+      expect(resultado.conversionUnidades.base).toBe('anual');
+      expect(resultado.conversionUnidades.diasLaborables).toBe(365);
+      expect(resultado.conversionUnidades.pasos).toHaveLength(1);
+      expect(resultado.conversionUnidades.pasos[0]).toMatchObject({
+        variable: 'D',
+        unidadOrigen: 'mensual',
+        factor: 12,
+        valorOrigen: 800,
+        valorAnual: 9600,
+      });
+    });
+
+    test('convierte el costo de mantener mensual a H anual (H × 12)', () => {
+      // D = 10,000/año, S = 20, H = 1.5/mes → H anual = 18
+      // Q* = √(2 × 10000 × 20 / 18) ≈ √22222 ≈ 149
+      const resultado = calcularEOQ({
+        demandaAnual: 10000,
+        costoOrdenar: 20,
+        costoMantener: 1.5,
+        unidadCostoMantener: 'mensual',
+      });
+
+      expect(resultado.desglose.costoHoldingUnitario).toBe(18);
+      expect(resultado.cantidadOptima).toBe(149);
+
+      expect(resultado.conversionUnidades.pasos).toHaveLength(1);
+      expect(resultado.conversionUnidades.pasos[0]).toMatchObject({
+        variable: 'H',
+        factor: 12,
+        valorAnual: 18,
+      });
+    });
+
+    test('mezcla de unidades: D semestral y H anual genera dos pasos en la metadata', () => {
+      // D = 3,200/semestre → 6,400/año ; H = 5 anual.
+      const resultado = calcularEOQ({
+        demandaAnual: 3200,
+        unidadDemanda: 'semestral',
+        costoOrdenar: 20,
+        costoMantener: 5,
+      });
+
+      expect(resultado.desglose.demandaAnual).toBe(6400);
+      expect(resultado.cantidadOptima).toBe(226); // √(2×6400×20/5) ≈ 226.27
+      expect(resultado.conversionUnidades.activa).toBe(true);
+      expect(resultado.conversionUnidades.pasos).toHaveLength(1);
+      // H no se convirtió (anual), así que solo hay un paso: D.
+      expect(resultado.conversionUnidades.pasos[0].variable).toBe('D');
+    });
+
+    test('por defecto la unidad es anual y la Fase 0 queda inactiva', () => {
+      const resultado = calcularEOQ({
+        demandaAnual: 10000,
+        costoOrdenar: 20,
+        costoMantener: 5,
+        costoUnitario: 10,
+      });
+
+      expect(resultado.conversionUnidades.activa).toBe(false);
+      expect(resultado.conversionUnidades.pasos).toHaveLength(0);
+      expect(resultado.desglose.demandaAnual).toBe(10000);
+    });
+
+    test('la unidad diaria usa diasLaborables del formulario (365), no un factor fijo', () => {
+      // D = 10 unidades/día, diasLaborables = 365 → 3,650 unidades/año
+      const resultado = calcularEOQ({
+        demandaAnual: 10,
+        unidadDemanda: 'diario',
+        costoOrdenar: 20,
+        costoMantener: 5,
+        diasLaborables: 365,
+      });
+
+      expect(resultado.desglose.demandaAnual).toBe(3650);
+      expect(resultado.conversionUnidades.diasLaborables).toBe(365);
+      expect(resultado.conversionUnidades.pasos[0]).toMatchObject({
+        variable: 'D',
+        unidadOrigen: 'diario',
+        factor: 365,
+        valorOrigen: 10,
+        valorAnual: 3650,
+      });
+    });
+
+    test('la unidad diaria respeta el diasLaborables custom (250) del payload', () => {
+      // D = 10 unidades/día, diasLaborables = 250 → 2,500 unidades/año
+      const resultado = calcularEOQ({
+        demandaAnual: 10,
+        unidadDemanda: 'diario',
+        costoOrdenar: 20,
+        costoMantener: 5,
+        diasLaborables: 250,
+      });
+
+      expect(resultado.desglose.demandaAnual).toBe(2500);
+      expect(resultado.conversionUnidades.pasos[0].factor).toBe(250);
+    });
+
+    test('el costo de mantener diario también usa diasLaborables', () => {
+      // H = 0.5 unidades/día de holding → 0.5 × 360 = 180 (con payload 360)
+      const resultado = calcularEOQ({
+        demandaAnual: 10000,
+        costoOrdenar: 20,
+        costoMantener: 0.5,
+        unidadCostoMantener: 'diario',
+        diasLaborables: 360,
+      });
+
+      expect(resultado.desglose.costoHoldingUnitario).toBe(180);
+      expect(resultado.conversionUnidades.pasos[0]).toMatchObject({
+        variable: 'H',
+        unidadOrigen: 'diario',
+        factor: 360,
+        valorAnual: 180,
+      });
+    });
+
+    test('la curva de costos usa la demanda homogeneizada anual', () => {
+      const curva = generarCurvaTC({
+        demandaAnual: 800,
+        unidadDemanda: 'mensual',
+        costoOrdenar: 20,
+        costoMantener: 5,
+      });
+
+      // En Q* continuo D/Q·S = Q/2·H, con D = 9,600 → Q* ≈ 277.13
+      const q = Math.sqrt((2 * 9600 * 20) / 5);
+      expect(curva).toContainEqual(
+        expect.objectContaining({
+          cantidad: Math.round(q),
+        })
+      );
+    });
+
+    test('caso homogéneo: D y H semestrales calculan sobre el semestre sin Fase 0', () => {
+      // Ambas variables en "semestral": no hay conversión, la base es el semestre.
+      const resultado = calcularEOQ({
+        demandaAnual: 1200, // 1,200 unidades/semestre
+        costoOrdenar: 20,
+        costoMantener: 5,   // 5 USD/unidad-semestre
+        costoUnitario: 10,
+        unidadDemanda: 'semestral',
+        unidadCostoMantener: 'semestral',
+      });
+
+      expect(resultado.conversionUnidades.activa).toBe(false);
+      expect(resultado.conversionUnidades.base).toBe('semestral');
+      expect(resultado.conversionUnidades.factorBase).toBe(2);
+      expect(resultado.conversionUnidades.pasos).toHaveLength(0);
+
+      // Q* Idéntico al caso anual equivalente (D=2400, H=10): √(2·2400·20/10)=√9600≈98
+      const anual = calcularEOQ({
+        demandaAnual: 2400,
+        costoOrdenar: 20,
+        costoMantener: 10,
+        costoUnitario: 10,
+      });
+      expect(resultado.cantidadOptima).toBe(anual.cantidadOptima);
+
+      // Costos y pedidos expresados POR SEMESTRE (equivalentes anuales ÷ 2)
+      expect(resultado.costoTotalAnual).toBeCloseTo(anual.costoTotalAnual / 2, 1);
+      expect(resultado.costoOrdenar).toBeCloseTo(anual.costoOrdenar / 2, 1);
+      expect(resultado.costoMantener).toBeCloseTo(anual.costoMantener / 2, 1);
+      expect(resultado.numeroPedidos).toBeCloseTo(anual.numeroPedidos / 2, 1);
+
+      // El ciclo en días es invariante (mismo intervalo real entre órdenes)
+      expect(resultado.cicloReposicion).toBeCloseTo(anual.cicloReposicion, 1);
+      expect(resultado.desglose.demandaDiaria).toBeCloseTo(anual.desglose.demandaDiaria, 1);
+    });
+
+    test('caso homogéneo: D y H mensuales → base mensual con factorBase 12', () => {
+      const resultado = calcularEOQ({
+        demandaAnual: 300,
+        costoOrdenar: 20,
+        costoMantener: 4,
+        unidadDemanda: 'mensual',
+        unidadCostoMantener: 'mensual',
+      });
+
+      expect(resultado.conversionUnidades.activa).toBe(false);
+      expect(resultado.conversionUnidades.base).toBe('mensual');
+      expect(resultado.conversionUnidades.factorBase).toBe(12);
+      expect(resultado.conversionUnidades.pasos).toHaveLength(0);
+      expect(resultado.desglose.demandaAnual).toBe(300);
+    });
+
+    test('caso homogéneo: D y H diarios mantienen base diaria (factorBase = 365)', () => {
+      const resultado = calcularEOQ({
+        demandaAnual: 100, // unidades/día
+        costoOrdenar: 20,
+        costoMantener: 0.4,
+        unidadDemanda: 'diario',
+        unidadCostoMantener: 'diario',
+        diasLaborables: 365,
+      });
+
+      expect(resultado.conversionUnidades.activa).toBe(false);
+      expect(resultado.conversionUnidades.base).toBe('diario');
+      expect(resultado.conversionUnidades.factorBase).toBe(365);
+      expect(resultado.conversionUnidades.pasos).toHaveLength(0);
+      // período de un día → demanda diaria = D / 1 = 100
+      expect(resultado.desglose.demandaDiaria).toBe(100);
+    });
+  });
+});
+
+describe('EOQ - Pestaña Procesos (procesos paso a paso)', () => {
+  const inputProcesos = {
+    demandaAnual: 10000,
+    costoOrdenar: 20,
+    costoMantener: 5,
+    costoUnitario: 10,
+  };
+
+  test('genera el desglose de Q*, costos, N, ciclo y demanda diaria (anual)', () => {
+    const resultado = calcularEOQ(inputProcesos);
+    const ids = resultado.procesos.map((p) => p.id);
+
+    expect(ids).toContain('eoq-q-optimo');
+    expect(ids).toContain('eoq-numero-pedidos');
+    expect(ids).toContain('cicloReposicion');
+    expect(ids).toContain('demandaDiaria');
+    expect(ids).toContain('eoq-costo-ordenar');
+    expect(ids).toContain('eoq-costo-mantener');
+    expect(ids).toContain('eoq-costo-adquisicion');
+    expect(ids).toContain('eoq-costo-total');
+    // Sin lead time no se incluye el proceso de ROP
+    expect(ids).not.toContain('puntoReorden');
+
+    const q = resultado.procesos.find((p) => p.id === 'eoq-q-optimo')!;
+    expect(q.formula).toContain('\\frac{2DS}{H}');
+    expect(q.sustitucion).toBe('Q^* = \\sqrt{\\frac{2(10000)(20)}{5}}');
+    expect(q.resultado).toBe('Q^* = 283');
+
+    const tc = resultado.procesos.find((p) => p.id === 'eoq-costo-total')!;
+    expect(tc.formula).toBe('TC = C_o + C_h + C_c');
+    expect(tc.sustitucion).toContain('706.71');
+    expect(tc.sustitucion).toContain('707.5');
+    expect(tc.sustitucion).toContain('100000');
+    expect(tc.resultado).toBe('TC = 101414.21');
+  });
+
+  test('la Sustitución usa los valores homogeneizados cuando hubo Fase 0 (D mensual → anual)', () => {
+    const resultado = calcularEOQ({
+      ...inputProcesos,
+      demandaAnual: 800, // unidades/mes
+      unidadDemanda: 'mensual',
+      unidadCostoMantener: 'anual',
+    });
+
+    expect(resultado.conversionUnidades.activa).toBe(true);
+
+    const pasoD = resultado.procesos.find((p) => p.id === 'fase0-0-D');
+    expect(pasoD).toBeDefined();
+    expect(pasoD!.sustitucion).toContain('800 \\times 12');
+    expect(pasoD!.resultado).toBe('D_{\\mathrm{base}} = 9600');
+
+    // Q* debe sustituir 9600 (homogeneizada), NUNCA el 800 crudo del input.
+    const q = resultado.procesos.find((p) => p.id === 'eoq-q-optimo')!;
+    expect(q.sustitucion).toContain('2(9600)(20)');
+    expect(q.sustitucion).not.toContain('2(800)(20)');
+    expect(q.resultado).toBe('Q^* = 277');
+  });
+
+  test('modo porcentaje antepone el proceso H = I × C', () => {
+    const resultado = calcularEOQ({
+      ...inputProcesos,
+      tipoCostoMantener: 'porcentaje',
+      costoUnitario: 50,
+      costoMantener: undefined,
+      costoMantenerPorcentaje: 20,
+    });
+
+    const h = resultado.procesos.find((p) => p.id === 'eoq-h-efectivo');
+    expect(h).toBeDefined();
+    expect(h!.formula).toBe('H = \\frac{I}{100} \\times C');
+    expect(h!.sustitucion).toBe('H = \\frac{20}{100} \\times 50');
+    expect(h!.resultado).toBe('H = 10');
+
+    // La sustitución de Q* usa H = 10
+    const q = resultado.procesos.find((p) => p.id === 'eoq-q-optimo')!;
+    expect(q.sustitucion).toContain('(20)}{10}');
+  });
+
+  test('incluye el proceso ROP cuando hay lead time', () => {
+    const resultado = calcularEOQ({ ...inputProcesos, leadTime: 5 });
+    const rop = resultado.procesos.find((p) => p.id === 'puntoReorden');
+    expect(rop).toBeDefined();
+    // d = 10000/365 ≈ 27.4 → ROP = 27.4 × 5 = 137
+    expect(rop!.sustitucion).toContain('27.4 \\cdot 5');
+    expect(rop!.resultado).toBe('ROP = 137');
+  });
+});
+
+describe('EOQ - Procesos con unidades homogéneas (Caso 1)', () => {
+  test('sin Fase 0: no hay procesos de conversión y N se expresa por semestre', () => {
+    const resultado = calcularEOQ({
+      demandaAnual: 1200,
+      costoOrdenar: 20,
+      costoMantener: 5,
+      costoUnitario: 10,
+      unidadDemanda: 'semestral',
+      unidadCostoMantener: 'semestral',
+    });
+
+    expect(resultado.procesos.some((p) => p.id.startsWith('fase0-'))).toBe(false);
+    const n = resultado.procesos.find((p) => p.id === 'eoq-numero-pedidos')!;
+    // D/semestre ÷ Q* = 1200/98 ≈ 12.24 pedidos por semestre
+    expect(n.resultado).toBe('N = 12.24');
+  });
 });

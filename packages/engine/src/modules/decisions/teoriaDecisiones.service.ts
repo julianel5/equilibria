@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { proceso, fmtProceso, type ProcesoCalculo } from '../procesos';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Teoría de Decisiones - Matriz de Pagos
@@ -135,6 +136,7 @@ export interface TeoriaDecisionesResult {
   maximoPorColumna: number[];   // máximos de cada columna
   minimoPorColumna: number[];   // mínimos de cada columna
   matrizArrepentimiento: number[][]; // r_ij para el modo activo
+  procesos: ProcesoCalculo[];   // pasos pedagógicos por criterio y alternativa
 }
 
 // --- Servicio ---
@@ -174,6 +176,199 @@ function construirCriterio(
     ganador: valores[ganadorIdx],
     ...(matrizArrepentimiento ? { matrizArrepentimiento } : {}),
   };
+}
+
+export function construirProcesosDecisiones(d: {
+  alternativas: string[];
+  pagos: number[][];
+  esCostos: boolean;
+  alpha: number;
+  probabilidades: (number | null)[];
+  vmeDisponible: boolean;
+  maximoPorColumna: number[];
+  minimoPorColumna: number[];
+  matrizArrepentimiento: number[][];
+  criterios: CriterioResult[];
+}): ProcesoCalculo[] {
+  const { alternativas, pagos, esCostos } = d;
+  const nCols = pagos[0].length;
+  const procesos: ProcesoCalculo[] = [];
+
+  const texAlt = (nombre: string): string => `\\text{${nombre}}`;
+  const listar = (xs: number[]): string => xs.map(fmtProceso).join(', ');
+  const opFila = (max: boolean): string => (max ? '\\max' : '\\min');
+  const buscar = (clave: CriterioClave): CriterioResult => d.criterios.find((c) => c.clave === clave)!;
+
+  const grupo = (g: {
+    clave: CriterioClave;
+    titulo: string;
+    formulaFilas: string;
+    filas: { tex: string; valor: number }[];
+    formulaDecision: string;
+    simboloDecision: string;
+    sustitucionDecision: string;
+  }): void => {
+    g.filas.forEach((fila, i) => {
+      procesos.push(
+        proceso({
+          id: `decision-${g.clave}-alt-${i}`,
+          titulo: `${g.titulo} · ${alternativas[i]}`,
+          simbolo: texAlt(alternativas[i]),
+          formula: g.formulaFilas,
+          sustitucion: fila.tex,
+          resultado: `= ${fmtProceso(fila.valor)}`,
+          tipoResultado: 'texto',
+        })
+      );
+    });
+    const ganador = buscar(g.clave).ganador;
+    procesos.push(
+      proceso({
+        id: `decision-${g.clave}-ganador`,
+        titulo: `${g.titulo} — Decisión`,
+        simbolo: g.simboloDecision,
+        formula: g.formulaDecision,
+        sustitucion: g.sustitucionDecision,
+        resultado: `\\text{Ganador: } ${texAlt(ganador.alternativa)}\\;(${fmtProceso(ganador.valor)})`,
+        tipoResultado: 'texto',
+      })
+    );
+  };
+
+  const cO = buscar('maximax');
+  grupo({
+    clave: 'maximax',
+    titulo: cO.nombre,
+    formulaFilas: esCostos ? '\\min_j a_{ij}' : '\\max_j a_{ij}',
+    filas: pagos.map((fila, i) => ({
+      tex: `${opFila(!esCostos)}\\left(${listar(fila)}\\right)`,
+      valor: cO.valores[i].valor,
+    })),
+    formulaDecision: cO.formula,
+    simboloDecision: esCostos
+      ? '\\min_i\\left(\\min_j a_{ij}\\right)'
+      : '\\max_i\\left(\\max_j a_{ij}\\right)',
+    sustitucionDecision: `${opFila(!esCostos)}\\left(${listar(cO.valores.map((v) => v.valor))}\\right)`,
+  });
+
+  const cW = buscar('maximin');
+  grupo({
+    clave: 'maximin',
+    titulo: cW.nombre,
+    formulaFilas: esCostos ? '\\max_j a_{ij}' : '\\min_j a_{ij}',
+    filas: pagos.map((fila, i) => ({
+      tex: `${opFila(esCostos)}\\left(${listar(fila)}\\right)`,
+      valor: cW.valores[i].valor,
+    })),
+    formulaDecision: cW.formula,
+    simboloDecision: esCostos
+      ? '\\min_i\\left(\\max_j a_{ij}\\right)'
+      : '\\max_i\\left(\\min_j a_{ij}\\right)',
+    sustitucionDecision: `${opFila(esCostos)}\\left(${listar(cW.valores.map((v) => v.valor))}\\right)`,
+  });
+
+  const cL = buscar('laplace');
+  grupo({
+    clave: 'laplace',
+    titulo: cL.nombre,
+    formulaFilas: `\\bar{a}_i = \\frac{1}{${nCols}} \\sum_{j=1}^{${nCols}} a_{ij}`,
+    filas: pagos.map((fila, i) => ({
+      tex: `\\frac{${fila.map(fmtProceso).join(' + ')}}{${nCols}}`,
+      valor: cL.valores[i].valor,
+    })),
+    formulaDecision: cL.formula,
+    simboloDecision: esCostos ? '\\min_i\\left(\\bar{a}_i\\right)' : '\\max_i\\left(\\bar{a}_i\\right)',
+    sustitucionDecision: `${opFila(!esCostos)}\\left(${listar(cL.valores.map((v) => v.valor))}\\right)`,
+  });
+
+  const cH = buscar('hurwicz');
+  grupo({
+    clave: 'hurwicz',
+    titulo: cH.nombre,
+    formulaFilas: esCostos
+      ? 'H_i = \\alpha \\min_j a_{ij} + (1-\\alpha) \\max_j a_{ij}'
+      : 'H_i = \\alpha \\max_j a_{ij} + (1-\\alpha) \\min_j a_{ij}',
+    filas: pagos.map((fila, i) => {
+      const max = Math.max(...fila);
+      const min = Math.min(...fila);
+      const best = esCostos ? min : max;
+      const worst = esCostos ? max : min;
+      return {
+        tex: `${fmtProceso(d.alpha)} \\cdot ${fmtProceso(best)} + ${fmtProceso(1 - d.alpha)} \\cdot ${fmtProceso(worst)}`,
+        valor: cH.valores[i].valor,
+      };
+    }),
+    formulaDecision: cH.formula,
+    simboloDecision: esCostos ? '\\min_i\\left(H_i\\right)' : '\\max_i\\left(H_i\\right)',
+    sustitucionDecision: `${opFila(!esCostos)}\\left(${listar(cH.valores.map((v) => v.valor))}\\right)`,
+  });
+
+  const cS = buscar('savage');
+  const referencia = esCostos ? d.minimoPorColumna : d.maximoPorColumna;
+  const refSimbolo = esCostos ? 'm_j' : 'M_j';
+  const columnas = pagos[0].map((_, j) => `\\left[${listar(pagos.map((fila) => fila[j]))}\\right]`);
+  procesos.push(
+    proceso({
+      id: 'decision-savage-referencia',
+      titulo: `${cS.nombre} · Referencia por estado`,
+      simbolo: refSimbolo,
+      formula: esCostos ? `${refSimbolo} = \\min_k a_{kj}` : `${refSimbolo} = \\max_k a_{kj}`,
+      sustitucion: `${refSimbolo} = ${opFila(!esCostos)}\\left(${columnas.join(',\\; ')}\\right)`,
+      resultado: `${refSimbolo} = [${listar(referencia)}]`,
+      tipoResultado: 'texto',
+    })
+  );
+  cS.valores.forEach((v, i) => {
+    const fila = pagos[i];
+    procesos.push(
+      proceso({
+        id: `decision-savage-alt-${i}`,
+        titulo: `${cS.nombre} · Arrepentimiento`,
+        simbolo: texAlt(alternativas[i]),
+        formula: esCostos ? `${refSimbolo} \\text{ (referencia)}: r_{ij} = a_{ij} - ${refSimbolo}` : `${refSimbolo} \\text{ (referencia)}: r_{ij} = ${refSimbolo} - a_{ij}`,
+        sustitucion: `\\max\\left(${fila
+          .map(
+            (_, j) =>
+              `|${esCostos ? fmtProceso(fila[j]) : fmtProceso(referencia[j])} - ${
+                esCostos ? fmtProceso(referencia[j]) : fmtProceso(fila[j])
+              }|`
+          )
+          .join(', ')}\\right)`,
+        resultado: `= ${fmtProceso(v.valor)}`,
+        tipoResultado: 'texto',
+      })
+    );
+  });
+  procesos.push(
+    proceso({
+      id: 'decision-savage-ganador',
+      titulo: `${cS.nombre} — Decisión`,
+      simbolo: '\\min_i\\left(\\max_j r_{ij}\\right)',
+      formula: cS.formula,
+      sustitucion: `\\min\\left(${listar(cS.valores.map((x) => x.valor))}\\right)`,
+      resultado: `\\text{Ganador: } ${texAlt(cS.ganador.alternativa)}\\;(${fmtProceso(cS.ganador.valor)})`,
+      tipoResultado: 'texto',
+    })
+  );
+
+  if (d.vmeDisponible) {
+    const cV = buscar('vme');
+    const probs = d.probabilidades as number[];
+    grupo({
+      clave: 'vme',
+      titulo: cV.nombre,
+      formulaFilas: 'VE(d_i) = \\sum_{j} p_j \\cdot a_{ij}',
+      filas: pagos.map((fila, i) => ({
+        tex: fila.map((pago, j) => `\\left(${fmtProceso(probs[j])}\\right)\\left(${fmtProceso(pago)}\\right)`).join(' + '),
+        valor: cV.valores[i].valor,
+      })),
+      formulaDecision: cV.formula,
+      simboloDecision: esCostos ? '\\min_i\\left(VE(d_i)\\right)' : '\\max_i\\left(VE(d_i)\\right)',
+      sustitucionDecision: `${opFila(!esCostos)}\\left(${listar(cV.valores.map((v) => v.valor))}\\right)`,
+    });
+  }
+
+  return procesos;
 }
 
 export function calcularTeoriaDecisiones(input: TeoriaDecisionesInput): TeoriaDecisionesResult {
@@ -339,5 +534,17 @@ export function calcularTeoriaDecisiones(input: TeoriaDecisionesInput): TeoriaDe
     maximoPorColumna,
     minimoPorColumna,
     matrizArrepentimiento,
+    procesos: construirProcesosDecisiones({
+      alternativas,
+      pagos,
+      esCostos,
+      alpha: validated.alpha,
+      probabilidades: probs,
+      vmeDisponible,
+      maximoPorColumna,
+      minimoPorColumna,
+      matrizArrepentimiento,
+      criterios,
+    }),
   };
 }

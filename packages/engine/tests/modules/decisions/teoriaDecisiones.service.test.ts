@@ -458,3 +458,162 @@ describe('Teoría de Decisiones — modo Minimizar (costos)', () => {
     expect(r.criterios.find((c) => c.clave === 'vme')!.nombre).toBe('VME (Valor Monetario Esperado)');
   });
 });
+
+describe('Teoría de Decisiones — procesos paso a paso', () => {
+  const r = calcularTeoriaDecisiones(basico);
+  const buscar = (id: string) => r.procesos.find((p) => p.id === id);
+
+  test('genera una tarjeta por alternativa y una de decisión por criterio', () => {
+    // maximax, maximin, laplace, hurwicz (4 c/u) + savage (3+2) + vme (4) = 25
+    expect(r.procesos.map((p) => p.id)).toEqual([
+      'decision-maximax-alt-0',
+      'decision-maximax-alt-1',
+      'decision-maximax-alt-2',
+      'decision-maximax-ganador',
+      'decision-maximin-alt-0',
+      'decision-maximin-alt-1',
+      'decision-maximin-alt-2',
+      'decision-maximin-ganador',
+      'decision-laplace-alt-0',
+      'decision-laplace-alt-1',
+      'decision-laplace-alt-2',
+      'decision-laplace-ganador',
+      'decision-hurwicz-alt-0',
+      'decision-hurwicz-alt-1',
+      'decision-hurwicz-alt-2',
+      'decision-hurwicz-ganador',
+      'decision-savage-referencia',
+      'decision-savage-alt-0',
+      'decision-savage-alt-1',
+      'decision-savage-alt-2',
+      'decision-savage-ganador',
+      'decision-vme-alt-0',
+      'decision-vme-alt-1',
+      'decision-vme-alt-2',
+      'decision-vme-ganador',
+    ]);
+  });
+
+  test('Maximax: evalúa cada fila y declara al ganador', () => {
+    const alt0 = buscar('decision-maximax-alt-0')!;
+    expect(alt0.titulo).toBe('Maximax · Alt 1');
+    expect(alt0.formula).toBe('\\max_j a_{ij}');
+    expect(alt0.sustitucion).toBe('\\max\\left(130, 260, 40\\right)');
+    expect(alt0.resultado).toBe('= 260');
+
+    const ganador = buscar('decision-maximax-ganador')!;
+    expect(ganador.sustitucion).toBe('\\max\\left(260, 240, 300\\right)');
+    expect(ganador.resultado).toContain('\\text{Ganador: } \\text{Alt 3}\\;(300)');
+  });
+
+  test('Maximin: toma el mínimo de cada fila y luego el mayor', () => {
+    const alt2 = buscar('decision-maximin-alt-2')!;
+    expect(alt2.formula).toBe('\\min_j a_{ij}');
+    expect(alt2.sustitucion).toBe('\\min\\left(100, 200, 300\\right)');
+    expect(alt2.resultado).toBe('= 100');
+
+    const ganador = buscar('decision-maximin-ganador')!;
+    expect(ganador.sustitucion).toBe('\\min\\left(40, 110, 100\\right)');
+    expect(ganador.resultado).toContain('\\text{Ganador: } \\text{Alt 2}\\;(110)');
+  });
+
+  test('Laplace promedia la fila con el número de estados', () => {
+    const alt0 = buscar('decision-laplace-alt-0')!;
+    expect(alt0.sustitucion).toBe('\\frac{130 + 260 + 40}{3}');
+    expect(alt0.resultado).toBe('= 143.33');
+  });
+
+  test('Hurwicz pondera máximo y mínimo con α', () => {
+    const alt0 = buscar('decision-hurwicz-alt-0')!;
+    expect(alt0.sustitucion).toBe('0.5 \\cdot 260 + 0.5 \\cdot 40');
+    expect(alt0.resultado).toBe('= 150');
+  });
+
+  test('Savage muestra la referencia por columna antes del arrepentimiento', () => {
+    const ref = buscar('decision-savage-referencia')!;
+    expect(ref.formula).toBe('M_j = \\max_k a_{kj}');
+    expect(ref.sustitucion).toBe(
+      'M_j = \\max\\left(\\left[130, 240, 100\\right],\\; \\left[260, 110, 200\\right],\\; \\left[40, 160, 300\\right]\\right)'
+    );
+    expect(ref.resultado).toBe('M_j = [240, 260, 300]');
+
+    const alt0 = buscar('decision-savage-alt-0')!;
+    expect(alt0.titulo).toBe('Savage (Minimax Regret) · Arrepentimiento');
+    expect(alt0.sustitucion).toBe('\\max\\left(|240 - 130|, |260 - 260|, |300 - 40|\\right)');
+    expect(alt0.resultado).toBe('= 260');
+
+    const ganador = buscar('decision-savage-ganador')!;
+    expect(ganador.sustitucion).toBe('\\min\\left(260, 150, 140\\right)');
+    expect(ganador.resultado).toContain('\\text{Ganador: } \\text{Alt 3}\\;(140)');
+  });
+
+  test('VME pondera cada pago con su probabilidad', () => {
+    const alt0 = buscar('decision-vme-alt-0')!;
+    expect(alt0.sustitucion).toBe(
+      '\\left(0.4\\right)\\left(130\\right) + \\left(0.3\\right)\\left(260\\right) + \\left(0.3\\right)\\left(40\\right)'
+    );
+    expect(alt0.resultado).toBe('= 142');
+    expect(alt0.formula).toBe('VE(d_i) = \\sum_{j} p_j \\cdot a_{ij}');
+
+    const ganador = buscar('decision-vme-ganador')!;
+    expect(ganador.sustitucion).toBe('\\max\\left(142, 177, 190\\right)');
+    expect(ganador.resultado).toContain('\\text{Ganador: } \\text{Alt 3}\\;(190)');
+  });
+
+  test('sin probabilidades se omiten los pasos del VME', () => {
+    const sinVme = calcularTeoriaDecisiones({
+      ...basico,
+      estados: basico.estados.map((e) => ({ ...e, probabilidad: null })),
+    });
+    expect(sinVme.procesos.length).toBe(21);
+    expect(sinVme.procesos.some((p) => p.id.startsWith('decision-vme'))).toBe(false);
+  });
+
+  test('modo costos invierte la referencia de Savage y los criterios', () => {
+    const costo = calcularTeoriaDecisiones({
+      alternativas: [
+        { nombre: 'Alt 1', pagos: [8, 15, 20] },
+        { nombre: 'Alt 2', pagos: [12, 9, 13] },
+        { nombre: 'Alt 3', pagos: [6, 18, 25] },
+      ],
+      estados: [
+        { nombre: 'E1', probabilidad: 0.4 },
+        { nombre: 'E2', probabilidad: 0.3 },
+        { nombre: 'E3', probabilidad: 0.3 },
+      ],
+      tipoAnalisis: 'minimizar',
+      alpha: 0.5,
+    });
+    const buscarC = (id: string) => costo.procesos.find((p) => p.id === id)!;
+
+    const minimin = buscarC('decision-maximax-alt-0');
+    expect(minimin.titulo).toBe('Minimin · Alt 1');
+    expect(minimin.formula).toBe('\\min_j a_{ij}');
+    expect(minimin.sustitucion).toBe('\\min\\left(8, 15, 20\\right)');
+    expect(minimin.resultado).toBe('= 8');
+    expect(buscarC('decision-maximax-ganador').resultado).toContain(
+      '\\text{Ganador: } \\text{Alt 3}\\;(6)'
+    );
+
+    const minimax = buscarC('decision-maximin-ganador');
+    expect(minimax.sustitucion).toBe('\\max\\left(20, 13, 25\\right)');
+    expect(minimax.resultado).toContain('\\text{Ganador: } \\text{Alt 2}\\;(13)');
+
+    const ref = buscarC('decision-savage-referencia');
+    expect(ref.formula).toBe('m_j = \\min_k a_{kj}');
+    expect(ref.resultado).toBe('m_j = [6, 9, 13]');
+
+    const alt0 = buscarC('decision-savage-alt-0');
+    expect(alt0.formula).toBe('m_j \\text{ (referencia)}: r_{ij} = a_{ij} - m_j');
+    expect(alt0.sustitucion).toBe('\\max\\left(|8 - 6|, |15 - 9|, |20 - 13|\\right)');
+    expect(alt0.resultado).toBe('= 7');
+
+    const savGanador = buscarC('decision-savage-ganador');
+    expect(savGanador.sustitucion).toBe('\\min\\left(7, 6, 12\\right)');
+    expect(savGanador.resultado).toContain('\\text{Ganador: } \\text{Alt 2}\\;(6)');
+
+    const vme = buscarC('decision-vme-ganador');
+    expect(vme.sustitucion).toBe('\\min\\left(13.7, 11.4, 15.3\\right)');
+    expect(vme.resultado).toContain('\\text{Ganador: } \\text{Alt 2}\\;(11.4)');
+  });
+});

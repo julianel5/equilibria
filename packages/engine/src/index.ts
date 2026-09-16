@@ -14,12 +14,28 @@ export type {
   RangoEvaluacion,
 } from './modules/inventory/eoqDescuentos.service';
 export { EOQDescuentosInputSchema, RangoPrecioSchema } from './modules/inventory/eoqDescuentos.service';
+export {
+  UNIDADES_TIEMPO,
+  ETIQUETAS_UNIDAD_TIEMPO,
+  PERIODO_DE_UNIDAD,
+  FACTOR_UNIDADES_A_ANO,
+  normalizarAAño,
+  construirNormalizacion,
+} from './modules/inventory/unidadesTiempo';
+export type {
+  UnidadTiempo,
+  NormalizacionUnidades,
+  PasoNormalizacion,
+} from './modules/inventory/unidadesTiempo';
 export { calcularDemandaProbabilistica, inversaNormalEstandar } from './modules/stochastic/demandaProbabilistica.service';
 export type {
   DemandaProbabilisticaInput,
   DemandaProbabilisticaResult,
 } from './modules/stochastic/demandaProbabilistica.service';
 export { DemandaProbabilisticaInputSchema } from './modules/stochastic/demandaProbabilistica.service';
+export { calcularPeriodoUnico, generarPuntosDistribucion } from './modules/stochastic/periodoUnico.service';
+export type { PeriodoUnicoInput, PeriodoUnicoResult, PuntoDistribucion } from './modules/stochastic/periodoUnico.service';
+export { PeriodoUnicoInputSchema } from './modules/stochastic/periodoUnico.service';
 export { calcularTeoriaDecisiones } from './modules/decisions/teoriaDecisiones.service';
 export type {
   TeoriaDecisionesInput,

@@ -214,3 +214,91 @@ describe('EOQ con Faltantes - Costo de mantener porcentual (H = I × C)', () => 
     }).toThrow('El costo de mantener debe ser un número positivo');
   });
 });
+
+describe('EOQ con Faltantes - Unidades homogéneas (Caso 1)', () => {
+  test('D y H mensuales calculan sobre el mes sin Fase 0', () => {
+    const resultado = calcularEOQFaltantes({
+      demandaAnual: 2500,     // unidades/mes
+      costoOrdenar: 20,
+      costoMantener: 2,       // USD/unidad-mes
+      costoFaltantes: 2,      // USD/unidad-mes faltante
+      costoUnitario: 10,
+      unidadDemanda: 'mensual',
+      unidadCostoMantener: 'mensual',
+    });
+    const anual = calcularEOQFaltantes({
+      demandaAnual: 30000,    // 2500 × 12
+      costoOrdenar: 20,
+      costoMantener: 24,      // 2 × 12
+      costoFaltantes: 24,     // 2 × 12
+      costoUnitario: 10,
+    });
+
+    expect(resultado.conversionUnidades.activa).toBe(false);
+    expect(resultado.conversionUnidades.base).toBe('mensual');
+    expect(resultado.conversionUnidades.factorBase).toBe(12);
+    expect(resultado.conversionUnidades.pasos).toHaveLength(0);
+
+    // Miso Q*, ciclo y ROP en días (invariantes); costos/pedidos por mes
+    expect(resultado.cantidadOptima).toBe(anual.cantidadOptima);
+    expect(resultado.cicloReposicion).toBe(anual.cicloReposicion);
+    expect(resultado.desglose.demandaDiaria).toBeCloseTo(anual.desglose.demandaDiaria, 1);
+    expect(resultado.costoTotalAnual).toBeCloseTo(anual.costoTotalAnual / 12, 1);
+    expect(resultado.numeroPedidos).toBeCloseTo(anual.numeroPedidos / 12, 1);
+  });
+});
+
+describe('EOQ con Faltantes - Pestaña Procesos (procesos paso a paso)', () => {
+  const input = {
+    demandaAnual: 10000,
+    costoOrdenar: 20,
+    costoMantener: 5,
+    costoFaltantes: 5,
+    costoUnitario: 10,
+  };
+
+  test('genera el desglose de Q*, S*, Imax, costos y TC (anual)', () => {
+    const resultado = calcularEOQFaltantes(input);
+    const ids = resultado.procesos.map((p) => p.id);
+
+    expect(ids).toContain('faltantes-q-optimo');
+    expect(ids).toContain('faltantes-faltante-maximo');
+    expect(ids).toContain('faltantes-inventario-maximo');
+    expect(ids).toContain('faltantes-numero-pedidos');
+    expect(ids).toContain('cicloReposicion');
+    expect(ids).toContain('faltantes-costo-mantener');
+    expect(ids).toContain('faltantes-costo-faltantes');
+    expect(ids).toContain('faltantes-costo-ordenar');
+    expect(ids).toContain('faltantes-costo-total');
+
+    const q = resultado.procesos.find((p) => p.id === 'faltantes-q-optimo')!;
+    expect(q.sustitucion).toContain('2(10000)(20)');
+    expect(q.sustitucion).toContain('\\frac{5+5}{5}');
+    expect(q.resultado).toBe('Q^* = 400');
+
+    const s = resultado.procesos.find((p) => p.id === 'faltantes-faltante-maximo')!;
+    expect(s.sustitucion).toBe('S^* = 400 \\cdot \\frac{5}{5+5}');
+    expect(s.resultado).toBe('S^* = 200');
+
+    const ch = resultado.procesos.find((p) => p.id === 'faltantes-costo-mantener')!;
+    expect(ch.formula).toBe('C_h = \\frac{I_{max}^2}{2 \\cdot Q^*} \\cdot H');
+    expect(ch.resultado).toBe('C_h = 250');
+
+    const tc = resultado.procesos.find((p) => p.id === 'faltantes-costo-total')!;
+    expect(tc.resultado).toBe('TC = 1000');
+  });
+
+  test('la Sustitución usa la D homogeneizada en el caso mixto', () => {
+    const resultado = calcularEOQFaltantes({
+      ...input,
+      demandaAnual: 800, // unidades/mes
+      unidadDemanda: 'mensual',
+      unidadCostoMantener: 'anual',
+    });
+
+    const q = resultado.procesos.find((p) => p.id === 'faltantes-q-optimo')!;
+    expect(q.sustitucion).toContain('2(9600)(20)');
+    expect(q.sustitucion).not.toContain('2(800)(20)');
+    expect(resultado.procesos.some((p) => p.id === 'fase0-0-D')).toBe(true);
+  });
+});

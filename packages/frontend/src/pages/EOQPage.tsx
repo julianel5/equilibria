@@ -2,6 +2,13 @@ import { Fragment, useCallback, useEffect, useMemo, useState, type ChangeEvent, 
 import { calcularEOQ, ApiError, type EOQResult } from '../services/api';
 import CostChart, { type PuntoCosto } from '@shared/components/CostChart';
 import CostoMantenerToggle, { type ModoMantener } from '@shared/components/CostoMantenerToggle';
+import SelectorUnidadTiempo, {
+  ETIQUETAS_UNIDAD_TIEMPO,
+  PERIODO_DE_UNIDAD,
+  type UnidadTiempo,
+} from '@shared/components/SelectorUnidadTiempo';
+import Fase0Unidades from '@shared/components/Fase0Unidades';
+import ProcesosView from '@shared/components/ProcesosView';
 import EOQTeoria from '../components/EOQTeoria';
 import { VARIABLES_EOQ } from '../data/glosario';
 import Formula from '@shared/components/Formula';
@@ -10,10 +17,11 @@ import KpiCard from '@shared/components/KpiCard';
 import PrefsCard from '@shared/components/PrefsCard';
 import TabsPanel from '@shared/components/TabsPanel';
 
-type Pestana = 'calculadora' | 'teoria';
+type Pestana = 'calculadora' | 'procesos' | 'teoria';
 
 const PESTANAS: { clave: Pestana; etiqueta: string }[] = [
   { clave: 'calculadora', etiqueta: 'Calculadora' },
+  { clave: 'procesos', etiqueta: 'Procesos' },
   { clave: 'teoria', etiqueta: 'Teoría y Supuestos' },
 ];
 
@@ -25,6 +33,8 @@ interface FormState {
   costoUnitario: string;
   diasLaborables: string;
   leadTime: string;
+  unidadDemanda: UnidadTiempo;
+  unidadCostoMantener: UnidadTiempo;
 }
 
 interface PrefsState {
@@ -43,7 +53,7 @@ interface CampoFormulario {
 }
 
 const FORM_METADATA: CampoFormulario[] = [
-  { key: 'demandaAnual', label: 'Demanda anual', simbolo: 'D', min: 0.01, unidadSufijo: (u: string, _m: string) => `${u} / año` },
+  { key: 'demandaAnual', label: 'Demanda', simbolo: 'D', min: 0.01, unidadSufijo: (u: string, _m: string) => `${u} / año` },
   { key: 'costoOrdenar', label: 'Costo de ordenar', simbolo: 'S', min: 0.01, unidadSufijo: (_u: string, m: string) => `${m} / orden` },
   { key: 'costoUnitario', label: 'Costo unitario (opcional)', simbolo: 'C', opcional: true, min: 0, unidadSufijo: (u: string, m: string) => `${m} / ${u}` },
   { key: 'diasLaborables', label: 'Días laborables al año', min: 1, unidadSufijo: () => 'días al año' },
@@ -68,6 +78,8 @@ export default function EOQPage() {
     costoUnitario: '10',
     diasLaborables: '365',
     leadTime: '',
+    unidadDemanda: 'anual',
+    unidadCostoMantener: 'anual',
   });
   const [tipoCostoMantener, setTipoCostoMantener] = useState<ModoMantener>('fijo');
   const [prefs, setPrefs] = useState<PrefsState>({
@@ -103,6 +115,8 @@ export default function EOQPage() {
         costoMantenerPorcentaje:
           modo === 'porcentaje' ? Number(datos.costoMantenerPorcentaje) : undefined,
         costoUnitario: Number(datos.costoUnitario) || undefined,
+        unidadDemanda: datos.unidadDemanda,
+        unidadCostoMantener: datos.unidadCostoMantener,
         diasLaborables:
           Number.isFinite(diasLaborables) && diasLaborables > 0 ? diasLaborables : undefined,
         leadTime:
@@ -140,6 +154,10 @@ export default function EOQPage() {
   const handleChange =
     (key: keyof FormState) => (e: ChangeEvent<HTMLInputElement>) =>
       setForm((prev) => ({ ...prev, [key]: e.target.value }));
+
+  const handleSelectChange =
+    (key: 'unidadDemanda' | 'unidadCostoMantener') => (e: ChangeEvent<HTMLSelectElement>) =>
+      setForm((prev) => ({ ...prev, [key]: e.target.value as UnidadTiempo }));
 
   const handlePrefChange =
     (key: keyof PrefsState) => (e: ChangeEvent<HTMLInputElement>) =>
@@ -187,6 +205,15 @@ export default function EOQPage() {
     return sinDuplicado.sort((a, b) => a.cantidad - b.cantidad);
   }, [resultado]);
 
+  // Aplicación numérica de Q* con los valores homogeneizados (base anual) para la Fase 0.
+  const formulaQNumerica = resultado
+    ? `Q^* = \\sqrt{ \\frac{2 \\cdot ${fmtDecimal(resultado.desglose.demandaAnual)} \\cdot ${fmtDecimal(
+        resultado.desglose.costoFijoOrden
+      )}}{${fmtDecimal(resultado.desglose.costoHoldingUnitario)}} } = ${fmtDecimal(
+        resultado.cantidadOptima
+      )}`
+    : undefined;
+
   if (pestana === 'teoria') {
     return (
       <div className="space-y-6">
@@ -201,6 +228,36 @@ export default function EOQPage() {
           ariaLabel="Secciones del modelo EOQ"
         />
         <EOQTeoria />
+        <Glossary
+          abierto={glosarioAbierto}
+          onClose={() => setGlosarioAbierto(false)}
+          variables={VARIABLES_EOQ}
+        />
+      </div>
+    );
+  }
+
+  if (pestana === 'procesos') {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <EOQHeader />
+          <GlossaryButton onClick={() => setGlosarioAbierto(true)} />
+        </div>
+        <TabsPanel
+          pestanas={PESTANAS}
+          activa={pestana}
+          onCambio={(c) => setPestana(c as Pestana)}
+          ariaLabel="Secciones del modelo EOQ"
+        />
+        {resultado && resultado.procesos ? (
+          <ProcesosView procesos={resultado.procesos} unidad={unidad} moneda={moneda} />
+        ) : (
+          <div className="mx-auto flex max-w-md flex-col items-center gap-2 rounded-lg border border-slate-200 bg-white p-8 text-center shadow-md  dark:border-gray-700 dark:bg-gray-800">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
+            <p className="text-sm text-slate-500  dark:text-gray-400">Calculando EOQ…</p>
+          </div>
+        )}
         <Glossary
           abierto={glosarioAbierto}
           onClose={() => setGlosarioAbierto(false)}
@@ -236,6 +293,22 @@ export default function EOQPage() {
     );
   }
 
+  // Base de cálculo del motor: "anual" cuando las unidades están mezcladas
+  // (Fase 0 forzada) o la unidad compartida cuando D y H vienen en la misma
+  // unidad (caso homogéneo). Los títulos/descripciones se adaptan a ella.
+  const unidadBase = resultado.conversionUnidades.base;
+  const etiquetaBase = ETIQUETAS_UNIDAD_TIEMPO[unidadBase];
+  const adjetivoBase = etiquetaBase.toLowerCase();
+  const periodoBase = PERIODO_DE_UNIDAD[unidadBase];
+  const formulaCiclo =
+    unidadBase === 'anual'
+      ? 'T = \\frac{365}{N}'
+      : 'T = \\frac{\\text{Días en el período}}{N}';
+  const frasePedidos =
+    periodoBase === 'año' ? 'al año' : `por ${periodoBase}`;
+  const fraseDemoAnual =
+    periodoBase === 'año' ? 'la demanda anual' : `la demanda del ${periodoBase}`;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -257,6 +330,14 @@ export default function EOQPage() {
         onMonedaChange={handlePrefChange('moneda')}
       />
 
+      {/* Fase 0: estandarización de unidades (solo si hay unidades no anuales) */}
+      {resultado.conversionUnidades.activa ? (
+        <Fase0Unidades
+          normalizacion={resultado.conversionUnidades}
+          aplicacion={formulaQNumerica}
+        />
+      ) : null}
+
       {/* Fila principal: formulario + KPIs grandes */}
       <div className="grid items-start gap-6 lg:grid-cols-[320px_1fr]">
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
@@ -277,21 +358,43 @@ export default function EOQPage() {
                       </span>
                     ) : null}
                   </span>
-                  <input
-                    type="number"
-                    min={String(campo.min)}
-                    step="any"
-                    placeholder={campo.placeholder}
-                    required={
-                      !campo.opcional ||
-                      (campo.key === 'costoUnitario' && tipoCostoMantener === 'porcentaje')
-                    }
-                    value={form[campo.key]}
-                    onChange={handleChange(campo.key)}
-                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
-                  />
+                  {campo.key === 'demandaAnual' ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min={String(campo.min)}
+                        step="any"
+                        placeholder={campo.placeholder}
+                        required={!campo.opcional}
+                        value={form[campo.key]}
+                        onChange={handleChange(campo.key)}
+                        className="w-full flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
+                      />
+                      <SelectorUnidadTiempo
+                        valor={form.unidadDemanda}
+                        onChange={handleSelectChange('unidadDemanda')}
+                        ariaLabel="Unidad de tiempo de la demanda"
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      type="number"
+                      min={String(campo.min)}
+                      step="any"
+                      placeholder={campo.placeholder}
+                      required={
+                        !campo.opcional ||
+                        (campo.key === 'costoUnitario' && tipoCostoMantener === 'porcentaje')
+                      }
+                      value={form[campo.key]}
+                      onChange={handleChange(campo.key)}
+                      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
+                    />
+                  )}
                   <span className="mt-0.5 block text-xs text-slate-400  dark:text-gray-500">
-                    {campo.unidadSufijo(unidad, moneda)}
+                    {campo.key === 'demandaAnual'
+                      ? `${unidad} / ${PERIODO_DE_UNIDAD[form.unidadDemanda]}`
+                      : campo.unidadSufijo(unidad, moneda)}
                   </span>
                   {fieldErrors[campo.key] ? (
                     <span
@@ -313,6 +416,8 @@ export default function EOQPage() {
                     unidad={unidad}
                     moneda={moneda}
                     fieldErrors={fieldErrors}
+                    unidadCostoMantener={form.unidadCostoMantener}
+                    onUnidadCostoMantenerChange={handleSelectChange('unidadCostoMantener')}
                   />
                 ) : null}
               </Fragment>
@@ -367,11 +472,11 @@ export default function EOQPage() {
             />
             <KpiCard
               large
-              title="Costo total anual"
+              title={`Costo total ${adjetivoBase}`}
               value={fmtMoneda(resultado.costoTotalAnual, moneda)}
               formula={'TC = \\frac{D}{Q^*}S + \\frac{Q^*}{2}H + DC'}
               tone="emerald"
-              description="Suma anual de los costos de ordenar, mantener y comprar el inventario."
+              description={`Suma ${adjetivoBase} de los costos de ordenar, mantener y comprar el inventario.`}
             />
           </div>
         </section>
@@ -388,15 +493,15 @@ export default function EOQPage() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <KpiCard
             title="Número de pedidos"
-            value={`${fmtDecimal(resultado.numeroPedidos)} / año`}
+            value={`${fmtDecimal(resultado.numeroPedidos)} / ${periodoBase}`}
             formula={'N = \\frac{D}{Q^*}'}
             tone="slate"
-            description="Órdenes emitidas al año en el punto óptimo."
+            description={`Órdenes emitidas ${frasePedidos} en el punto óptimo.`}
           />
           <KpiCard
             title="Ciclo de reposición"
             value={`${fmtDecimal(resultado.cicloReposicion)} días`}
-            formula={'T = \\frac{365}{N}'}
+            formula={formulaCiclo}
             tone="slate"
             description="Días entre una orden y la siguiente."
           />
@@ -408,14 +513,14 @@ export default function EOQPage() {
             description="Nivel medio de stock a lo largo del ciclo."
           />
           <KpiCard
-            title="Costo anual de ordenar"
+            title={`Costo ${adjetivoBase} de ordenar`}
             value={fmtMoneda(resultado.costoOrdenar, moneda)}
             formula={'C_o = \\frac{D}{Q^*} \\cdot S'}
             tone="amber"
-            description="Costo fijo multiplicado por los pedidos del año."
+            description={`Costo fijo multiplicado por los pedidos del ${periodoBase}.`}
           />
           <KpiCard
-            title="Costo anual de mantener"
+            title={`Costo ${adjetivoBase} de mantener`}
             value={fmtMoneda(resultado.costoMantener, moneda)}
             formula={'C_h = \\frac{Q^*}{2} \\cdot H'}
             tone="amber"
@@ -426,7 +531,7 @@ export default function EOQPage() {
             value={fmtMoneda(resultado.costoAdquisicion, moneda)}
             formula={'C_c = D \\cdot C'}
             tone="slate"
-            description="Costo de comprar la demanda anual al precio unitario."
+            description={`Costo de comprar ${fraseDemoAnual} al precio unitario.`}
           />
           {mostrarROP ? (
             <KpiCard

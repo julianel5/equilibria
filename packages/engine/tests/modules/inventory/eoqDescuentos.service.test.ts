@@ -194,4 +194,149 @@ describe('EOQ con Descuentos por Cantidad', () => {
     expect(resultado.desglose.demandaAnual).toBe(1000);
     expect(resultado.desglose.costoFijoOrden).toBe(5);
   });
+
+  test('caso homogéneo: D y H/I semestrales calculan sobre el semestre sin Fase 0', () => {
+    const resultado = calcularEOQDescuentos({
+      ...inputFijo,
+      demandaAnual: 500,       // unidades/semestre
+      costoMantener: 1,        // USD/unidad-semestre
+      unidadDemanda: 'semestral',
+      unidadCostoMantener: 'semestral',
+    });
+    const anual = calcularEOQDescuentos({
+      ...inputFijo,
+      demandaAnual: 1000,
+      costoMantener: 2,
+    });
+
+    expect(resultado.conversionUnidades.activa).toBe(false);
+    expect(resultado.conversionUnidades.base).toBe('semestral');
+    expect(resultado.conversionUnidades.factorBase).toBe(2);
+    expect(resultado.conversionUnidades.pasos).toHaveLength(0);
+
+    // Mismo ganador y lote óptimo; el TC total ganador es el semestral (anual ÷ 2)
+    expect(resultado.loteOptimo).toBe(anual.loteOptimo);
+    expect(resultado.costoTotalOptimo).toBeCloseTo(anual.costoTotalOptimo / 2, 1);
+  });
+
+  test('caso homogéneo: D y H/I mensuales → base mensual con factorBase 12', () => {
+    const resultado = calcularEOQDescuentos({
+      ...inputFijo,
+      demandaAnual: 500,
+      costoMantener: 0.5,
+      unidadDemanda: 'mensual',
+      unidadCostoMantener: 'mensual',
+    });
+
+    expect(resultado.conversionUnidades.activa).toBe(false);
+    expect(resultado.conversionUnidades.base).toBe('mensual');
+    expect(resultado.conversionUnidades.factorBase).toBe(12);
+    expect(resultado.conversionUnidades.pasos).toHaveLength(0);
+  });
+});
+
+describe('EOQ con Descuentos - Pestaña Procesos (procesos paso a paso)', () => {
+  const inputFijo = {
+    demandaAnual: 1000,
+    costoOrdenar: 5,
+    tipoCostoMantener: 'fijo' as const,
+    costoMantener: 2,
+    rangos: [
+      { cantidadMinima: 0, cantidadMaxima: 199, costoUnitario: 10 },
+      { cantidadMinima: 200, costoUnitario: 9 },
+    ],
+  };
+  const inputDescartado = {
+    demandaAnual: 1000,
+    costoOrdenar: 5,
+    tipoCostoMantener: 'fijo' as const,
+    costoMantener: 1,
+    rangos: [
+      { cantidadMinima: 0, cantidadMaxima: 99, costoUnitario: 10 },
+      { cantidadMinima: 100, costoUnitario: 9 },
+    ],
+  };
+  const inputPorcentaje = {
+    demandaAnual: 10000,
+    costoOrdenar: 20,
+    tipoCostoMantener: 'porcentaje' as const,
+    costoMantenerPorcentaje: 20,
+    rangos: [
+      { cantidadMinima: 0, cantidadMaxima: 1000, costoUnitario: 10 },
+      { cantidadMinima: 1001, costoUnitario: 9 },
+    ],
+  };
+
+  test('genera los procesos por nivel (H_j, Q*_j, ajuste, costos) y la selección', () => {
+    const resultado = calcularEOQDescuentos(inputFijo);
+    const ids = resultado.procesos.map((p) => p.id);
+
+    expect(ids).toContain('descuentos-n1-h');
+    expect(ids).toContain('descuentos-n1-q');
+    expect(ids).toContain('descuentos-n1-ajuste');
+    expect(ids).toContain('descuentos-n1-tc');
+    expect(ids).toContain('descuentos-n2-h');
+    expect(ids).toContain('descuentos-n2-q');
+    expect(ids).toContain('descuentos-n2-ajuste');
+    expect(ids).toContain('descuentos-n2-tc');
+    expect(ids).toContain('descuentos-seleccion');
+    expect(ids).not.toContain('descuentos-n1-descartado');
+
+    // Nivel 1 (fijo): H_1 = H y Q*_1 usa los datos de entrada.
+    const h1 = resultado.procesos.find((p) => p.id === 'descuentos-n1-h')!;
+    expect(h1.formula).toBe('H_j = H');
+    expect(h1.sustitucion).toBe('H_j = 2');
+
+    const q1 = resultado.procesos.find((p) => p.id === 'descuentos-n1-q')!;
+    expect(q1.sustitucion).toBe('Q^*_j = \\sqrt{\\frac{2(1000)(5)}{2}}');
+
+    // Nivel 2: Q* < q_min → Regla 1, ajuste a q_min = 200.
+    const ajuste2 = resultado.procesos.find((p) => p.id === 'descuentos-n2-ajuste')!;
+    expect(ajuste2.titulo).toContain('Regla 1');
+    expect(ajuste2.sustitucion).toContain('q_{min} = 200');
+    expect(ajuste2.resultado).toBe('Q = 200');
+
+    // Selección: lista de TC_j y ganador = nivel 2.
+    const sel = resultado.procesos.find((p) => p.id === 'descuentos-seleccion')!;
+    expect(sel.sustitucion).toContain('TC_{1} = 10141.42');
+    expect(sel.sustitucion).toContain('TC_{2} = 9225');
+    expect(sel.resultado).toContain('nivel } 2 \\text{ con } Q = 200');
+  });
+
+  test('los niveles descartados generan su proceso sin candidato', () => {
+    const resultado = calcularEOQDescuentos(inputDescartado);
+
+    const desc = resultado.procesos.find((p) => p.id === 'descuentos-n1-descartado');
+    expect(desc).toBeDefined();
+    expect(desc!.formula).toContain('Regla 3');
+    expect(desc!.sustitucion).toBe('Q^*_j = 100 > q_{max} = 99');
+    expect(desc!.resultado).toBe('\\text{sin candidato}');
+  });
+
+  test('modo porcentaje: H_j = (I/100)×C_j aparece en la Sustitución', () => {
+    const resultado = calcularEOQDescuentos(inputPorcentaje);
+
+    const h1 = resultado.procesos.find((p) => p.id === 'descuentos-n1-h')!;
+    expect(h1.formula).toBe('H_j = \\frac{I}{100} \\times C_j');
+    expect(h1.sustitucion).toBe('H_j = \\frac{20}{100} \\times 10');
+    expect(h1.resultado).toBe('H_j = 2');
+
+    const h2 = resultado.procesos.find((p) => p.id === 'descuentos-n2-h')!;
+    expect(h2.sustitucion).toBe('H_j = \\frac{20}{100} \\times 9');
+    expect(h2.resultado).toBe('H_j = 1.8');
+  });
+
+  test('la Sustitución usa la D homogeneizada en el caso mixto', () => {
+    const resultado = calcularEOQDescuentos({
+      ...inputFijo,
+      demandaAnual: 500, // unidades/mes
+      unidadDemanda: 'mensual',
+      unidadCostoMantener: 'anual',
+    });
+
+    const q1 = resultado.procesos.find((p) => p.id === 'descuentos-n1-q')!;
+    expect(q1.sustitucion).toContain('2(6000)(5)');
+    expect(q1.sustitucion).not.toContain('2(500)(5)');
+    expect(resultado.procesos.some((p) => p.id === 'fase0-0-D')).toBe(true);
+  });
 });

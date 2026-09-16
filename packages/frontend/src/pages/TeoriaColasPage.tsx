@@ -12,13 +12,15 @@ import { VARIABLES_TEORIACOLAS } from '../data/glosario';
 import Formula from '@shared/components/Formula';
 import Glossary, { GlossaryButton } from '@shared/components/Glossary';
 import KpiCard from '@shared/components/KpiCard';
+import ProcesosView from '@shared/components/ProcesosView';
 import TabsPanel from '@shared/components/TabsPanel';
 
-type Pestana = 'calculadora' | 'teoria';
+type Pestana = 'calculadora' | 'procesos' | 'teoria';
 type Modelo = 'MM1' | 'MMc';
 
 const PESTANAS: { clave: Pestana; etiqueta: string }[] = [
   { clave: 'calculadora', etiqueta: 'Calculadora' },
+  { clave: 'procesos', etiqueta: 'Procesos' },
   { clave: 'teoria', etiqueta: 'Teoría y Supuestos' },
 ];
 
@@ -146,6 +148,36 @@ export default function TeoriaColasPage() {
           ariaLabel="Secciones del modelo de teoría de colas"
         />
         <TeoriaColasTeoria />
+        <Glossary
+          abierto={glosarioAbierto}
+          onClose={() => setGlosarioAbierto(false)}
+          variables={VARIABLES_TEORIACOLAS}
+        />
+      </div>
+    );
+  }
+
+  if (pestana === 'procesos') {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <TeoriaColasHeader />
+          <GlossaryButton onClick={() => setGlosarioAbierto(true)} />
+        </div>
+        <TabsPanel
+          pestanas={PESTANAS}
+          activa={pestana}
+          onCambio={(c) => setPestana(c as Pestana)}
+          ariaLabel="Secciones del modelo de teoría de colas"
+        />
+        {resultado && resultado.procesos ? (
+          <ProcesosView procesos={resultado.procesos} unidad="clientes" />
+        ) : (
+          <div className="mx-auto flex max-w-md flex-col items-center gap-2 rounded-lg border border-slate-200 bg-white p-8 text-center shadow-md  dark:border-gray-700 dark:bg-gray-800">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
+            <p className="text-sm text-slate-500  dark:text-gray-400">Calculando las métricas de colas…</p>
+          </div>
+        )}
         <Glossary
           abierto={glosarioAbierto}
           onClose={() => setGlosarioAbierto(false)}

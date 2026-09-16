@@ -1,3 +1,7 @@
+import type { NormalizacionUnidades } from '@shared/components/Fase0Unidades';
+import type { UnidadTiempo } from '@shared/components/SelectorUnidadTiempo';
+import type { PasoProceso } from '@shared/types/procesos';
+
 export interface EOQInput {
   demandaAnual: number;
   costoOrdenar: number;
@@ -7,6 +11,8 @@ export interface EOQInput {
   costoMantenerPorcentaje?: number;
   diasLaborables?: number;
   leadTime?: number;
+  unidadDemanda?: UnidadTiempo;
+  unidadCostoMantener?: UnidadTiempo;
 }
 
 export interface EOQDesglose {
@@ -29,6 +35,8 @@ export interface EOQResult {
   costoOrdenar: number;
   costoMantener: number;
   puntoReorden: number;
+  conversionUnidades: NormalizacionUnidades;
+  procesos: PasoProceso[];
   desglose: EOQDesglose;
 }
 
@@ -42,6 +50,8 @@ export interface EPQInput {
   costoMantenerPorcentaje?: number;
   diasLaborables?: number;
   leadTime?: number;
+  unidadDemanda?: UnidadTiempo;
+  unidadCostoMantener?: UnidadTiempo;
 }
 
 export interface EPQDesglose {
@@ -67,6 +77,8 @@ export interface EPQResult {
   costoOrdenar: number;
   costoMantener: number;
   puntoReorden: number;
+  conversionUnidades: NormalizacionUnidades;
+  procesos: PasoProceso[];
   desglose: EPQDesglose;
 }
 
@@ -80,6 +92,8 @@ export interface EOQFaltantesInput {
   costoMantenerPorcentaje?: number;
   diasLaborables?: number;
   leadTime?: number;
+  unidadDemanda?: UnidadTiempo;
+  unidadCostoMantener?: UnidadTiempo;
 }
 
 export interface EOQFaltantesDesglose {
@@ -106,6 +120,8 @@ export interface EOQFaltantesResult {
   costoMantener: number;
   costoFaltantes: number;
   puntoReorden: number;
+  conversionUnidades: NormalizacionUnidades;
+  procesos: PasoProceso[];
   desglose: EOQFaltantesDesglose;
 }
 
@@ -121,6 +137,8 @@ export interface EOQDescuentosInput {
   tipoCostoMantener: 'fijo' | 'porcentaje';
   costoMantener?: number;
   costoMantenerPorcentaje?: number;
+  unidadDemanda?: UnidadTiempo;
+  unidadCostoMantener?: UnidadTiempo;
   rangos: RangoPrecioInput[];
 }
 
@@ -151,6 +169,8 @@ export interface EOQDescuentosResult {
     costoUnitario: number;
   };
   rangos: RangoEvaluacion[];
+  conversionUnidades: NormalizacionUnidades;
+  procesos: PasoProceso[];
   desglose: {
     demandaAnual: number;
     costoFijoOrden: number;
@@ -177,6 +197,50 @@ export interface DemandaProbabilisticaResult {
     nivelServicio: number;
     valorZExacto: number;
   };
+  procesos: PasoProceso[];
+}
+
+export interface PeriodoUnicoInput {
+  modoIngreso?: 'bienes' | 'servicios';
+  distribucion: 'normal' | 'uniforme';
+  precioVenta?: number;
+  costoCompra?: number;
+  valorRescate?: number;
+  costoSubestimacion?: number;
+  costoSobreestimacion?: number;
+  demandaMedia?: number;
+  desviacionDemanda?: number;
+  limiteInferior?: number;
+  limiteSuperior?: number;
+}
+
+export interface PuntoDistribucion {
+  demanda: number;
+  densidad: number;
+}
+
+export interface PeriodoUnicoResult {
+  modoIngreso: 'bienes' | 'servicios';
+  distribucion: 'normal' | 'uniforme';
+  costoSubestimacion: number;
+  costoSobreestimacion: number;
+  nivelServicio: number;
+  valorZ: number | null;
+  cantidadOptima: number;
+  desglose: {
+    precioVenta?: number;
+    costoCompra?: number;
+    valorRescate?: number;
+    costoSubestimacion?: number;
+    costoSobreestimacion?: number;
+    valorZExacto: number | null;
+    demandaMedia?: number;
+    desviacionDemanda?: number;
+    limiteInferior?: number;
+    limiteSuperior?: number;
+  };
+  puntos: PuntoDistribucion[];
+  procesos: PasoProceso[];
 }
 
 export interface TeoriaDecisionesInput {
@@ -211,6 +275,7 @@ export interface TeoriaDecisionesResult {
   maximoPorColumna: number[];
   minimoPorColumna: number[];
   matrizArrepentimiento: number[][];
+  procesos: PasoProceso[];
 }
 
 export type UnidadTiempoColas = 'horas' | 'minutos' | 'dias';
@@ -258,6 +323,7 @@ export interface TeoriaColasResult {
   w: number;
   distribucion: EstadoProbabilidadColas[];
   unidadTiempo: UnidadTiempoColasResult;
+  procesos: PasoProceso[];
 }
 
 export type TipoOptimizacionPL = 'MAX' | 'MIN';
@@ -407,6 +473,17 @@ export async function calcularDemandaProbabilistica(
 
   const { data } = await parseResponse(res);
   return data as DemandaProbabilisticaResult;
+}
+
+export async function calcularPeriodoUnico(input: PeriodoUnicoInput): Promise<PeriodoUnicoResult> {
+  const res = await fetch(`${API_BASE}/stochastic/periodo-unico`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const { data } = await parseResponse(res);
+  return data as PeriodoUnicoResult;
 }
 
 export async function calcularTeoriaDecisiones(input: TeoriaDecisionesInput): Promise<TeoriaDecisionesResult> {

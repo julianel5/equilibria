@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { proceso, type ProcesoCalculo } from '../procesos';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Demanda Probabilística - Punto de Reorden con Stock de Seguridad
@@ -55,6 +56,48 @@ export function inversaNormalEstandar(p: number): number {
     ((((D[0] * q + D[1]) * q + D[2]) * q + D[3]) * q + 1);
 }
 
+// ───────────────────────────────────────────────────────────────────────────────
+// Procesos paso a paso (contrato global `PasoProceso` → `ProcesoCalculo`)
+// ───────────────────────────────────────────────────────────────────────────────
+//
+// Genera los pasos de: Stock de seguridad (SS = Z·σ_L) y Punto de reorden
+// (ROP = D_L + SS). La sustitución inyecta el cuantil Z y la desviación durante
+// el lead time sin redondear para que la aritmética coincida con los KPIs.
+
+const fmt2 = (n: number): string => String(Math.round(n * 100) / 100);
+const fmt4 = (n: number): string => String(Math.round(n * 10000) / 10000);
+
+interface DatosProcesosROP {
+  valorZ: number;
+  sigmaDurEntrega: number;
+  demandaDuranteEntrega: number;
+  stockSeguridad: number;
+  puntoReorden: number;
+}
+
+export function construirProcesosROP(d: DatosProcesosROP): ProcesoCalculo[] {
+  return [
+    proceso({
+      id: 'rop-ss',
+      titulo: 'Stock de seguridad',
+      simbolo: 'SS',
+      formula: 'SS = Z \\cdot \\sigma_L',
+      sustitucion: `SS = ${fmt4(d.valorZ)} \\cdot ${fmt4(d.sigmaDurEntrega)}`,
+      resultado: `SS = ${fmt2(d.stockSeguridad)}`,
+      tipoResultado: 'cantidad',
+    }),
+    proceso({
+      id: 'rop-rop',
+      titulo: 'Punto de reorden',
+      simbolo: 'ROP',
+      formula: 'ROP = D_L + SS',
+      sustitucion: `ROP = ${fmt2(d.demandaDuranteEntrega)} + ${fmt2(d.stockSeguridad)}`,
+      resultado: `ROP = ${fmt2(d.puntoReorden)}`,
+      tipoResultado: 'cantidad',
+    }),
+  ];
+}
+
 // --- Schema de validación (Zod) ---
 
 export const DemandaProbabilisticaInputSchema = z.object({
@@ -92,6 +135,7 @@ export interface DemandaProbabilisticaResult {
     nivelServicio: number;
     valorZExacto: number;        // Z sin redondear (para la gráfica y desglose fino)
   };
+  procesos: ProcesoCalculo[];
 }
 
 // --- Servicio ---
@@ -138,5 +182,12 @@ export function calcularDemandaProbabilistica(
       nivelServicio: csl,
       valorZExacto: Z,
     },
+    procesos: construirProcesosROP({
+      valorZ: Z,
+      sigmaDurEntrega: sigmaL,
+      demandaDuranteEntrega: demandaL,
+      stockSeguridad,
+      puntoReorden,
+    }),
   };
 }

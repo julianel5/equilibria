@@ -6,6 +6,7 @@ import EPQPage from './pages/EPQPage';
 import EOQFaltantesPage from './pages/EOQFaltantesPage';
 import EOQDescuentosPage from './pages/EOQDescuentosPage';
 import PuntoReordenPage from './pages/PuntoReordenPage';
+import PeriodoUnicoPage from './pages/PeriodoUnicoPage';
 import TeoriaDecisionesPage from './pages/TeoriaDecisionesPage';
 import TeoriaColasPage from './pages/TeoriaColasPage';
 import MetodoGraficoPage from './pages/MetodoGraficoPage';
@@ -19,6 +20,7 @@ const TITULOS: Record<string, string> = {
   '/inventory/eoq-faltantes': 'EOQ con Faltantes - Equilibria',
   '/inventory/eoq-descuentos': 'EOQ con Descuentos - Equilibria',
   '/stochastic/punto-reorden': 'Punto de Reorden - Equilibria',
+  '/stochastic/periodo-unico': 'Periodo Único - Equilibria',
   '/decisiones/matriz-pagos': 'Matriz de Pagos - Equilibria',
   '/stochastic/teoria-colas': 'Teoría de Colas - Equilibria',
   '/pl/metodo-grafico': 'Método Gráfico - Equilibria',
@@ -45,7 +47,8 @@ const NAV_GRUPOS: GrupoNav[] = [
   {
     titulo: 'Estocásticos',
     links: [
-      { nombre: 'Probabilística', ruta: '/stochastic/punto-reorden' },
+      { nombre: 'Punto de Reorden (ROP)', ruta: '/stochastic/punto-reorden' },
+      { nombre: 'Periodo Único (Newsvendor)', ruta: '/stochastic/periodo-unico' },
       { nombre: 'Colas', ruta: '/stochastic/teoria-colas' },
     ],
   },
@@ -277,6 +280,7 @@ export default function App() {
             <Route path="/inventory/eoq-faltantes" element={<EOQFaltantesPage />} />
             <Route path="/inventory/eoq-descuentos" element={<EOQDescuentosPage />} />
             <Route path="/stochastic/punto-reorden" element={<PuntoReordenPage />} />
+            <Route path="/stochastic/periodo-unico" element={<PeriodoUnicoPage />} />
             <Route path="/decisiones/matriz-pagos" element={<TeoriaDecisionesPage />} />
             <Route path="/stochastic/teoria-colas" element={<TeoriaColasPage />} />
             <Route path="/pl/metodo-grafico" element={<MetodoGraficoPage />} />

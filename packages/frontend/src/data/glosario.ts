@@ -326,6 +326,57 @@ export const VARIABLES_DEMANDAPROBABILISTICA: VariableDef[] = [
   },
 ];
 
+export const VARIABLES_PERIODOUNICO: VariableDef[] = [
+  {
+    simbolo: 'p',
+    nombre: 'Precio de venta',
+    descripcion:
+      'Precio de venta unitario del producto. Determina junto con el costo de compra la utilidad por unidad vendida (C_u = p − c).',
+  },
+  {
+    simbolo: 'c',
+    nombre: 'Costo de compra',
+    descripcion:
+      'Costo de compra unitario pagado al proveedor. Es el costo de cada unidad ordenada al inicio del período.',
+  },
+  {
+    simbolo: 'v',
+    nombre: 'Valor de rescate',
+    descripcion:
+      'Valor que se recupera por cada unidad no vendida al final del período (salvamento, liquidación o reventa). Debe ser menor al costo de compra (v < c).',
+  },
+  {
+    simbolo: 'C_u',
+    nombre: 'Costo de subestimación (escasez)',
+    descripcion:
+      'Costo de quedarse corto: la utilidad que se pierde por cada unidad demandada que no se pudo satisfacer (C_u = p − c).',
+  },
+  {
+    simbolo: 'C_o',
+    nombre: 'Costo de sobreestimación (exceso)',
+    descripcion:
+      'Costo de pedir de más: la pérdida por cada unidad comprada y no vendida al final del período (C_o = c − v).',
+  },
+  {
+    simbolo: 'P(D \\leq Q^*)',
+    nombre: 'Razón crítica (nivel de servicio)',
+    descripcion:
+      'Probabilidad de que la demanda no supere la cantidad óptima. La política del newsvendor la fija en C_u / (C_u + C_o): balance exacto entre el costo de faltar y el de sobrar.',
+  },
+  {
+    simbolo: 'Z',
+    nombre: 'Valor Z',
+    descripcion:
+      'Cuantil de la normal estándar para la razón crítica (Z = Φ⁻¹(CSL)). Se usa solo cuando la demanda sigue una distribución normal para convertir P(D ≤ Q*) en Q* = μ + Z·σ.',
+  },
+  {
+    simbolo: 'Q^*',
+    nombre: 'Cantidad óptima de pedido',
+    descripcion:
+      'Cantidad a ordenar al inicio del período. Con demanda normal vale Q* = μ + Z·σ; con demanda uniforme en [a, b], Q* = a + CSL·(b − a).',
+  },
+];
+
 export const VARIABLES_TEORIADECISIONES: VariableDef[] = [
   {
     simbolo: 'a_{ij}',

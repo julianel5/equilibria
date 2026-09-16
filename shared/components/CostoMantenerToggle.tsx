@@ -1,5 +1,6 @@
 import type { ChangeEvent } from 'react';
 import Formula from './Formula';
+import SelectorUnidadTiempo, { PERIODO_DE_UNIDAD, type UnidadTiempo } from './SelectorUnidadTiempo';
 
 export type ModoMantener = 'fijo' | 'porcentaje';
 
@@ -14,6 +15,8 @@ interface CostoMantenerToggleProps {
   moneda: string;
   fieldErrors?: Record<string, string>;
   hintPorcentaje?: string;
+  unidadCostoMantener?: UnidadTiempo;
+  onUnidadCostoMantenerChange?: (e: ChangeEvent<HTMLSelectElement>) => void;
 }
 
 const inputClases =
@@ -37,6 +40,8 @@ export default function CostoMantenerToggle({
   moneda,
   fieldErrors = {},
   hintPorcentaje = 'porcentaje anual del precio (H = I × C)',
+  unidadCostoMantener = 'anual',
+  onUnidadCostoMantenerChange,
 }: CostoMantenerToggleProps) {
   return (
     <div>
@@ -66,17 +71,30 @@ export default function CostoMantenerToggle({
             <Formula tex={modo === 'fijo' ? 'H' : 'I'} />
           </span>
         </label>
-        <input
-          type="number"
-          min="0.01"
-          step="any"
-          required
-          value={modo === 'fijo' ? costoMantener : costoMantenerPorcentaje}
-          onChange={modo === 'fijo' ? onCostoMantenerChange : onCostoMantenerPorcentajeChange}
-          className={inputClases}
-        />
+        <div className="flex gap-2">
+          <input
+            type="number"
+            min="0.01"
+            step="any"
+            required
+            value={modo === 'fijo' ? costoMantener : costoMantenerPorcentaje}
+            onChange={modo === 'fijo' ? onCostoMantenerChange : onCostoMantenerPorcentajeChange}
+            className={`${inputClases} flex-1`}
+          />
+          {onUnidadCostoMantenerChange ? (
+            <SelectorUnidadTiempo
+              valor={unidadCostoMantener}
+              onChange={onUnidadCostoMantenerChange}
+              ariaLabel="Unidad de tiempo del costo de mantener"
+            />
+          ) : null}
+        </div>
         <span className="mt-0.5 block text-xs text-slate-400  dark:text-gray-500">
-          {modo === 'fijo' ? `${moneda} / ${unidad}-año` : hintPorcentaje}
+          {modo === 'fijo'
+            ? `${moneda} / ${unidad} por ${PERIODO_DE_UNIDAD[unidadCostoMantener]}`
+            : onUnidadCostoMantenerChange && unidadCostoMantener !== 'anual'
+              ? `porcentaje por ${PERIODO_DE_UNIDAD[unidadCostoMantener]} del precio (H = I × C)`
+              : hintPorcentaje}
         </span>
         {fieldErrors.costoMantener ? (
           <span role="alert" className="mt-1 block text-xs font-semibold text-red-600  dark:text-red-400">

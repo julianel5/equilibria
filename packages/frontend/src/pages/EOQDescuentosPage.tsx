@@ -2,6 +2,13 @@ import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormE
 import { calcularEOQDescuentos, ApiError, type EOQDescuentosResult, type RangoEvaluacion } from '../services/api';
 import RangosPrecios, { type RangoPrecio } from '@shared/components/RangosPrecios';
 import CostoMantenerToggle, { type ModoMantener } from '@shared/components/CostoMantenerToggle';
+import SelectorUnidadTiempo, {
+  ETIQUETAS_UNIDAD_TIEMPO,
+  PERIODO_DE_UNIDAD,
+  type UnidadTiempo,
+} from '@shared/components/SelectorUnidadTiempo';
+import Fase0Unidades from '@shared/components/Fase0Unidades';
+import ProcesosView from '@shared/components/ProcesosView';
 import EOQDescuentosTeoria from '../components/EOQDescuentosTeoria';
 import { VARIABLES_EOQDESCUENTOS } from '../data/glosario';
 import Formula from '@shared/components/Formula';
@@ -10,10 +17,11 @@ import KpiCard from '@shared/components/KpiCard';
 import PrefsCard from '@shared/components/PrefsCard';
 import TabsPanel from '@shared/components/TabsPanel';
 
-type Pestana = 'calculadora' | 'teoria';
+type Pestana = 'calculadora' | 'procesos' | 'teoria';
 
 const PESTANAS: { clave: Pestana; etiqueta: string }[] = [
   { clave: 'calculadora', etiqueta: 'Calculadora' },
+  { clave: 'procesos', etiqueta: 'Procesos' },
   { clave: 'teoria', etiqueta: 'Teoría y Supuestos' },
 ];
 
@@ -22,6 +30,8 @@ interface FormState {
   costoOrdenar: string;
   costoMantener: string;
   costoMantenerPorcentaje: string;
+  unidadDemanda: UnidadTiempo;
+  unidadCostoMantener: UnidadTiempo;
 }
 
 interface PrefsState {
@@ -48,6 +58,8 @@ export default function EOQDescuentosPage() {
     costoOrdenar: '20',
     costoMantener: '2',
     costoMantenerPorcentaje: '20',
+    unidadDemanda: 'anual',
+    unidadCostoMantener: 'anual',
   });
   const [tipoCostoMantener, setTipoCostoMantener] = useState<ModoMantener>('porcentaje');
   const [rangos, setRangos] = useState<RangoPrecio[]>([
@@ -89,6 +101,8 @@ export default function EOQDescuentosPage() {
           costoMantener: modo === 'fijo' ? Number(datos.costoMantener) : undefined,
           costoMantenerPorcentaje:
             modo === 'porcentaje' ? Number(datos.costoMantenerPorcentaje) : undefined,
+          unidadDemanda: datos.unidadDemanda,
+          unidadCostoMantener: datos.unidadCostoMantener,
           rangos: niveles.map((r) => ({
             cantidadMinima: Number(r.cantidadMinima),
             cantidadMaxima:
@@ -129,6 +143,10 @@ export default function EOQDescuentosPage() {
     (key: keyof FormState) => (e: ChangeEvent<HTMLInputElement>) =>
       setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
+  const handleSelectChange =
+    (key: 'unidadDemanda' | 'unidadCostoMantener') => (e: ChangeEvent<HTMLSelectElement>) =>
+      setForm((prev) => ({ ...prev, [key]: e.target.value as UnidadTiempo }));
+
   const handlePrefChange =
     (key: keyof PrefsState) => (e: ChangeEvent<HTMLInputElement>) =>
       setPrefs((prev) => ({ ...prev, [key]: e.target.value }));
@@ -140,6 +158,14 @@ export default function EOQDescuentosPage() {
     [resultado]
   );
   const maxTC = candidatos.length ? Math.max(...candidatos.map((r) => r.costoTotal ?? 0)) : 0;
+
+  // Aplicación numérica de Q* con D homogeneizada (base anual): H_j se recalcula
+  // por nivel a partir del H fijo o del porcentaje I anual ya convertidos.
+  const formulaQNumerica = resultado
+    ? `Q^*_j = \\sqrt{ \\frac{2 \\cdot ${fmtDecimal(
+        resultado.desglose.demandaAnual
+      )} \\cdot ${fmtDecimal(resultado.desglose.costoFijoOrden)}}{H_j} }`
+    : undefined;
 
   const inputClases =
     'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30';
@@ -158,6 +184,36 @@ export default function EOQDescuentosPage() {
           ariaLabel="Secciones del modelo EOQ con Descuentos"
         />
         <EOQDescuentosTeoria />
+        <Glossary
+          abierto={glosarioAbierto}
+          onClose={() => setGlosarioAbierto(false)}
+          variables={VARIABLES_EOQDESCUENTOS}
+        />
+      </div>
+    );
+  }
+
+  if (pestana === 'procesos') {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <EOQDescuentosHeader />
+          <GlossaryButton onClick={() => setGlosarioAbierto(true)} />
+        </div>
+        <TabsPanel
+          pestanas={PESTANAS}
+          activa={pestana}
+          onCambio={(c) => setPestana(c as Pestana)}
+          ariaLabel="Secciones del modelo EOQ con Descuentos"
+        />
+        {resultado && resultado.procesos ? (
+          <ProcesosView procesos={resultado.procesos} unidad={unidad} moneda={moneda} />
+        ) : (
+          <div className="mx-auto flex max-w-md flex-col items-center gap-2 rounded-lg border border-slate-200 bg-white p-8 text-center shadow-md  dark:border-gray-700 dark:bg-gray-800">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
+            <p className="text-sm text-slate-500  dark:text-gray-400">Calculando EOQ con Descuentos…</p>
+          </div>
+        )}
         <Glossary
           abierto={glosarioAbierto}
           onClose={() => setGlosarioAbierto(false)}
@@ -193,6 +249,12 @@ export default function EOQDescuentosPage() {
     );
   }
 
+  // Base de cálculo del motor (unidad compartida en el caso homogéneo, o
+  // "anual" con unidades mixtas). Los títulos/descripciones se adaptan a ella.
+  const unidadBase = resultado.conversionUnidades.base;
+  const etiquetaBase = ETIQUETAS_UNIDAD_TIEMPO[unidadBase];
+  const adjetivoBase = etiquetaBase.toLowerCase();
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -213,6 +275,14 @@ export default function EOQDescuentosPage() {
         onMonedaChange={handlePrefChange('moneda')}
       />
 
+      {/* Fase 0: estandarización de unidades (solo si hay unidades no anuales) */}
+      {resultado.conversionUnidades.activa ? (
+        <Fase0Unidades
+          normalizacion={resultado.conversionUnidades}
+          aplicacion={formulaQNumerica}
+        />
+      ) : null}
+
       {/* Fila principal: formulario dinámico + KPIs grandes */}
       <div className="grid items-start gap-6 lg:grid-cols-[320px_1fr]">
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
@@ -224,22 +294,29 @@ export default function EOQDescuentosPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-600  dark:text-gray-300">
-                Demanda anual
+                Demanda
                 <span className="text-slate-400  dark:text-gray-500">
                   <Formula tex="D" />
                 </span>
               </label>
-              <input
-                type="number"
-                min="0.01"
-                step="any"
-                required
-                value={form.demandaAnual}
-                onChange={handleChange('demandaAnual')}
-                className={inputClases}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="0.01"
+                  step="any"
+                  required
+                  value={form.demandaAnual}
+                  onChange={handleChange('demandaAnual')}
+                  className={`${inputClases} flex-1`}
+                />
+                <SelectorUnidadTiempo
+                  valor={form.unidadDemanda}
+                  onChange={handleSelectChange('unidadDemanda')}
+                  ariaLabel="Unidad de tiempo de la demanda"
+                />
+              </div>
               <span className="mt-0.5 block text-xs text-slate-400  dark:text-gray-500">
-                {unidad} / año
+                {unidad} / {PERIODO_DE_UNIDAD[form.unidadDemanda]}
               </span>
               {fieldErrors.demandaAnual ? (
                 <span role="alert" className="mt-1 block text-xs font-semibold text-red-600  dark:text-red-400">
@@ -286,6 +363,8 @@ export default function EOQDescuentosPage() {
               moneda={moneda}
               fieldErrors={fieldErrors}
               hintPorcentaje="porcentaje anual del precio del nivel (H = I × C)"
+              unidadCostoMantener={form.unidadCostoMantener}
+              onUnidadCostoMantenerChange={handleSelectChange('unidadCostoMantener')}
             />
 
             {/* Constructor dinámico de niveles de precio */}
@@ -351,11 +430,11 @@ export default function EOQDescuentosPage() {
             />
             <KpiCard
               large
-              title="Costo total anual"
+              title={`Costo total ${adjetivoBase}`}
               value={fmtMoneda(resultado.costoTotalOptimo, moneda)}
               formula={'TC_j = \\frac{D}{Q}S + \\frac{Q}{2}H_j + DC_j'}
               tone="emerald"
-              description="Menor costo total entre los candidatos válidos: ordenar, mantener y adquirir al precio del nivel ganador."
+              description={`Menor costo total ${adjetivoBase} entre los candidatos válidos: ordenar, mantener y adquirir al precio del nivel ganador.`}
             />
           </div>
         </section>
@@ -475,7 +554,7 @@ export default function EOQDescuentosPage() {
             Costo total de los candidatos válidos
           </h2>
           <p className="mb-5 text-sm text-slate-400  dark:text-gray-500">
-            Longitud proporcional al costo total anual. La barra más corta (verde) es el nivel
+            Longitud proporcional al costo total {adjetivoBase}. La barra más corta (verde) es el nivel
             ganador Q* final.
           </p>
           <div className="space-y-4">
@@ -547,6 +626,12 @@ function DesgloseNiveles({ resultado, activo, onActivo, unidad, moneda }: Desglo
   const esFijo = resultado.tipoCostoMantener === 'fijo';
   const demanda = resultado.desglose.demandaAnual;
 
+  // Unidad base del motor para los títulos dinámicos ("Anual", "Semestral", ...).
+  const unidadBase = resultado.conversionUnidades.base;
+  const etiquetaBase = ETIQUETAS_UNIDAD_TIEMPO[unidadBase];
+  const adjetivoBase = etiquetaBase.toLowerCase();
+  const periodoBase = PERIODO_DE_UNIDAD[unidadBase];
+
   const tabClases = (esActiva: boolean, descartado: boolean) =>
     `inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400/60 ${
       esActiva
@@ -562,10 +647,10 @@ function DesgloseNiveles({ resultado, activo, onActivo, unidad, moneda }: Desglo
   const numOrdenes = q > 0 ? demanda / q : 0;
 
   const textoH = esFijo
-    ? `Costo fijo por ${unidad}-año: ${
+    ? `Costo fijo por ${unidad}-${periodoBase}: ${
         resultado.costoMantener !== null ? fmtDecimal(resultado.costoMantener) : '—'
       } ${moneda}.`
-    : `I = ${fmtDecimal(resultado.costoMantenerPorcentaje ?? 0)}% anual sobre el precio del nivel C_j = ${fmtDecimal(rangoActivo.costoUnitario)} → H_j = ${fmtDecimal(rangoActivo.costoMantenerEfectivo)} ${moneda}.`;
+    : `I = ${fmtDecimal(resultado.costoMantenerPorcentaje ?? 0)}% ${adjetivoBase} sobre el precio del nivel C_j = ${fmtDecimal(rangoActivo.costoUnitario)} → H_j = ${fmtDecimal(rangoActivo.costoMantenerEfectivo)} ${moneda}.`;
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
@@ -574,7 +659,7 @@ function DesgloseNiveles({ resultado, activo, onActivo, unidad, moneda }: Desglo
       </h2>
       <p className="mb-4 text-sm text-slate-400  dark:text-gray-500">
         Haz clic en cada nivel de precio para ver, paso a paso, cómo se calculó su lote y cada uno de
-        sus costos anuales a partir de las fórmulas del modelo.
+        sus costos en el período a partir de las fórmulas del modelo.
       </p>
 
       <div role="tablist" aria-label="Desglose por nivel de precio" className="mb-5 flex flex-wrap gap-2">
@@ -668,28 +753,28 @@ function DesgloseNiveles({ resultado, activo, onActivo, unidad, moneda }: Desglo
             description={textoH}
           />
           <KpiCard
-            title="Costo Anual de Ordenar"
+            title={`Costo ${adjetivoBase} de Ordenar`}
             value={fmtMoneda(rangoActivo.costoOrdenar ?? 0, moneda)}
             formula={'C_o = \\frac{D}{Q} S'}
             tone="slate"
-            description={`${fmtDecimal(numOrdenes)} órdenes/año × S = ${fmtDecimal(resultado.desglose.costoFijoOrden)} ${moneda} cada una.`}
+            description={`${fmtDecimal(numOrdenes)} órdenes/${periodoBase} × S = ${fmtDecimal(resultado.desglose.costoFijoOrden)} ${moneda} cada una.`}
           />
           <KpiCard
-            title="Costo Anual de Mantener"
+            title={`Costo ${adjetivoBase} de Mantener`}
             value={fmtMoneda(rangoActivo.costoMantener ?? 0, moneda)}
             formula={'C_h = \\frac{Q}{2} H_j'}
             tone="emerald"
             description={`Inventario promedio ${fmtDecimal(q / 2)} ${unidad} × H_j = ${fmtDecimal(rangoActivo.costoMantenerEfectivo)} ${moneda}.`}
           />
           <KpiCard
-            title="Costo Anual de Adquisición"
+            title={`Costo ${adjetivoBase} de Adquisición`}
             value={fmtMoneda(rangoActivo.costoProducto ?? 0, moneda)}
             formula={'C_p = D \\times C_j'}
             tone="slate"
             description={`${fmtDecimal(demanda)} ${unidad} × precio C_j = ${fmtDecimal(rangoActivo.costoUnitario)} ${moneda}.`}
           />
           <KpiCard
-            title="Costo Total Anual"
+            title={`Costo Total ${etiquetaBase}`}
             value={fmtMoneda(rangoActivo.costoTotal ?? 0, moneda)}
             formula={'TC_j = C_o + C_h + C_p'}
             tone="emerald"

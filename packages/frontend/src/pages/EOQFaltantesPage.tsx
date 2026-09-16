@@ -2,6 +2,13 @@ import { Fragment, useCallback, useEffect, useMemo, useState, type ChangeEvent, 
 import { calcularEOQFaltantes, ApiError, type EOQFaltantesResult } from '../services/api';
 import CostChart, { type PuntoCosto } from '@shared/components/CostChart';
 import CostoMantenerToggle, { type ModoMantener } from '@shared/components/CostoMantenerToggle';
+import SelectorUnidadTiempo, {
+  ETIQUETAS_UNIDAD_TIEMPO,
+  PERIODO_DE_UNIDAD,
+  type UnidadTiempo,
+} from '@shared/components/SelectorUnidadTiempo';
+import Fase0Unidades from '@shared/components/Fase0Unidades';
+import ProcesosView from '@shared/components/ProcesosView';
 import EOQFaltantesTeoria from '../components/EOQFaltantesTeoria';
 import { VARIABLES_EOQFALTANTES } from '../data/glosario';
 import Formula from '@shared/components/Formula';
@@ -10,10 +17,11 @@ import KpiCard from '@shared/components/KpiCard';
 import PrefsCard from '@shared/components/PrefsCard';
 import TabsPanel from '@shared/components/TabsPanel';
 
-type Pestana = 'calculadora' | 'teoria';
+type Pestana = 'calculadora' | 'procesos' | 'teoria';
 
 const PESTANAS: { clave: Pestana; etiqueta: string }[] = [
   { clave: 'calculadora', etiqueta: 'Calculadora' },
+  { clave: 'procesos', etiqueta: 'Procesos' },
   { clave: 'teoria', etiqueta: 'Teoría y Supuestos' },
 ];
 
@@ -26,6 +34,8 @@ interface FormState {
   costoUnitario: string;
   diasLaborables: string;
   leadTime: string;
+  unidadDemanda: UnidadTiempo;
+  unidadCostoMantener: UnidadTiempo;
 }
 
 interface PrefsState {
@@ -44,7 +54,7 @@ interface CampoFormulario {
 }
 
 const FORM_METADATA: CampoFormulario[] = [
-  { key: 'demandaAnual', label: 'Demanda anual', simbolo: 'D', min: 0.01, unidadSufijo: (u: string, _m: string) => `${u} / año` },
+  { key: 'demandaAnual', label: 'Demanda', simbolo: 'D', min: 0.01, unidadSufijo: (u: string, _m: string) => `${u} / año` },
   { key: 'costoOrdenar', label: 'Costo de ordenar', simbolo: 'S', min: 0.01, unidadSufijo: (_u: string, m: string) => `${m} / orden` },
   { key: 'costoFaltantes', label: 'Costo de faltantes (escasez)', simbolo: 'B', min: 0.01, unidadSufijo: (u: string, m: string) => `${m} / ${u}-año` },
   { key: 'costoUnitario', label: 'Costo unitario (opcional)', simbolo: 'C', opcional: true, min: 0, unidadSufijo: (u: string, m: string) => `${m} / ${u}` },
@@ -71,6 +81,8 @@ export default function EOQFaltantesPage() {
     costoUnitario: '10',
     diasLaborables: '365',
     leadTime: '',
+    unidadDemanda: 'anual',
+    unidadCostoMantener: 'anual',
   });
   const [tipoCostoMantener, setTipoCostoMantener] = useState<ModoMantener>('fijo');
   const [prefs, setPrefs] = useState<PrefsState>({
@@ -107,6 +119,8 @@ export default function EOQFaltantesPage() {
           modo === 'porcentaje' ? Number(datos.costoMantenerPorcentaje) : undefined,
         costoFaltantes: Number(datos.costoFaltantes),
         costoUnitario: Number(datos.costoUnitario) || undefined,
+        unidadDemanda: datos.unidadDemanda,
+        unidadCostoMantener: datos.unidadCostoMantener,
         diasLaborables:
           Number.isFinite(diasLaborables) && diasLaborables > 0 ? diasLaborables : undefined,
         leadTime:
@@ -144,6 +158,10 @@ export default function EOQFaltantesPage() {
   const handleChange =
     (key: keyof FormState) => (e: ChangeEvent<HTMLInputElement>) =>
       setForm((prev) => ({ ...prev, [key]: e.target.value }));
+
+  const handleSelectChange =
+    (key: 'unidadDemanda' | 'unidadCostoMantener') => (e: ChangeEvent<HTMLSelectElement>) =>
+      setForm((prev) => ({ ...prev, [key]: e.target.value as UnidadTiempo }));
 
   const handlePrefChange =
     (key: keyof PrefsState) => (e: ChangeEvent<HTMLInputElement>) =>
@@ -198,6 +216,19 @@ export default function EOQFaltantesPage() {
     return sinDuplicado.sort((a, b) => a.cantidad - b.cantidad);
   }, [resultado]);
 
+  // Aplicación numérica de Q* con los valores homogeneizados (base anual) para la Fase 0.
+  const formulaQNumerica = resultado
+    ? `Q^* = \\sqrt{ \\frac{2 \\cdot ${fmtDecimal(resultado.desglose.demandaAnual)} \\cdot ${fmtDecimal(
+        resultado.desglose.costoFijoOrden
+      )}}{${fmtDecimal(
+        resultado.desglose.costoHoldingUnitario
+      )}} } \\times \\sqrt{ \\frac{${fmtDecimal(
+        resultado.desglose.costoHoldingUnitario
+      )} + ${fmtDecimal(resultado.desglose.costoFaltantesUnitario)}}{${fmtDecimal(
+        resultado.desglose.costoFaltantesUnitario
+      )}} } = ${fmtDecimal(resultado.cantidadOptima)}`
+    : undefined;
+
   if (pestana === 'teoria') {
     return (
       <div className="space-y-6">
@@ -212,6 +243,36 @@ export default function EOQFaltantesPage() {
           ariaLabel="Secciones del modelo EOQ con Faltantes"
         />
         <EOQFaltantesTeoria />
+        <Glossary
+          abierto={glosarioAbierto}
+          onClose={() => setGlosarioAbierto(false)}
+          variables={VARIABLES_EOQFALTANTES}
+        />
+      </div>
+    );
+  }
+
+  if (pestana === 'procesos') {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <EOQFaltantesHeader />
+          <GlossaryButton onClick={() => setGlosarioAbierto(true)} />
+        </div>
+        <TabsPanel
+          pestanas={PESTANAS}
+          activa={pestana}
+          onCambio={(c) => setPestana(c as Pestana)}
+          ariaLabel="Secciones del modelo EOQ con Faltantes"
+        />
+        {resultado && resultado.procesos ? (
+          <ProcesosView procesos={resultado.procesos} unidad={unidad} moneda={moneda} />
+        ) : (
+          <div className="mx-auto flex max-w-md flex-col items-center gap-2 rounded-lg border border-slate-200 bg-white p-8 text-center shadow-md  dark:border-gray-700 dark:bg-gray-800">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
+            <p className="text-sm text-slate-500  dark:text-gray-400">Calculando EOQ con Faltantes…</p>
+          </div>
+        )}
         <Glossary
           abierto={glosarioAbierto}
           onClose={() => setGlosarioAbierto(false)}
@@ -247,6 +308,23 @@ export default function EOQFaltantesPage() {
     );
   }
 
+  // Base de cálculo del motor (unidad compartida en el caso homogéneo, o
+  // "anual" con unidades mixtas). Los títulos/descripciones se adaptan a ella.
+  const unidadBase = resultado.conversionUnidades.base;
+  const etiquetaBase = ETIQUETAS_UNIDAD_TIEMPO[unidadBase];
+  const adjetivoBase = etiquetaBase.toLowerCase();
+  const periodoBase = PERIODO_DE_UNIDAD[unidadBase];
+  const formulaCiclo =
+    unidadBase === 'anual'
+      ? 'T = \\frac{\\text{días laborables}}{N}'
+      : 'T = \\frac{\\text{Días en el período}}{N}';
+  const frasePedidos =
+    periodoBase === 'año' ? 'al año' : `por ${periodoBase}`;
+  const fraseDel =
+    periodoBase === 'año' ? 'del año' : `del ${periodoBase}`;
+  const fraseDemanda =
+    periodoBase === 'año' ? 'la demanda anual' : `la demanda del ${periodoBase}`;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -268,6 +346,14 @@ export default function EOQFaltantesPage() {
         onMonedaChange={handlePrefChange('moneda')}
       />
 
+      {/* Fase 0: estandarización de unidades (solo si hay unidades no anuales) */}
+      {resultado.conversionUnidades.activa ? (
+        <Fase0Unidades
+          normalizacion={resultado.conversionUnidades}
+          aplicacion={formulaQNumerica}
+        />
+      ) : null}
+
       {/* Fila principal: formulario + KPIs grandes */}
       <div className="grid items-start gap-6 lg:grid-cols-[320px_1fr]">
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
@@ -288,21 +374,43 @@ export default function EOQFaltantesPage() {
                       </span>
                     ) : null}
                   </span>
-                  <input
-                    type="number"
-                    min={String(campo.min)}
-                    step="any"
-                    placeholder={campo.placeholder}
-                    required={
-                      !campo.opcional ||
-                      (campo.key === 'costoUnitario' && tipoCostoMantener === 'porcentaje')
-                    }
-                    value={form[campo.key]}
-                    onChange={handleChange(campo.key)}
-                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
-                  />
+                  {campo.key === 'demandaAnual' ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min={String(campo.min)}
+                        step="any"
+                        placeholder={campo.placeholder}
+                        required={!campo.opcional}
+                        value={form[campo.key]}
+                        onChange={handleChange(campo.key)}
+                        className="w-full flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
+                      />
+                      <SelectorUnidadTiempo
+                        valor={form.unidadDemanda}
+                        onChange={handleSelectChange('unidadDemanda')}
+                        ariaLabel="Unidad de tiempo de la demanda"
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      type="number"
+                      min={String(campo.min)}
+                      step="any"
+                      placeholder={campo.placeholder}
+                      required={
+                        !campo.opcional ||
+                        (campo.key === 'costoUnitario' && tipoCostoMantener === 'porcentaje')
+                      }
+                      value={form[campo.key]}
+                      onChange={handleChange(campo.key)}
+                      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
+                    />
+                  )}
                   <span className="mt-0.5 block text-xs text-slate-400  dark:text-gray-500">
-                    {campo.unidadSufijo(unidad, moneda)}
+                    {campo.key === 'demandaAnual'
+                      ? `${unidad} / ${PERIODO_DE_UNIDAD[form.unidadDemanda]}`
+                      : campo.unidadSufijo(unidad, moneda)}
                   </span>
                   {fieldErrors[campo.key] ? (
                     <span
@@ -324,6 +432,8 @@ export default function EOQFaltantesPage() {
                     unidad={unidad}
                     moneda={moneda}
                     fieldErrors={fieldErrors}
+                    unidadCostoMantener={form.unidadCostoMantener}
+                    onUnidadCostoMantenerChange={handleSelectChange('unidadCostoMantener')}
                   />
                 ) : null}
               </Fragment>
@@ -374,7 +484,7 @@ export default function EOQFaltantesPage() {
               value={`${fmtDecimal(resultado.cantidadOptima)} ${unidad}`}
               formula={'Q^* = \\sqrt{ \\frac{2DS}{H} } \\times \\sqrt{ \\frac{H+B}{B} }'}
               tone="blue"
-              description="Pedido que minimiza el costo relevante total anual, mayor que el EOQ puro porque tolera faltantes y reduce el holding."
+              description={`Pedido que minimiza el costo relevante total ${adjetivoBase}, mayor que el EOQ puro porque tolera faltantes y reduce el holding.`}
             />
             <KpiCard
               large
@@ -414,34 +524,34 @@ export default function EOQFaltantesPage() {
           />
           <KpiCard
             title="Número de pedidos"
-            value={`${fmtDecimal(resultado.numeroPedidos)} / año`}
+            value={`${fmtDecimal(resultado.numeroPedidos)} / ${periodoBase}`}
             formula={'N = \\frac{D}{Q^*}'}
             tone="slate"
-            description="Órdenes emitidas al año para cubrir la demanda anual."
+            description={`Órdenes emitidas ${frasePedidos} para cubrir ${fraseDemanda}.`}
           />
           <KpiCard
             title="Ciclo de reposición"
             value={`${fmtDecimal(resultado.cicloReposicion)} días`}
-            formula={'T = \\frac{\\text{días laborables}}{N}'}
+            formula={formulaCiclo}
             tone="slate"
             description="Días entre el arribo de una orden y la siguiente."
           />
           <KpiCard
-            title="Costo anual de ordenar"
+            title={`Costo ${adjetivoBase} de ordenar`}
             value={fmtMoneda(resultado.costoOrdenar, moneda)}
             formula={'C_o = \\frac{D}{Q^*} \\cdot S'}
             highlight
-            description="Costo fijo por orden multiplicado por los pedidos del año."
+            description={`Costo fijo por orden multiplicado por los pedidos ${fraseDel}.`}
           />
           <KpiCard
-            title="Costo anual de mantener"
+            title={`Costo ${adjetivoBase} de mantener`}
             value={fmtMoneda(resultado.costoMantener, moneda)}
             formula={'C_h = \\frac{(I_{max})^2}{2Q^*} \\cdot H'}
             highlight
             description="Holding sobre el inventario promedio Imax²/(2Q*), presente solo parte del ciclo."
           />
           <KpiCard
-            title="Costo anual de faltantes"
+            title={`Costo ${adjetivoBase} de faltantes`}
             value={fmtMoneda(resultado.costoFaltantes, moneda)}
             formula={'C_f = \\frac{(S^*)^2}{2Q^*} \\cdot B'}
             highlight
@@ -452,7 +562,7 @@ export default function EOQFaltantesPage() {
             value={fmtMoneda(resultado.costoAdquisicion, moneda)}
             formula={'C_c = D \\cdot C'}
             tone="slate"
-            description="Costo de comprar la demanda anual al costo unitario (no es un costo relevante)."
+            description={`Costo de comprar ${fraseDemanda} al costo unitario (no es un costo relevante).`}
           />
           {mostrarROP ? (
             <KpiCard

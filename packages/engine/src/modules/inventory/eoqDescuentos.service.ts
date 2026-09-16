@@ -1,4 +1,19 @@
 import { z } from 'zod';
+import {
+  DEFAULT_DIAS_LABORABLES,
+  normalizarAAño,
+  construirNormalizacion,
+  factorAAño,
+  UNIDADES_TIEMPO,
+  type NormalizacionUnidades,
+  type PasoNormalizacion,
+} from './unidadesTiempo';
+import {
+  fmtProceso,
+  proceso,
+  procesosDeConversion,
+  type ProcesoCalculo,
+} from './procesos';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EOQ con Descuentos por Cantidad
@@ -70,6 +85,12 @@ export const EOQDescuentosInputSchema = z.object({
     .positive({ message: 'El porcentaje (I) del costo de mantener debe ser un número positivo' })
     .optional()
     .describe('Porcentaje anual de manejo de inventario (I) aplicado al precio (modo porcentaje)'),
+  unidadDemanda: z.enum(UNIDADES_TIEMPO)
+    .optional()
+    .describe('Unidad de tiempo de la demanda (D). Por defecto "anual".'),
+  unidadCostoMantener: z.enum(UNIDADES_TIEMPO)
+    .optional()
+    .describe('Unidad de tiempo del costo de mantener (H o I). Por defecto "anual".'),
   rangos: z.array(RangoPrecioSchema)
     .min(2, { message: 'Debe definir al menos dos niveles de precio.' })
     .describe('Niveles de precio ordenados de menor a mayor cantidad'),
@@ -154,6 +175,8 @@ export interface EOQDescuentosResult {
     costoUnitario: number;
   };
   rangos: RangoEvaluacion[];
+  conversionUnidades: NormalizacionUnidades;
+  procesos: ProcesoCalculo[];   // Pestaña "Procesos": desglose paso a paso
   desglose: {
     demandaAnual: number;
     costoFijoOrden: number;
@@ -166,16 +189,79 @@ export function calcularEOQDescuentos(input: EOQDescuentosInput): EOQDescuentosR
   // Validar inputs con Zod
   const validated = EOQDescuentosInputSchema.parse(input);
 
-  const D = validated.demandaAnual;
+  // Fase 0: estandarización de unidades (D, H/I).
+  // Caso homogéneo (misma unidad en D y el costo de mantener): la unidad
+  // compartida es la base, sin conversión (Fase 0 inactiva).
+  // Caso mixto o ambas anuales: base anual forzada con metadata pedagógica.
+  // Este modelo no declara días laborables, así que la unidad diaria usa el
+  // valor por defecto (DEFAULT_DIAS_LABORABLES).
+  const unidadD = validated.unidadDemanda ?? 'anual';
+  const unidadH = validated.unidadCostoMantener ?? 'anual';
+
+  let D: number;
+  let Hfijo: number;
+  let I: number;
+  let conversionUnidades: NormalizacionUnidades;
+
+  if (unidadD === unidadH) {
+    const base = unidadD;
+    D = validated.demandaAnual;
+    Hfijo = validated.costoMantener ?? 0;
+    I = validated.costoMantenerPorcentaje ?? 0;
+    conversionUnidades = {
+      activa: false,
+      base,
+      factorBase: factorAAño(base),
+      diasLaborables: DEFAULT_DIAS_LABORABLES,
+      pasos: [],
+    };
+  } else {
+    D = normalizarAAño(validated.demandaAnual, unidadD);
+    Hfijo = normalizarAAño(validated.costoMantener ?? 0, unidadH);
+    I = normalizarAAño(validated.costoMantenerPorcentaje ?? 0, unidadH);
+
+    const pasos: PasoNormalizacion[] = [];
+    if (unidadD !== 'anual') {
+      pasos.push({
+        variable: 'D',
+        concepto: 'Demanda',
+        valorOrigen: validated.demandaAnual,
+        unidadOrigen: unidadD,
+        factor: factorAAño(unidadD),
+        valorAnual: D,
+      });
+    }
+    if (unidadH !== 'anual') {
+      pasos.push(
+        validated.tipoCostoMantener === 'fijo'
+          ? {
+              variable: 'H',
+              concepto: 'Costo de mantener',
+              valorOrigen: validated.costoMantener ?? 0,
+              unidadOrigen: unidadH,
+              factor: factorAAño(unidadH),
+              valorAnual: Hfijo,
+            }
+          : {
+              variable: 'I',
+              concepto: 'Tasa de mantener (porcentaje)',
+              valorOrigen: validated.costoMantenerPorcentaje ?? 0,
+              unidadOrigen: unidadH,
+              factor: factorAAño(unidadH),
+              valorAnual: I,
+            }
+      );
+    }
+    conversionUnidades = construirNormalizacion(pasos);
+  }
+
   const S = validated.costoOrdenar;
   const tipo = validated.tipoCostoMantener;
-  const H = validated.costoMantener;
-  const I = validated.costoMantenerPorcentaje;
 
   const evaluados: RangoEvaluacion[] = validated.rangos.map((rango) => {
     const C_j = rango.costoUnitario;
-    // Costo de mantener efectivo del nivel: fijo o porcentaje del precio.
-    const H_j = tipo === 'fijo' ? (H as number) : ((I as number) / 100) * C_j;
+    // Costo de mantener efectivo del nivel: fijo o porcentaje del precio (anual).
+    const H_j = tipo === 'fijo' ? Hfijo : (I / 100) * C_j;
 
     // Q* = √(2DS / H_j) redondeado a 2 decimales.
     const qOriginal = Math.round(Math.sqrt((2 * D * S) / H_j) * 100) / 100;
@@ -242,17 +328,181 @@ export function calcularEOQDescuentos(input: EOQDescuentosInput): EOQDescuentosR
     loteOptimo: ganador.qAjustado as number,
     costoTotalOptimo: ganador.costoTotal as number,
     tipoCostoMantener: tipo,
-    costoMantener: tipo === 'fijo' ? round2(H as number) : null,
-    costoMantenerPorcentaje: tipo === 'porcentaje' ? (I as number) : null,
+    costoMantener: tipo === 'fijo' ? round2(Hfijo) : null,
+    costoMantenerPorcentaje: tipo === 'porcentaje' ? round2(I) : null,
     rangoGanador: {
       cantidadMinima: ganador.cantidadMinima,
       cantidadMaxima: ganador.cantidadMaxima,
       costoUnitario: ganador.costoUnitario,
     },
     rangos: evaluados,
+    conversionUnidades,
+    procesos: construirProcesosDescuentos({
+      evaluados,
+      conversionUnidades,
+      D,
+      S,
+      tipo,
+      Hfijo,
+      I,
+      loteOptimo: ganador.qAjustado as number,
+    }),
     desglose: {
       demandaAnual: D,
       costoFijoOrden: S,
     },
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Procesos paso a paso de Descuentos por Cantidad: uno por nivel (H_j, Q*_j,
+// ajuste, costos y TC_j) y la selección final del nivel ganador.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface DatosProcesosDescuentos {
+  evaluados: RangoEvaluacion[];
+  conversionUnidades: NormalizacionUnidades;
+  D: number;
+  S: number;
+  tipo: 'fijo' | 'porcentaje';
+  Hfijo: number;
+  I: number;
+  loteOptimo: number;
+}
+
+function construirProcesosDescuentos(datos: DatosProcesosDescuentos): ProcesoCalculo[] {
+  const procesos: ProcesoCalculo[] = procesosDeConversion(datos.conversionUnidades.pasos);
+  const D = fmtProceso(datos.D);
+  const S = fmtProceso(datos.S);
+
+  datos.evaluados.forEach((r, idx) => {
+    const nivel = idx + 1;
+    const qMin = fmtProceso(r.cantidadMinima);
+    const qMax = r.cantidadMaxima === null ? '\\infty' : fmtProceso(r.cantidadMaxima);
+    const Cj = fmtProceso(r.costoUnitario);
+    const Hj = fmtProceso(r.costoMantenerEfectivo);
+    const qOrig = fmtProceso(r.qOriginal);
+
+    procesos.push(
+      proceso({
+        id: `descuentos-n${nivel}-h`,
+        titulo: `Nivel ${nivel} · Costo de mantener efectivo`,
+        simbolo: 'H_j',
+        formula: datos.tipo === 'fijo' ? 'H_j = H' : 'H_j = \\frac{I}{100} \\times C_j',
+        sustitucion:
+          datos.tipo === 'fijo'
+            ? `H_j = ${fmtProceso(datos.Hfijo)}`
+            : `H_j = \\frac{${fmtProceso(datos.I)}}{100} \\times ${Cj}`,
+        resultado: `H_j = ${Hj}`,
+        tipoResultado: 'moneda',
+      }),
+      proceso({
+        id: `descuentos-n${nivel}-q`,
+        titulo: `Nivel ${nivel} · Lote óptimo con este precio`,
+        simbolo: 'Q^*_j',
+        formula: 'Q^*_j = \\sqrt{\\frac{2DS}{H_j}}',
+        sustitucion: `Q^*_j = \\sqrt{\\frac{2(${D})(${S})}{${Hj}}}`,
+        resultado: `Q^*_j = ${qOrig}`,
+        tipoResultado: 'cantidad',
+      })
+    );
+
+    if (r.descartado) {
+      procesos.push(
+        proceso({
+          id: `descuentos-n${nivel}-descartado`,
+          titulo: `Nivel ${nivel} · Descarte del nivel`,
+          simbolo: 'Q^*_j',
+          formula: '\\text{Regla 3: si } Q^*_j > q_{max} \\Rightarrow \\text{el nivel se descarta}',
+          sustitucion: `Q^*_j = ${qOrig} > q_{max} = ${qMax}`,
+          resultado: '\\text{sin candidato}',
+          tipoResultado: 'texto',
+        })
+      );
+      return;
+    }
+
+    const Q = fmtProceso(r.qAjustado as number);
+    const ajustado = r.qAjustado !== r.qOriginal;
+    procesos.push(
+      proceso({
+        id: `descuentos-n${nivel}-ajuste`,
+        titulo: `Nivel ${nivel} · ${ajustado ? 'Ajuste del candidato (Regla 1)' : 'Candidato válido'}`,
+        simbolo: 'Q',
+        formula: ajustado
+          ? '\\text{Regla 1: si } Q^*_j < q_{min} \\Rightarrow Q = q_{min}'
+          : '\\text{Regla 2: si } q_{min} \\le Q^*_j \\le q_{max} \\Rightarrow Q = Q^*_j',
+        sustitucion: ajustado
+          ? `Q^*_j = ${qOrig} < q_{min} = ${qMin} \\Rightarrow Q = ${qMin}`
+          : `q_{min} = ${qMin} \\le Q^*_j = ${qOrig} \\le q_{max} = ${qMax}`,
+        resultado: `Q = ${Q}`,
+        tipoResultado: 'cantidad',
+      })
+    );
+
+    const costoOrdenar = r.costoOrdenar as number;
+    const costoMantener = r.costoMantener as number;
+    const costoProducto = r.costoProducto as number;
+
+    procesos.push(
+      proceso({
+        id: `descuentos-n${nivel}-co`,
+        titulo: `Nivel ${nivel} · Costo de ordenar`,
+        simbolo: 'C_{o,j}',
+        formula: 'C_{o,j} = \\frac{D}{Q} \\cdot S',
+        sustitucion: `C_{o,j} = \\frac{${D}}{${Q}} \\cdot ${S}`,
+        resultado: `C_{o,j} = ${fmtProceso(costoOrdenar)}`,
+        tipoResultado: 'moneda',
+      }),
+      proceso({
+        id: `descuentos-n${nivel}-ch`,
+        titulo: `Nivel ${nivel} · Costo de mantener`,
+        simbolo: 'C_{h,j}',
+        formula: 'C_{h,j} = \\frac{Q}{2} \\cdot H_j',
+        sustitucion: `C_{h,j} = \\frac{${Q}}{2} \\cdot ${Hj}`,
+        resultado: `C_{h,j} = ${fmtProceso(costoMantener)}`,
+        tipoResultado: 'moneda',
+      }),
+      proceso({
+        id: `descuentos-n${nivel}-cp`,
+        titulo: `Nivel ${nivel} · Costo del producto`,
+        simbolo: 'C_{p,j}',
+        formula: 'C_{p,j} = D \\cdot C_j',
+        sustitucion: `C_{p,j} = ${D} \\cdot ${Cj}`,
+        resultado: `C_{p,j} = ${fmtProceso(costoProducto)}`,
+        tipoResultado: 'moneda',
+      }),
+      proceso({
+        id: `descuentos-n${nivel}-tc`,
+        titulo: `Nivel ${nivel} · Costo total`,
+        simbolo: 'TC_j',
+        formula: 'TC_j = C_{o,j} + C_{h,j} + C_{p,j}',
+        sustitucion: `TC_j = (${fmtProceso(costoOrdenar)}) + (${fmtProceso(costoMantener)}) + (${fmtProceso(
+          costoProducto
+        )})`,
+        resultado: `TC_j = ${fmtProceso(r.costoTotal as number)}`,
+        tipoResultado: 'moneda',
+      })
+    );
+  });
+
+  // Selección del ganador: el nivel válido con menor TC_j.
+  const validos = datos.evaluados.filter((r) => !r.descartado && r.costoTotal !== null);
+  const indices = validos.map((r) => datos.evaluados.indexOf(r) + 1);
+  const idxGanador = datos.evaluados.findIndex((r) => r.esGanador) + 1;
+  procesos.push(
+    proceso({
+      id: 'descuentos-seleccion',
+      titulo: 'Selección del nivel ganador',
+      simbolo: 'TC',
+      formula: '\\text{Se elige el nivel con menor } TC_j',
+      sustitucion: validos
+        .map((r, k) => `TC_{${indices[k]}} = ${fmtProceso(r.costoTotal as number)}`)
+        .join(';\\;\\;'),
+      resultado: `\\text{ganador: nivel } ${idxGanador} \\text{ con } Q = ${fmtProceso(datos.loteOptimo)}`,
+      tipoResultado: 'texto',
+    })
+  );
+
+  return procesos;
 }

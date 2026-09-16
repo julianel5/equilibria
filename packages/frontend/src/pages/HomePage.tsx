@@ -217,12 +217,29 @@ export default function HomePage() {
             to="/stochastic/punto-reorden"
             className="rounded-lg border border-blue-200 bg-white p-5 shadow-md  hover:scale-[1.02] dark:border-blue-900 dark:bg-gray-800"
           >
-            <p className="text-base font-bold text-blue-600  dark:text-blue-400">Demanda Probabilística</p>
+            <p className="text-base font-bold text-blue-600  dark:text-blue-400">
+              Punto de Reorden (ROP)
+            </p>
             <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
               Punto de Reorden y Stock de Seguridad
             </p>
             <div className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-slate-600  dark:bg-blue-500/20 dark:text-blue-300">
               <Formula tex="ROP = \bar{d}L + Z\sigma_d\sqrt{L}" />
+            </div>
+          </NavLink>
+
+          <NavLink
+            to="/stochastic/periodo-unico"
+            className="rounded-lg border border-blue-200 bg-white p-5 shadow-md  hover:scale-[1.02] dark:border-blue-900 dark:bg-gray-800"
+          >
+            <p className="text-base font-bold text-blue-600  dark:text-blue-400">
+              Periodo Único (Newsvendor)
+            </p>
+            <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
+              Compra única con costos de exceso y escasez
+            </p>
+            <div className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-slate-600  dark:bg-blue-500/20 dark:text-blue-300">
+              <Formula tex="P(D \le Q^*) = \frac{C_u}{C_u + C_o}" />
             </div>
           </NavLink>
 

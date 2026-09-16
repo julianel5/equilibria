@@ -83,6 +83,30 @@ describe('Demanda Probabilística — Punto de Reorden', () => {
     expect(resultado.desglose.nivelServicio).toBe(95);
   });
 
+  test('debe generar los procesos de SS y ROP', () => {
+    const resultado = calcularDemandaProbabilistica(basico);
+    expect(resultado.procesos.map((p) => p.id)).toEqual(['rop-ss', 'rop-rop']);
+    const ss = resultado.procesos[0];
+    const rop = resultado.procesos[1];
+    expect(ss.formula).toBe('SS = Z \\cdot \\sigma_L');
+    expect(ss.sustitucion).toBe('SS = 1.6449 \\cdot 26.4575');
+    expect(ss.resultado).toBe('SS = 43.52');
+    expect(ss.tipoResultado).toBe('cantidad');
+    expect(rop.formula).toBe('ROP = D_L + SS');
+    expect(rop.sustitucion).toBe('ROP = 350 + 43.52');
+    expect(rop.resultado).toBe('ROP = 393.52');
+    expect(rop.tipoResultado).toBe('cantidad');
+  });
+
+  test('procesos de SS/ROP coinciden con los KPIs redondeados', () => {
+    const resultado = calcularDemandaProbabilistica({ ...basico, tiempoEntrega: 1 });
+    const ss = resultado.procesos.find((p) => p.id === 'rop-ss')!;
+    const rop = resultado.procesos.find((p) => p.id === 'rop-rop')!;
+    expect(ss.sustitucion).toBe('SS = 1.6449 \\cdot 10');
+    expect(ss.resultado).toBe(`SS = ${resultado.stockSeguridad}`);
+    expect(rop.resultado).toBe(`ROP = ${resultado.puntoReorden}`);
+  });
+
   test('CSL 97.5% produce Z ≈ 1.96', () => {
     const resultado = calcularDemandaProbabilistica({
       ...basico,

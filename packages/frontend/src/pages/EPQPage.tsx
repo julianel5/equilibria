@@ -2,6 +2,13 @@ import { Fragment, useCallback, useEffect, useMemo, useState, type ChangeEvent, 
 import { calcularEPQ, ApiError, type EPQResult } from '../services/api';
 import CostChart, { type PuntoCosto } from '@shared/components/CostChart';
 import CostoMantenerToggle, { type ModoMantener } from '@shared/components/CostoMantenerToggle';
+import SelectorUnidadTiempo, {
+  ETIQUETAS_UNIDAD_TIEMPO,
+  PERIODO_DE_UNIDAD,
+  type UnidadTiempo,
+} from '@shared/components/SelectorUnidadTiempo';
+import Fase0Unidades from '@shared/components/Fase0Unidades';
+import ProcesosView from '@shared/components/ProcesosView';
 import EPQTeoria from '../components/EPQTeoria';
 import { VARIABLES_EPQ } from '../data/glosario';
 import Formula from '@shared/components/Formula';
@@ -10,10 +17,11 @@ import KpiCard from '@shared/components/KpiCard';
 import PrefsCard from '@shared/components/PrefsCard';
 import TabsPanel from '@shared/components/TabsPanel';
 
-type Pestana = 'calculadora' | 'teoria';
+type Pestana = 'calculadora' | 'procesos' | 'teoria';
 
 const PESTANAS: { clave: Pestana; etiqueta: string }[] = [
   { clave: 'calculadora', etiqueta: 'Calculadora' },
+  { clave: 'procesos', etiqueta: 'Procesos' },
   { clave: 'teoria', etiqueta: 'Teoría y Supuestos' },
 ];
 
@@ -26,6 +34,8 @@ interface FormState {
   costoUnitario: string;
   diasLaborables: string;
   leadTime: string;
+  unidadDemanda: UnidadTiempo;
+  unidadCostoMantener: UnidadTiempo;
 }
 
 interface PrefsState {
@@ -44,7 +54,7 @@ interface CampoFormulario {
 }
 
 const FORM_METADATA: CampoFormulario[] = [
-  { key: 'demandaAnual', label: 'Demanda anual', simbolo: 'D', min: 0.01, unidadSufijo: (u: string, _m: string) => `${u} / año` },
+  { key: 'demandaAnual', label: 'Demanda', simbolo: 'D', min: 0.01, unidadSufijo: (u: string, _m: string) => `${u} / año` },
   { key: 'tasaProduccion', label: 'Tasa de producción (P)', simbolo: 'P', min: 0.01, unidadSufijo: (u: string, _m: string) => `${u} / año` },
   { key: 'costoOrdenar', label: 'Costo de preparación', simbolo: 'S', min: 0.01, unidadSufijo: (_u: string, m: string) => `${m} / corrida` },
   { key: 'costoUnitario', label: 'Costo unitario (opcional)', simbolo: 'C', opcional: true, min: 0, unidadSufijo: (u: string, m: string) => `${m} / ${u}` },
@@ -71,6 +81,8 @@ export default function EPQPage() {
     costoUnitario: '10',
     diasLaborables: '365',
     leadTime: '',
+    unidadDemanda: 'anual',
+    unidadCostoMantener: 'anual',
   });
   const [tipoCostoMantener, setTipoCostoMantener] = useState<ModoMantener>('fijo');
   const [prefs, setPrefs] = useState<PrefsState>({
@@ -107,6 +119,8 @@ export default function EPQPage() {
         costoMantenerPorcentaje:
           modo === 'porcentaje' ? Number(datos.costoMantenerPorcentaje) : undefined,
         costoUnitario: Number(datos.costoUnitario) || undefined,
+        unidadDemanda: datos.unidadDemanda,
+        unidadCostoMantener: datos.unidadCostoMantener,
         diasLaborables:
           Number.isFinite(diasLaborables) && diasLaborables > 0 ? diasLaborables : undefined,
         leadTime:
@@ -144,6 +158,10 @@ export default function EPQPage() {
   const handleChange =
     (key: keyof FormState) => (e: ChangeEvent<HTMLInputElement>) =>
       setForm((prev) => ({ ...prev, [key]: e.target.value }));
+
+  const handleSelectChange =
+    (key: 'unidadDemanda' | 'unidadCostoMantener') => (e: ChangeEvent<HTMLSelectElement>) =>
+      setForm((prev) => ({ ...prev, [key]: e.target.value as UnidadTiempo }));
 
   const handlePrefChange =
     (key: keyof PrefsState) => (e: ChangeEvent<HTMLInputElement>) =>
@@ -189,6 +207,17 @@ export default function EPQPage() {
     return sinDuplicado.sort((a, b) => a.cantidad - b.cantidad);
   }, [resultado]);
 
+  // Aplicación numérica de Q* con los valores homogeneizados (base anual) para la Fase 0.
+  const formulaQNumerica = resultado
+    ? `Q^* = \\sqrt{ \\frac{2 \\cdot ${fmtDecimal(resultado.desglose.demandaAnual)} \\cdot ${fmtDecimal(
+        resultado.desglose.costoFijoOrden
+      )}}{${fmtDecimal(resultado.desglose.costoHoldingUnitario)} \\cdot \\left(1 - \\frac{${fmtDecimal(
+        resultado.desglose.demandaAnual
+      )}}{${fmtDecimal(resultado.desglose.tasaProduccion)}}\\right)} } = ${fmtDecimal(
+        resultado.cantidadOptima
+      )}`
+    : undefined;
+
   if (pestana === 'teoria') {
     return (
       <div className="space-y-6">
@@ -203,6 +232,36 @@ export default function EPQPage() {
           ariaLabel="Secciones del modelo EPQ"
         />
         <EPQTeoria />
+        <Glossary
+          abierto={glosarioAbierto}
+          onClose={() => setGlosarioAbierto(false)}
+          variables={VARIABLES_EPQ}
+        />
+      </div>
+    );
+  }
+
+  if (pestana === 'procesos') {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <EPQHeader />
+          <GlossaryButton onClick={() => setGlosarioAbierto(true)} />
+        </div>
+        <TabsPanel
+          pestanas={PESTANAS}
+          activa={pestana}
+          onCambio={(c) => setPestana(c as Pestana)}
+          ariaLabel="Secciones del modelo EPQ"
+        />
+        {resultado && resultado.procesos ? (
+          <ProcesosView procesos={resultado.procesos} unidad={unidad} moneda={moneda} />
+        ) : (
+          <div className="mx-auto flex max-w-md flex-col items-center gap-2 rounded-lg border border-slate-200 bg-white p-8 text-center shadow-md  dark:border-gray-700 dark:bg-gray-800">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
+            <p className="text-sm text-slate-500  dark:text-gray-400">Calculando EPQ…</p>
+          </div>
+        )}
         <Glossary
           abierto={glosarioAbierto}
           onClose={() => setGlosarioAbierto(false)}
@@ -238,6 +297,23 @@ export default function EPQPage() {
     );
   }
 
+  // Base de cálculo del motor (unidad compartida en el caso homogéneo, o
+  // "anual" con unidades mixtas). Los títulos/descripciones se adaptan a ella.
+  const unidadBase = resultado.conversionUnidades.base;
+  const etiquetaBase = ETIQUETAS_UNIDAD_TIEMPO[unidadBase];
+  const adjetivoBase = etiquetaBase.toLowerCase();
+  const periodoBase = PERIODO_DE_UNIDAD[unidadBase];
+  const formulaCiclo =
+    unidadBase === 'anual'
+      ? 'T = \\frac{\\text{días laborables}}{N}'
+      : 'T = \\frac{\\text{Días en el período}}{N}';
+  const fraseCorridas =
+    periodoBase === 'año' ? 'al año' : `por ${periodoBase}`;
+  const fraseDeLa =
+    periodoBase === 'año' ? 'del año' : `del ${periodoBase}`;
+  const fraseDemanda =
+    periodoBase === 'año' ? 'la demanda anual' : `la demanda del ${periodoBase}`;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -259,6 +335,14 @@ export default function EPQPage() {
         onMonedaChange={handlePrefChange('moneda')}
       />
 
+      {/* Fase 0: estandarización de unidades (solo si hay unidades no anuales) */}
+      {resultado.conversionUnidades.activa ? (
+        <Fase0Unidades
+          normalizacion={resultado.conversionUnidades}
+          aplicacion={formulaQNumerica}
+        />
+      ) : null}
+
       {/* Fila principal: formulario + KPIs grandes */}
       <div className="grid items-start gap-6 lg:grid-cols-[320px_1fr]">
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
@@ -279,21 +363,43 @@ export default function EPQPage() {
                       </span>
                     ) : null}
                   </span>
-                  <input
-                    type="number"
-                    min={String(campo.min)}
-                    step="any"
-                    placeholder={campo.placeholder}
-                    required={
-                      !campo.opcional ||
-                      (campo.key === 'costoUnitario' && tipoCostoMantener === 'porcentaje')
-                    }
-                    value={form[campo.key]}
-                    onChange={handleChange(campo.key)}
-                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
-                  />
+                  {campo.key === 'demandaAnual' ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min={String(campo.min)}
+                        step="any"
+                        placeholder={campo.placeholder}
+                        required={!campo.opcional}
+                        value={form[campo.key]}
+                        onChange={handleChange(campo.key)}
+                        className="w-full flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
+                      />
+                      <SelectorUnidadTiempo
+                        valor={form.unidadDemanda}
+                        onChange={handleSelectChange('unidadDemanda')}
+                        ariaLabel="Unidad de tiempo de la demanda"
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      type="number"
+                      min={String(campo.min)}
+                      step="any"
+                      placeholder={campo.placeholder}
+                      required={
+                        !campo.opcional ||
+                        (campo.key === 'costoUnitario' && tipoCostoMantener === 'porcentaje')
+                      }
+                      value={form[campo.key]}
+                      onChange={handleChange(campo.key)}
+                      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner  focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30"
+                    />
+                  )}
                   <span className="mt-0.5 block text-xs text-slate-400  dark:text-gray-500">
-                    {campo.unidadSufijo(unidad, moneda)}
+                    {campo.key === 'demandaAnual' || campo.key === 'tasaProduccion'
+                      ? `${unidad} / ${PERIODO_DE_UNIDAD[form.unidadDemanda]}`
+                      : campo.unidadSufijo(unidad, moneda)}
                   </span>
                   {fieldErrors[campo.key] ? (
                     <span
@@ -315,6 +421,8 @@ export default function EPQPage() {
                     unidad={unidad}
                     moneda={moneda}
                     fieldErrors={fieldErrors}
+                    unidadCostoMantener={form.unidadCostoMantener}
+                    onUnidadCostoMantenerChange={handleSelectChange('unidadCostoMantener')}
                   />
                 ) : null}
               </Fragment>
@@ -369,11 +477,11 @@ export default function EPQPage() {
             />
             <KpiCard
               large
-              title="Costo total anual"
+              title={`Costo total ${adjetivoBase}`}
               value={fmtMoneda(resultado.costoTotalAnual, moneda)}
               formula={'TC = \\frac{D}{Q^*}S + \\frac{Q^*}{2}H\\left(1-\\frac{D}{P}\\right) + DC'}
               tone="emerald"
-              description="Suma anual de los costos de preparación, mantener y comprar el inventario."
+              description={`Suma ${adjetivoBase} de los costos de preparación, mantener y comprar el inventario.`}
             />
           </div>
         </section>
@@ -390,15 +498,15 @@ export default function EPQPage() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <KpiCard
             title="Corridas de producción"
-            value={`${fmtDecimal(resultado.numeroProducciones)} / año`}
+            value={`${fmtDecimal(resultado.numeroProducciones)} / ${periodoBase}`}
             formula={'N = \\frac{D}{Q^*}'}
             tone="slate"
-            description="Veces que se arranca la línea de producción al año."
+            description={`Veces que se arranca la línea de producción ${fraseCorridas}.`}
           />
           <KpiCard
             title="Ciclo de producción"
             value={`${fmtDecimal(resultado.cicloProduccion)} días`}
-            formula={'T = \\frac{\\text{días laborables}}{N}'}
+            formula={formulaCiclo}
             tone="slate"
             description="Días de operación entre el inicio de una corrida y la siguiente."
           />
@@ -410,14 +518,14 @@ export default function EPQPage() {
             description="Nivel máximo de inventario alcanzado al finalizar la producción del lote."
           />
           <KpiCard
-            title="Costo anual de preparación"
+            title={`Costo ${adjetivoBase} de preparación`}
             value={fmtMoneda(resultado.costoOrdenar, moneda)}
             formula={'C_o = \\frac{D}{Q^*} \\cdot S'}
             tone="amber"
-            description="Costo de preparación multiplicado por las corridas del año."
+            description={`Costo de preparación multiplicado por las corridas ${fraseDeLa}.`}
           />
           <KpiCard
-            title="Costo anual de mantener"
+            title={`Costo ${adjetivoBase} de mantener`}
             value={fmtMoneda(resultado.costoMantener, moneda)}
             formula={'C_h = \\frac{I_{max}}{2} \\cdot H'}
             tone="amber"
@@ -428,7 +536,7 @@ export default function EPQPage() {
             value={fmtMoneda(resultado.costoAdquisicion, moneda)}
             formula={'C_c = D \\cdot C'}
             tone="slate"
-            description="Costo de fabricar o comprar la demanda anual al costo unitario."
+            description={`Costo de fabricar o comprar ${fraseDemanda} al costo unitario.`}
           />
           {mostrarROP ? (
             <KpiCard
