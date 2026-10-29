@@ -93,23 +93,20 @@ export default function HomePage() {
             </div>
           </NavLink>
 
-          <div
-            aria-disabled="true"
-            className="relative rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5  dark:border-gray-700 dark:bg-gray-900"
+          <NavLink
+            to="/pl/simplex"
+            className="rounded-lg border border-blue-200 bg-white p-5 shadow-md  hover:scale-[1.02] dark:border-blue-900 dark:bg-gray-800"
           >
-            <span className="absolute right-3 top-3 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500  dark:bg-gray-700 dark:text-gray-400">
-              Próximamente
-            </span>
-            <p className="text-base font-bold text-slate-400  dark:text-gray-500">
+            <p className="text-base font-bold text-blue-600  dark:text-blue-400">
               Método Simplex y Simplex Revisado
             </p>
-            <p className="mt-1 text-sm text-slate-400  dark:text-gray-500">
+            <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
               Algoritmo algebraico y matricial para maximización y minimización.
             </p>
-            <div className="mt-3 rounded-md bg-slate-100 px-3 py-2 text-slate-400  dark:bg-gray-800 dark:text-gray-400">
+            <div className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-slate-600  dark:bg-blue-500/20 dark:text-blue-300">
               <Formula tex="B^{-1}A_j" />
             </div>
-          </div>
+          </NavLink>
 
           <div
             aria-disabled="true"

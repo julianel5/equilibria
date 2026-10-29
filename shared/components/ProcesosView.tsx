@@ -35,17 +35,15 @@ function unidadDeResultado(
   }
 }
 
-/** Bloque KaTeX unificado: Fórmula / Sustitución / Resultado alineados. */
+/** Bloque KaTeX: Fórmula / Sustitución / Resultado separados por \\ (sin aligned). */
 function bloqueKaTeX(p: PasoProceso, unidad: string, moneda: string): string {
   const uni = unidadDeResultado(p, unidad, moneda);
   const sufijo = uni.trim() ? ` \\;\\text{${uni}}` : '';
   return [
-    '\\begin{aligned}',
-    `\\text{Fórmula: } & ${p.formula} \\\\`,
-    `\\text{Sustitución: } & ${p.sustitucion} \\\\`,
-    `\\text{Resultado: } & ${p.resultado}${sufijo}`,
-    '\\end{aligned}',
-  ].join(' ');
+    `\\text{Fórmula: } ${p.formula}`,
+    `\\text{Sustitución: } ${p.sustitucion}`,
+    `\\text{Resultado: } ${p.resultado}${sufijo}`,
+  ].join(' \\\\ ');
 }
 
 /**

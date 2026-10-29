@@ -280,11 +280,27 @@ export interface TeoriaDecisionesResult {
 
 export type UnidadTiempoColas = 'horas' | 'minutos' | 'dias';
 
+export type BasePenalizacionColas = 'sistema' | 'fila';
+
+export interface AnalisisCostosColas {
+  cs: number;
+  cw: number;
+  base: BasePenalizacionColas;
+  baseValor: number;
+  csTotal: number;
+  cwTotal: number;
+  ct: number;
+}
+
 export interface TeoriaColasInput {
   tasaLlegada: number;
   tasaServicio: number;
   servidores: number;
   unidadTiempo?: UnidadTiempoColas;
+  analisisCostos?: boolean;
+  costoServicio?: number;
+  costoEspera?: number;
+  basePenalizacion?: BasePenalizacionColas;
 }
 
 export interface EstadoProbabilidadColas {
@@ -324,6 +340,7 @@ export interface TeoriaColasResult {
   distribucion: EstadoProbabilidadColas[];
   unidadTiempo: UnidadTiempoColasResult;
   procesos: PasoProceso[];
+  analisisCostos: AnalisisCostosColas | null;
 }
 
 export type TipoOptimizacionPL = 'MAX' | 'MIN';
@@ -385,6 +402,103 @@ export interface MetodoGraficoResult {
   verticesFactibles: VerticePL[];
   interseccionesDescartadas: InterseccionDescartadaPL[];
   lineasEfectivas: LineaEfectivaPL[];
+}
+
+export type ObjetivoSimplex = 'max' | 'min';
+export type MetodoSimplex = 'tabular' | 'revisado';
+export type TipoRestriccionSimplex = 'LE' | 'GE' | 'EQ';
+
+export interface RestriccionSimplexInput {
+  coeficientes: number[];
+  tipo?: TipoRestriccionSimplex;
+  b: number;
+}
+
+export interface SimplexInput {
+  metodo?: MetodoSimplex;
+  objetivo?: ObjetivoSimplex;
+  funcionObjetivo: number[];
+  restricciones: RestriccionSimplexInput[];
+}
+
+export interface FraccionJSON {
+  num: string;
+  den: string;
+  tex: string;
+  dec: string;
+}
+
+export interface RazonTabularDTO {
+  fila: number;
+  variable: string;
+  numerador: FraccionJSON;
+  denominador: FraccionJSON;
+  razon: FraccionJSON | null;
+  descartada: boolean;
+}
+
+export interface TablaTabularDTO {
+  iteracion: number;
+  variables: string[];
+  basica: string[];
+  filas: FraccionJSON[][];
+  rhs: FraccionJSON[];
+  reducidos: FraccionJSON[];
+  z: FraccionJSON;
+  columnaEntrante: number | null;
+  filaSaliente: number | null;
+  pivote: FraccionJSON | null;
+  ratios: RazonTabularDTO[] | null;
+}
+
+export interface CostoReducidoDTO {
+  variable: string;
+  cj: FraccionJSON;
+  cr: FraccionJSON;
+  aj: FraccionJSON[];
+}
+
+export interface RazonRevisadoDTO {
+  fila: number;
+  variable: string;
+  valorBase: FraccionJSON;
+  d: FraccionJSON;
+  razon: FraccionJSON | null;
+  descartada: boolean;
+}
+
+export interface IteracionRevisadaDTO {
+  iteracion: number;
+  basica: string[];
+  B: FraccionJSON[][];
+  BInv: FraccionJSON[][];
+  cB: FraccionJSON[];
+  y: FraccionJSON[];
+  bi: FraccionJSON[];
+  costosReducidos: CostoReducidoDTO[];
+  columnaEntrante: number | null;
+  variableEntrante: string | null;
+  d: FraccionJSON[];
+  ratios: RazonRevisadoDTO[] | null;
+  filaSaliente: number | null;
+  variableSaliente: string | null;
+  z: FraccionJSON;
+}
+
+export interface SimplexResultado {
+  metodo: MetodoSimplex;
+  objetivo: ObjetivoSimplex;
+  n: number;
+  m: number;
+  estado: 'optimo' | 'no-acotado';
+  variables: string[];
+  basicaFinal: string[];
+  solucion: FraccionJSON[];
+  holguras: FraccionJSON[];
+  valorObjetivo: FraccionJSON;
+  tablas: TablaTabularDTO[];
+  revisado: IteracionRevisadaDTO[];
+  procesos: PasoProceso[];
 }
 
 const API_BASE = '/api';
@@ -517,4 +631,15 @@ export async function calcularMetodoGrafico(input: MetodoGraficoInput): Promise<
 
   const { data } = await parseResponse(res);
   return data as MetodoGraficoResult;
+}
+
+export async function calcularSimplex(input: SimplexInput): Promise<SimplexResultado> {
+  const res = await fetch(`${API_BASE}/pl/simplex`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const { data } = await parseResponse(res);
+  return data as SimplexResultado;
 }

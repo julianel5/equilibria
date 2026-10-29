@@ -483,4 +483,79 @@ export const VARIABLES_TEORIACOLAS: VariableDef[] = [
     descripcion:
       'Probabilidad de que haya exactamente n clientes en el sistema. En un sistema estable decae asintóticamente conforme crece n.',
   },
+  {
+    simbolo: 'C_s',
+    nombre: 'Costo de servicio por servidor',
+    descripcion:
+      'Costo de operación de un servidor por unidad de tiempo. El costo total de servicio es CS = s · C_s.',
+  },
+  {
+    simbolo: 'C_w',
+    nombre: 'Costo de espera',
+    descripcion:
+      'Costo de tener un cliente esperando (por unidad de medida de L o L_q). Penaliza todo el sistema (L) o solo la fila (L_q).',
+  },
+  {
+    simbolo: 'CT',
+    nombre: 'Costo total del sistema',
+    descripcion:
+      'Costo total esperado de la cola: CT = CS + CW, donde CS = s · C_s y CW = Base · C_w.',
+  },
+];
+
+export const VARIABLES_SIMPLEX: VariableDef[] = [
+  {
+    simbolo: 'x_j',
+    nombre: 'Variable de decisión',
+    descripcion:
+      'Variable j del problema: la cantidad a decidir. Todos los cálculos usan fracciones exactas (nunca punto flotante).',
+  },
+  {
+    simbolo: 'c_j',
+    nombre: 'Coeficiente de la función objetivo',
+    descripcion:
+      'Contribución al valor de Z por unidad de la variable x_j en max Z = Σ c_j x_j (o min).',
+  },
+  {
+    simbolo: 'S_i',
+    nombre: 'Variable de holgura',
+    descripcion:
+      'Variable que absorbe la diferencia entre el lado izquierdo y el b derecho de la restricción i cuando es ≤: a_{i1}x_1 + … + S_i = b_i.',
+  },
+  {
+    simbolo: 'b_i',
+    nombre: 'Término independiente',
+    descripcion:
+      'Lado derecho de la restricción i. En este módulo debe cumplir b_i ≥ 0 y todas las restricciones deben ser de tipo ≤.',
+  },
+  {
+    simbolo: 'Z_j - C_j',
+    nombre: 'Costo reducido (fila del tabular)',
+    descripcion:
+      'Última fila del tableau: Z_j − C_j = c_B B^{-1} a_j − c_j. En MAX entra la columna más negativa y el óptimo exige todos ≥ 0; en MIN el criterio se invierte.',
+  },
+  {
+    simbolo: 'B^{-1}',
+    nombre: 'Inversa de la base',
+    descripcion:
+      'Inversa exacta (Gauss–Jordan) de la matriz formada por las columnas básicas. Es el corazón del Simplex Revisado.',
+  },
+  {
+    simbolo: 'y^T',
+    nombre: 'Multiplicadores del Simplex',
+    descripcion:
+      'Vector y^T = c_B B^{-1} que permite calcular los costos reducidos \bar c_j = c_j − y^T a_j sin reconstruir todo el tableau.',
+  },
+  {
+    simbolo: 'x^*',
+    nombre: 'Solución óptima',
+    descripcion:
+      'Valores de las variables de decisión en el punto extremo óptimo; los que no están en la base valen 0.',
+  },
+  {
+    simbolo: 'Z^*',
+    nombre: 'Valor óptimo',
+    descripcion:
+      'Mejor valor finito de la función objetivo. Si ninguna prueba de la razón mínima encuentra denominador positivo, el problema es no acotado.',
+  },
 ];

@@ -51,6 +51,8 @@ export type {
   TeoriaColasResult,
   ModeloColas,
   EstadoProbabilidadColas,
+  AnalisisCostosColas,
+  BasePenalizacionColas,
 } from './modules/colas/teoriaColas.service';
 export { TeoriaColasInputSchema } from './modules/colas/teoriaColas.service';
 export { calcularMetodoGrafico } from './modules/pl/metodoGrafico.service';
@@ -64,3 +66,14 @@ export type {
   InterseccionDescartadaPL,
 } from './modules/pl/metodoGrafico.service';
 export { MetodoGraficoInputSchema } from './modules/pl/metodoGrafico.service';
+export { calcularSimplex } from './modules/pl/simplex/simplex.service';
+export type {
+  SimplexInput,
+  SimplexResultado,
+  FraccionJSON,
+  TablaTabularDTO,
+  IteracionRevisadaDTO,
+} from './modules/pl/simplex/simplex.service';
+export { SimplexInputSchema } from './modules/pl/simplex/simplex.service';
+export { calcularSimplexCore } from './modules/pl/simplex/simplex';
+export { Frac } from './modules/pl/simplex/fraction';

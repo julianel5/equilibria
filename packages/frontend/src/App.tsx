@@ -10,6 +10,7 @@ import PeriodoUnicoPage from './pages/PeriodoUnicoPage';
 import TeoriaDecisionesPage from './pages/TeoriaDecisionesPage';
 import TeoriaColasPage from './pages/TeoriaColasPage';
 import MetodoGraficoPage from './pages/MetodoGraficoPage';
+import SimplexPage from './pages/SimplexPage';
 import ThemeToggle from './components/ThemeToggle';
 import { ThemeProvider } from './hooks/useTheme';
 
@@ -24,6 +25,7 @@ const TITULOS: Record<string, string> = {
   '/decisiones/matriz-pagos': 'Matriz de Pagos - Equilibria',
   '/stochastic/teoria-colas': 'Teoría de Colas - Equilibria',
   '/pl/metodo-grafico': 'Método Gráfico - Equilibria',
+  '/pl/simplex': 'Método Simplex - Equilibria',
 };
 
 type LinkNav = { nombre: string; ruta: string };
@@ -42,7 +44,10 @@ const NAV_GRUPOS: GrupoNav[] = [
   },
   {
     titulo: 'Prog. Lineal',
-    links: [{ nombre: 'Mét. Gráfico', ruta: '/pl/metodo-grafico' }],
+    links: [
+      { nombre: 'Mét. Gráfico', ruta: '/pl/metodo-grafico' },
+      { nombre: 'Simplex', ruta: '/pl/simplex' },
+    ],
   },
   {
     titulo: 'Estocásticos',
@@ -284,6 +289,7 @@ export default function App() {
             <Route path="/decisiones/matriz-pagos" element={<TeoriaDecisionesPage />} />
             <Route path="/stochastic/teoria-colas" element={<TeoriaColasPage />} />
             <Route path="/pl/metodo-grafico" element={<MetodoGraficoPage />} />
+            <Route path="/pl/simplex" element={<SimplexPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
