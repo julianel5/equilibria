@@ -49,6 +49,17 @@ export const TeoriaColasInputSchema = z
       .int({ message: 'El número de servidores (c) debe ser un entero.' })
       .min(1, { message: 'El número de servidores (c) debe ser mayor o igual a 1.' }),
     unidadTiempo: z.enum(['horas', 'minutos', 'dias']).default('horas'),
+    // Submódulo opcional de análisis de costos (optimización económica).
+    analisisCostos: z.boolean().optional(),
+    costoServicio: z
+      .number()
+      .positive({ message: 'El costo por servidor (C_s) debe ser mayor que 0.' })
+      .optional(),
+    costoEspera: z
+      .number()
+      .positive({ message: 'El costo de espera (C_w) debe ser mayor que 0.' })
+      .optional(),
+    basePenalizacion: z.enum(['sistema', 'fila']).default('sistema'),
   })
   .superRefine((data, ctx) => {
     // Regla de estabilidad crítica: la capacidad total (c·μ) debe superar la
@@ -61,6 +72,25 @@ export const TeoriaColasInputSchema = z
           'El sistema es inestable (ρ ≥ 1). La tasa de llegada supera la capacidad total de servicio; la cola crecerá infinitamente.',
       });
     }
+    // El análisis de costos exige ambos costos: sin ellos no hay total que calcular.
+    if (data.analisisCostos === true) {
+      if (data.costoServicio == null) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['costoServicio'],
+          message:
+            'Debes indicar el costo por servidor (C_s) para habilitar el análisis de costos.',
+        });
+      }
+      if (data.costoEspera == null) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['costoEspera'],
+          message:
+            'Debes indicar el costo de espera (C_w) para habilitar el análisis de costos.',
+        });
+      }
+    }
   });
 
 export type TeoriaColasInput = z.input<typeof TeoriaColasInputSchema>;
@@ -70,6 +100,32 @@ export type TeoriaColasInput = z.input<typeof TeoriaColasInputSchema>;
 export type ModeloColas = 'MM1' | 'MMc';
 
 export type UnidadTiempoColas = 'horas' | 'minutos' | 'dias';
+
+/** Base de penalización por espera: todo el sistema (L) o solo la fila (L_q). */
+export type BasePenalizacionColas = 'sistema' | 'fila';
+
+/**
+ * Resultado del submódulo opcional de análisis de costos.
+ *   CS_total = s · C_s            (operación de los servidores)
+ *   CW_total = Base · C_w         (espera; Base es L o L_q según la selección)
+ *   CT       = CS_total + CW_total
+ */
+export interface AnalisisCostosColas {
+  /** Costo de servicio por servidor (C_s). */
+  cs: number;
+  /** Costo de espera por cliente-unidad (C_w). */
+  cw: number;
+  /** Base de penalización elegida: 'sistema' (L) o 'fila' (L_q). */
+  base: BasePenalizacionColas;
+  /** Valor de la base usada en la espera: L o L_q (redondeado como en KPIs). */
+  baseValor: number;
+  /** Costo total de servicio: s · C_s. */
+  csTotal: number;
+  /** Costo total de espera: Base · C_w. */
+  cwTotal: number;
+  /** Costo total del sistema: CS_total + CW_total. */
+  ct: number;
+}
 
 export interface EstadoProbabilidadColas {
   n: number;
@@ -109,6 +165,7 @@ export interface TeoriaColasResult {
   distribucion: EstadoProbabilidadColas[]; // P_n para n = 0..N_MAX
   unidadTiempo: UnidadTiempoColasResult;   // etiquetas y conversiones para la UI
   procesos: ProcesoCalculo[];              // Pestaña "Procesos": desglose paso a paso
+  analisisCostos: AnalisisCostosColas | null; // costo total del sistema (null si inactivo)
 }
 
 // --- Servicio ---
@@ -227,6 +284,7 @@ interface DatosProcesosColas {
   wq: number;
   w: number;
   unidad: UnidadTiempoColas;
+  analisisCostos?: AnalisisCostosColas | null;
 }
 
 /** Fracción KaTeX que expresa una tasa "clientes por unidad de tiempo". */
@@ -382,6 +440,41 @@ export function construirProcesosColas(d: DatosProcesosColas): ProcesoCalculo[] 
     })
   );
 
+  // 8-10. Análisis de costos (solo cuando el submódulo está activo).
+  if (d.analisisCostos) {
+    const a = d.analisisCostos;
+    const baseSimbolo = a.base === 'sistema' ? 'L' : 'L_q';
+    procesos.push(
+      proceso({
+        id: 'colas-cs',
+        titulo: 'Costo total de servicio',
+        simbolo: 'C_s',
+        formula: 'CS = s \\cdot C_s',
+        sustitucion: `CS = ${d.c} \\cdot ${fmt(a.cs)}`,
+        resultado: `CS = ${fmt(a.csTotal)}`,
+        tipoResultado: 'moneda',
+      }),
+      proceso({
+        id: 'colas-cw',
+        titulo: a.base === 'sistema' ? 'Costo total de espera (sistema L)' : 'Costo total de espera (fila L_q)',
+        simbolo: 'C_w',
+        formula: `CW = ${baseSimbolo} \\cdot C_w`,
+        sustitucion: `CW = ${fmt(a.baseValor)} \\cdot ${fmt(a.cw)}`,
+        resultado: `CW = ${fmt(a.cwTotal)}`,
+        tipoResultado: 'moneda',
+      }),
+      proceso({
+        id: 'colas-ct',
+        titulo: 'Costo total del sistema',
+        simbolo: 'CT',
+        formula: `CT = s \\cdot C_s + ${baseSimbolo} \\cdot C_w`,
+        sustitucion: `CT = ${d.c} \\cdot ${fmt(a.cs)} + ${fmt(a.baseValor)} \\cdot ${fmt(a.cw)}`,
+        resultado: `CT = ${fmt(a.ct)}`,
+        tipoResultado: 'moneda',
+      })
+    );
+  }
+
   return procesos;
 }
 
@@ -421,6 +514,28 @@ export function calcularTeoriaColas(input: TeoriaColasInput): TeoriaColasResult 
   const wq = redondear(metricas.wq);
   const w = redondear(metricas.w);
 
+  // Submódulo opcional de costos: CT = s·Cs + Base·Cw (Base = L o L_q).
+  let analisisCostos: AnalisisCostosColas | null = null;
+  if (validated.analisisCostos === true && validated.costoServicio && validated.costoEspera) {
+    const cs = validated.costoServicio;
+    const cw = validated.costoEspera;
+    const base = validated.basePenalizacion;
+    // La base usa los mismos valores redondeados que muestran los KPIs L / L_q
+    // para que la sustitución del proceso coincida con el resultado.
+    const baseValor = base === 'sistema' ? redondear(metricas.l) : redondear(metricas.lq);
+    const csTotal = redondear(c * cs, 2);
+    const cwTotal = redondear(baseValor * cw, 2);
+    analisisCostos = {
+      cs,
+      cw,
+      base,
+      baseValor,
+      csTotal,
+      cwTotal,
+      ct: redondear(csTotal + cwTotal, 2),
+    };
+  }
+
   return {
     modelo,
     lambda,
@@ -451,6 +566,8 @@ export function calcularTeoriaColas(input: TeoriaColasInput): TeoriaColasResult 
       wq: metricas.wq,
       w: metricas.w,
       unidad,
+      analisisCostos,
     }),
+    analisisCostos,
   };
 }

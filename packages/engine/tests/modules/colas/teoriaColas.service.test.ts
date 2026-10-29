@@ -404,3 +404,115 @@ describe('Teoría de Colas — Procesos paso a paso', () => {
     expect(p0.resultado).toContain('= ');
   });
 });
+
+describe('Teoría de Colas — Análisis de costos (optimización económica)', () => {
+  // Referencia M/M/1: λ=4, μ=5, c=1 → Lq=3.2, L=4.
+  // Con Cs=25 y Cw=30:
+  //   base sistema: CS=1·25=25, CW=L·Cw=4·30=120, CT=145
+  //   base fila:    CW=Lq·Cw=3.2·30=96,  CT=121
+
+  test('métricas estándar no se alteran al activar el análisis de costos', () => {
+    const r = calcularTeoriaColas({ ...mm1, analisisCostos: true, costoServicio: 25, costoEspera: 30 });
+    expect(r.lq).toBeCloseTo(3.2, 6);
+    expect(r.l).toBeCloseTo(4, 6);
+    expect(r.wq).toBeCloseTo(0.8, 6);
+    expect(r.w).toBeCloseTo(1, 6);
+  });
+
+  test('con base "sistema" la espera usa L y CT = s·Cs + L·Cw', () => {
+    const r = calcularTeoriaColas({ ...mm1, analisisCostos: true, costoServicio: 25, costoEspera: 30, basePenalizacion: 'sistema' });
+    expect(r.analisisCostos).not.toBeNull();
+    expect(r.analisisCostos!.base).toBe('sistema');
+    expect(r.analisisCostos!.baseValor).toBeCloseTo(4, 6);
+    expect(r.analisisCostos!.csTotal).toBeCloseTo(25, 6);
+    expect(r.analisisCostos!.cwTotal).toBeCloseTo(120, 6);
+    expect(r.analisisCostos!.ct).toBeCloseTo(145, 6);
+  });
+
+  test('con base "fila" la espera usa Lq y CT = s·Cs + Lq·Cw', () => {
+    const r = calcularTeoriaColas({ ...mm1, analisisCostos: true, costoServicio: 25, costoEspera: 30, basePenalizacion: 'fila' });
+    expect(r.analisisCostos!.base).toBe('fila');
+    expect(r.analisisCostos!.baseValor).toBeCloseTo(3.2, 6);
+    expect(r.analisisCostos!.cwTotal).toBeCloseTo(96, 6);
+    expect(r.analisisCostos!.ct).toBeCloseTo(121, 6);
+  });
+
+  test('M/M/c con costos: CS = c·Cs, CW = L·Cw y CT redondeados a 2 decimales', () => {
+    // λ=10, μ=5, c=3 → L=26/9≈2.888889, Lq=8/9≈0.888889
+    const r = calcularTeoriaColas({ ...mmc, analisisCostos: true, costoServicio: 20, costoEspera: 10, basePenalizacion: 'sistema' });
+    expect(r.analisisCostos!.csTotal).toBeCloseTo(60, 6);
+    expect(r.analisisCostos!.baseValor).toBeCloseTo(2.888889, 6);
+    expect(r.analisisCostos!.cwTotal).toBeCloseTo(28.89, 6);
+    expect(r.analisisCostos!.ct).toBeCloseTo(88.89, 6);
+  });
+
+  test('"sistema" es la base por defecto cuando el análisis está activo', () => {
+    const r = calcularTeoriaColas({ ...mm1, analisisCostos: true, costoServicio: 10, costoEspera: 5 });
+    expect(r.analisisCostos!.base).toBe('sistema');
+  });
+
+  test('sin activar el análisis, analisisCostos es null y no hay procesos de costos', () => {
+    const r = calcularTeoriaColas(mm1);
+    expect(r.analisisCostos).toBeNull();
+    expect(r.procesos.some((p) => p.id === 'colas-cs')).toBe(false);
+    expect(r.procesos.some((p) => p.id === 'colas-ct')).toBe(false);
+  });
+
+  test('al activar el análisis se añaden los procesos colas-cs, colas-cw y colas-ct en moneda', () => {
+    const r = calcularTeoriaColas({ ...mm1, analisisCostos: true, costoServicio: 25, costoEspera: 30, basePenalizacion: 'fila' });
+    const ids = r.procesos.map((p) => p.id);
+    expect(ids).toEqual(expect.arrayContaining(['colas-cs', 'colas-cw', 'colas-ct']));
+    expect(r.procesos[ids.indexOf('colas-cs')]).toMatchObject({ tipoResultado: 'moneda' });
+  });
+
+  test('proceso colas-cs: fórmula, sustitución y resultado con la moneda', () => {
+    const r = calcularTeoriaColas({ ...mm1, analisisCostos: true, costoServicio: 25, costoEspera: 30 });
+    const cs = r.procesos.find((p) => p.id === 'colas-cs')!;
+    expect(cs.titulo).toBe('Costo total de servicio');
+    expect(cs.formula).toBe('CS = s \\cdot C_s');
+    expect(cs.sustitucion).toBe('CS = 1 \\cdot 25');
+    expect(cs.resultado).toBe('CS = 25');
+    expect(cs.tipoResultado).toBe('moneda');
+  });
+
+  test('proceso colas-cw cambia la base (L o L_q) según la selección', () => {
+    const sistema = calcularTeoriaColas({ ...mm1, analisisCostos: true, costoServicio: 25, costoEspera: 30, basePenalizacion: 'sistema' });
+    const fila = calcularTeoriaColas({ ...mm1, analisisCostos: true, costoServicio: 25, costoEspera: 30, basePenalizacion: 'fila' });
+    const cwS = sistema.procesos.find((p) => p.id === 'colas-cw')!;
+    const cwF = fila.procesos.find((p) => p.id === 'colas-cw')!;
+    expect(cwS.formula).toBe('CW = L \\cdot C_w');
+    expect(cwS.sustitucion).toBe('CW = 4 \\cdot 30');
+    expect(cwS.resultado).toBe('CW = 120');
+    expect(cwF.formula).toBe('CW = L_q \\cdot C_w');
+    expect(cwF.sustitucion).toBe('CW = 3.2 \\cdot 30');
+    expect(cwF.resultado).toBe('CW = 96');
+  });
+
+  test('proceso colas-ct muestra la fórmula completa CT = s·Cs + Base·Cw', () => {
+    const r = calcularTeoriaColas({ ...mm1, analisisCostos: true, costoServicio: 25, costoEspera: 30, basePenalizacion: 'sistema' });
+    const ct = r.procesos.find((p) => p.id === 'colas-ct')!;
+    expect(ct.formula).toBe('CT = s \\cdot C_s + L \\cdot C_w');
+    expect(ct.sustitucion).toBe('CT = 1 \\cdot 25 + 4 \\cdot 30');
+    expect(ct.resultado).toBe('CT = 145');
+    expect(ct.simbolo).toBe('CT');
+  });
+
+  test('M/M/c el proceso CT sustituye la base redondeada (L = 2.888889)', () => {
+    const r = calcularTeoriaColas({ ...mmc, analisisCostos: true, costoServicio: 20, costoEspera: 10, basePenalizacion: 'sistema' });
+    const ct = r.procesos.find((p) => p.id === 'colas-ct')!;
+    expect(ct.sustitucion).toBe('CT = 3 \\cdot 20 + 2.888889 \\cdot 10');
+    expect(ct.resultado).toBe('CT = 88.89');
+  });
+
+  test('validación: activar costos sin C_s o sin C_w lanza error por campo', () => {
+    expect(() => calcularTeoriaColas({ ...mm1, analisisCostos: true })).toThrow(/C_s/);
+    expect(() =>
+      calcularTeoriaColas({ ...mm1, analisisCostos: true, costoServicio: 25 })
+    ).toThrow(/C_w/);
+  });
+
+  test('validación: costos negativos o cero son rechazados', () => {
+    expect(() => calcularTeoriaColas({ ...mm1, analisisCostos: true, costoServicio: -1, costoEspera: 30 })).toThrow(/mayor que 0/);
+    expect(() => calcularTeoriaColas({ ...mm1, analisisCostos: true, costoServicio: 25, costoEspera: 0 })).toThrow(/mayor que 0/);
+  });
+});
