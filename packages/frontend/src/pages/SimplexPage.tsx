@@ -958,6 +958,29 @@ export default function SimplexPage() {
               </p>
             </>
           ) : null}
+          {(() => {
+            if (objetivo === 'max' && coefsObj.length === 2 && filas.length === 3 && filas.every((f) => f.operador === 'LE')) {
+              const c1 = coefsObj[0];
+              const c2 = coefsObj[1];
+              const r = filas;
+              return (
+                <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900/50 dark:bg-blue-950/20">
+                  <h3 className="text-sm font-semibold text-slate-700 dark:text-gray-100">Problema estandarizado (forma canónica)</h3>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">
+                    Al convertir restricciones ≤ con b ≥ 0 se suman variables de holgura S1,S2,S3 con coeficiente 0 en Z.
+                  </p>
+                  <div className="mt-2 space-y-1 text-sm text-slate-700 dark:text-gray-200">
+                    <div><Formula tex={`\\max Z = ${c1}X_1 + ${c2}X_2 + 0S_1 + 0S_2 + 0S_3`} /></div>
+                    <div className="mt-1"><Formula tex={`${r[0].coeficientes[0]}X_1 + ${r[0].coeficientes[1]}X_2 + S_1 + 0S_2 + 0S_3 = ${r[0].b}`} /></div>
+                    <div><Formula tex={`${r[1].coeficientes[0]}X_1 + ${r[1].coeficientes[1]}X_2 + 0S_1 + S_2 + 0S_3 = ${r[1].b}`} /></div>
+                    <div><Formula tex={`${r[2].coeficientes[0]}X_1 + ${r[2].coeficientes[1]}X_2 + 0S_1 + 0S_2 + S_3 = ${r[2].b}`} /></div>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
         </section>
       </div>
 
