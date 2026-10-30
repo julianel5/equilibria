@@ -32,6 +32,38 @@ const PESTANAS: { clave: Pestana; etiqueta: string }[] = [
   { clave: 'teoria', etiqueta: 'Teoría y Supuestos' },
 ];
 
+interface ProblemaTipico {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  contexto: string;
+  objetivo: ObjetivoSimplex;
+  metodo: MetodoSimplex;
+  variables: string[];
+  coeficientesObjetivo: string[];
+  restricciones: { coeficientes: string[]; operador: 'LE' | 'GE' | 'EQ'; b: string }[];
+}
+
+const PROBLEMAS_TIPICOS: ProblemaTipico[] = [
+  {
+    id: 'agro-tech',
+    nombre: 'Agro-Tech (Fertilizantes)',
+    descripcion: 'Planificación de producción de fertilizantes 5-5-10 y 5-10-5',
+    contexto: `Tom Anderson, gerente de producción de la Agro-tech necesita planear la combinación de fertilizantes para el siguiente mes y no tiene claro cómo va a proceder para elaborar el plan. La Agro-Tech es una compañía pequeña de productos químicos que fabrica entre otros artículos dos tipos de fertilizante que se elaboran combinando ingredientes que se compran con proveedores externos. Cada mes, Tom tiene que planear la cantidad de cada fertilizante que debe producirse. Su plan debe tomar en consideración el costo de los ingredientes, el precio de venta de los fertilizantes, cualesquier pedido que deba surtirse y las restricciones impuestas al uso de los recursos de la compañía, mano de obra, materias primas o tiempo de máquina. El proceso de planeación para este mes es más difícil que lo normal. Por lo general la Agro-Tech fabrica fertilizantes de acuerdo con los pedidos de los clientes pero este mes los fertilizantes van a venderse a través de un mayorista. Esto complica las cosas porque Tom tiene que elaborar un programa de producción que conduzca a las mayores utilidades posibles para la Agro-Tech, al mismo tiempo que se utiliza sólo la cantidad de ingredientes que están disponibles para el mes.
+
+Los dos fertilizantes que la Agro-Tech fabrica son las mezclas denominadas 5-5-10 y 5-10-5. En cada caso, el primer valor se refiere al porcentaje que el producto final tiene de nitrato químico, el segundo valor se refiere al porcentaje de fosfato que aparece en el producto final y el tercer valor da el porcentaje de potasio. El fertilizante se estabiliza con un material de relleno como podría ser barro. Por ejemplo, el 5-5-10 está elaborado con 5% de nitrato, 5% de fosfato y 10% de potasio y el 80% restante es barro. El mayorista comprará cualquier cantidad de ambos fertilizantes que la Agro-Tech pueda fabricar. Esta dispuesto a pagar $71.50 por tonelada del 5-5-10 y $69 por tonelada del 5-10-5. Este mes, la disponibilidad y costos de materias primas son 1100 toneladas de nitrato a $200 por tonelada, 1800 toneladas de fosfato a $80 cada una y 2000 toneladas de potasio a $160 cada una. El relleno esta disponible en cantidades ilimitadas al precio de $10 por tonelada, pero para los otros tres ingredientes sólo se dispone de las cantidades mencionadas antes. No hay restricciones para el uso de la mano de obra ni tampoco para el empleo de la maquinaria durante el mes, pero se tiene un costo de $15 por tonelada por concepto de mezclado de los fertilizantes. La pregunta que Tom debe resolver es ¿cómo utilizar los recursos escasos (nitrato, fosfato y potasio) de que dispone Agro-Tech, de manera que se obtengan las mayores utilidades para la compañía?`,
+    objetivo: 'max',
+    metodo: 'tabular',
+    variables: ['X1', 'X2'],
+    coeficientesObjetivo: ['18.5', '20'],
+    restricciones: [
+      { coeficientes: ['0.05', '0.05'], operador: 'LE', b: '1100' },
+      { coeficientes: ['0.05', '0.1'], operador: 'LE', b: '1800' },
+      { coeficientes: ['0.1', '0.05'], operador: 'LE', b: '2000' },
+    ],
+  },
+];
+
 const inputBase =
   'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30';
 
@@ -350,6 +382,7 @@ export default function SimplexPage() {
   const [cargando, setCargando] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [pestana, setPestana] = useState<Pestana>('calculadora');
+  const [modalProblema, setModalProblema] = useState<ProblemaTipico | null>(null);
   const versionAuto = useRef(0);
 
   const numVariables = useMemo(() => {
@@ -401,6 +434,24 @@ export default function SimplexPage() {
     ]);
 
   const eliminarFila = (id: string) => setFilas((prev) => prev.filter((r) => r.id !== id));
+
+  const aplicarProblemaTipico = (problema: ProblemaTipico) => {
+    setMetodo(problema.metodo);
+    setObjetivo(problema.objetivo);
+    setN(problema.variables.length.toString());
+    setCoefsObj(problema.coeficientesObjetivo);
+    setFilas(
+      problema.restricciones.map((r, idx) => ({
+        id: `r${idx + 1}`,
+        operador: r.operador,
+        b: r.b,
+        coeficientes: r.coeficientes,
+      }))
+    );
+    setResultado(null);
+    setErrors([]);
+    setPestana('calculadora');
+  };
 
   const construirPayload = useCallback(
     () => ({
@@ -523,10 +574,30 @@ export default function SimplexPage() {
       <div className="grid items-start gap-6 lg:grid-cols-[460px_1fr]">
         {/* Formulario */}
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
-          <h2 className="text-lg font-semibold text-slate-700  dark:text-gray-100">Configuración del problema</h2>
-          <p className="mb-4 text-sm text-slate-400  dark:text-gray-500">
-            Forma estándar: solo restricciones ≤ con b ≥ 0.
-          </p>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-700  dark:text-gray-100">Configuración del problema</h2>
+              <p className="text-sm text-slate-400  dark:text-gray-500">
+                Forma estándar: solo restricciones ≤ con b ≥ 0.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setModalProblema(PROBLEMAS_TIPICOS[0])}
+                className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20"
+              >
+                Problemas típicos
+              </button>
+              <button
+                type="button"
+                onClick={() => aplicarProblemaTipico(PROBLEMAS_TIPICOS[0])}
+                className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20"
+              >
+                Auto-rellenar Agro-Tech
+              </button>
+            </div>
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="grid grid-cols-3 gap-2">
@@ -887,6 +958,69 @@ export default function SimplexPage() {
           ) : null}
         </section>
       </div>
+
+      {modalProblema ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
+            <div className="flex items-start justify-between border-b border-slate-200 p-5 dark:border-gray-700">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-100">{modalProblema.nombre}</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-gray-400">{modalProblema.descripcion}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalProblema(null)}
+                className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                aria-label="Cerrar"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-4 p-5">
+              <div>
+                <h4 className="mb-2 text-sm font-semibold text-slate-700 dark:text-gray-200">Modelo</h4>
+                <div className="rounded-md bg-slate-50 p-3 dark:bg-gray-800">
+                  <Formula tex={`\\max Z = ${modalProblema.coeficientesObjetivo.map((c, i) => `${c}X_${i + 1}`).join(' + ')}`} />
+                  <div className="mt-2 space-y-1">
+                    {modalProblema.restricciones.map((r, i) => (
+                      <div key={i}>
+                        <Formula tex={`${r.coeficientes.map((c, j) => `${c}X_${j + 1}`).join(' + ')} \\le ${r.b}`} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h4 className="mb-2 text-sm font-semibold text-slate-700 dark:text-gray-200">Contexto del problema</h4>
+                <div className="max-h-80 overflow-y-auto rounded-md border border-slate-200 bg-white p-4 text-sm leading-relaxed text-slate-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                  <p className="whitespace-pre-line">{modalProblema.contexto}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 p-4 dark:border-gray-700">
+              <button
+                type="button"
+                onClick={() => setModalProblema(null)}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  aplicarProblemaTipico(modalProblema);
+                  setModalProblema(null);
+                }}
+                className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Auto-rellenar en el formulario
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
