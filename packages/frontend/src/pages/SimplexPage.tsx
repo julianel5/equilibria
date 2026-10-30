@@ -875,9 +875,9 @@ export default function SimplexPage() {
                 <KpiCard
                   title="Base final"
                   value={resultado.basicaFinal
-                    .map((v) => v.replace(/[{}]/g, ''))
+                    .map((v) => v.replace(/[{}]/g, '').replace(/_([0-9]+)/g, '_$1'))
                     .join(', ')
-                    .replace(/([SX])([0-9]+)/g, '$1_$2')}
+                    .replace(/([A-Za-z]+)([0-9]+)/g, '$1_$2')}
                   formula={'B = \\{ x_B \\}'}
                   tone="blue"
                   description="Conjunto de variables básicas en el vértice óptimo (holguras incluidas)."
