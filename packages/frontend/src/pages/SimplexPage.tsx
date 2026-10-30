@@ -872,16 +872,26 @@ export default function SimplexPage() {
                   tone="emerald"
                   description="Valor de cada variable de decisión; las ausentes de la base valen 0."
                 />
-                <KpiCard
-                  title="Base final"
-                  value={resultado.basicaFinal
-                    .map((v) => v.replace(/[{}]/g, '').replace(/_([0-9]+)/g, '_$1'))
-                    .join(', ')
-                    .replace(/([A-Za-z]+)([0-9]+)/g, '$1_$2')}
-                  formula={'B = \\{ x_B \\}'}
-                  tone="blue"
-                  description="Conjunto de variables básicas en el vértice óptimo (holguras incluidas)."
-                />
+                <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-600 dark:bg-gray-800">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-gray-400">Base final</p>
+                  <p className="mt-2 text-2xl font-bold tabular-nums text-blue-600 dark:text-blue-400">
+                    {resultado.basicaFinal.map((v, i) => {
+                      const limpio = v.replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1_$2');
+                      return (
+                        <span key={i}>
+                          <Formula tex={limpio} />
+                          {i < resultado.basicaFinal.length - 1 ? ', ' : ''}
+                        </span>
+                      );
+                    })}
+                  </p>
+                  <div className="mt-3 rounded-md border border-transparent bg-gray-100 px-3 py-2 text-gray-800 dark:border dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                    <Formula tex={'B = \\{ x_B \\}'} />
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-400 dark:text-gray-500">
+                    Conjunto de variables básicas en el vértice óptimo (holguras incluidas).
+                  </p>
+                </div>
                 <KpiCard
                   title="Iteraciones"
                   value={`${resultado.metodo === 'tabular' ? resultado.tablas.length - 1 : resultado.revisado.length - 1}`}
