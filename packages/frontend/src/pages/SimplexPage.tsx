@@ -391,10 +391,7 @@ export default function SimplexPage() {
     return Number.isFinite(v) ? Math.min(Math.max(v, 1), 12) : 1;
   }, [n]);
 
-  const hayDobleFase = useMemo(
-    () => filas.some((f) => f.operador !== 'LE'),
-    [filas]
-  );
+  const hayDobleFase = useMemo(() => false, [filas]);
 
   // Mantiene los arreglos sincronizados con el número de variables elegido.
   useEffect(() => {
