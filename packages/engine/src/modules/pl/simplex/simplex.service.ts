@@ -46,13 +46,7 @@ export const SimplexInputSchema = z
           message: `El término independiente b de la restricción ${i + 1} debe ser ≥ 0.`,
         });
       }
-      if (r.tipo !== 'LE') {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['restricciones', i, 'tipo'],
-          message: `Las restricciones de tipo ≥ o = requieren el módulo "Dos Fases / Penalización". Este módulo solo admite restricciones ≤ con b ≥ 0.`,
-        });
-      }
+      // permitir GE/EQ con Gran M
     });
   });
 
@@ -288,7 +282,8 @@ export function calcularSimplex(input: SimplexInput): SimplexResultado {
     A,
     b,
     validado.objetivo as ObjetivoSimplex,
-    validado.metodo
+    validado.metodo,
+    validado.restricciones.map((r) => r.tipo)
   );
 
   const tablas = core.tablas.map(tablaDTO);

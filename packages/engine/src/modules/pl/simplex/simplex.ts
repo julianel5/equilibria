@@ -77,10 +77,28 @@ export interface ResultadoSimplexCore {
 
 const LIMITE_ITERACIONES = 200;
 
-function nombresVariables(n: number, m: number): string[] {
+function nombresVariables(
+  n: number,
+  m: number,
+  tipos?: Array<'LE' | 'GE' | 'EQ'>
+): string[] {
   const vars: string[] = [];
   for (let j = 0; j < n; j++) vars.push(`x_{${j + 1}}`);
-  for (let i = 0; i < m; i++) vars.push(`S_{${i + 1}}`);
+  if (tipos && tipos.length === m) {
+    for (let i = 0; i < m; i++) {
+      const t = tipos[i];
+      if (t === 'LE') {
+        vars.push(`S_{${i + 1}}`);
+      } else if (t === 'GE') {
+        vars.push(`E_{${i + 1}}`);
+        vars.push(`R_{${i + 1}}`);
+      } else if (t === 'EQ') {
+        vars.push(`R_{${i + 1}}`);
+      }
+    }
+  } else {
+    for (let i = 0; i < m; i++) vars.push(`S_{${i + 1}}`);
+  }
   return vars;
 }
 
@@ -219,28 +237,122 @@ function resolverTabular(
   c: number[],
   A: number[][],
   b: number[],
-  objetivo: ObjetivoSimplex
+  objetivo: ObjetivoSimplex,
+  tipos?: Array<'LE' | 'GE' | 'EQ'>
 ): { estado: 'optimo' | 'no-acotado'; tablas: IteracionTabular[]; basicaFinal: string[]; indices: number[]; solucion: Frac[]; z: Frac } {
   const n = c.length;
   const m = A.length;
-  const tot = n + m;
-  const variables = nombresVariables(n, m);
+  const tList = tipos || Array.from({ length: m }, () => 'LE' as const);
+  const variables = nombresVariables(n, m, tList);
+  const tot = variables.length;
 
-  let filas = A.map((fila, i) => {
-    const fil: Frac[] = new Array(tot).fill(Frac.CERO);
-    for (let j = 0; j < n; j++) fil[j] = Frac.deDecimal(fila[j]);
-    fil[n + i] = Frac.UNO;
-    return fil;
-  });
+  let sOff = 0;
+  for (let i = 0; i < m; i++) if (tList[i] === 'LE') sOff++;
+  let geOff = 0;
+  for (let i = 0; i < m; i++) if (tList[i] === 'GE') geOff++;
+
+  let filas: Frac[][] = Array.from({ length: m }, () => Array.from({ length: tot }, () => Frac.CERO));
+  const basica: string[] = [];
+  const indices: number[] = [];
+
+  for (let i = 0; i < m; i++) {
+    const t = tList[i];
+    for (let j = 0; j < n; j++) filas[i][j] = Frac.deDecimal(A[i][j]);
+    if (t === 'LE') {
+      let k = 0;
+      for (let x = 0; x < i; x++) if (tList[x] === 'LE') k++;
+      const idx = n + k;
+      filas[i][idx] = Frac.UNO;
+      basica.push(variables[idx]);
+      indices.push(idx);
+    } else if (t === 'GE') {
+      let k = 0;
+      for (let x = 0; x < i; x++) if (tList[x] === 'GE') k++;
+      const idxE = n + sOff + k * 2;
+      const idxR = n + sOff + k * 2 + 1;
+      filas[i][idxE] = Frac.UNO.neg();
+      filas[i][idxR] = Frac.UNO;
+      basica.push(variables[idxR]);
+      indices.push(idxR);
+    } else if (t === 'EQ') {
+      let k = 0;
+      for (let x = 0; x < i; x++) if (tList[x] === 'EQ') k++;
+      const idxR = n + sOff + geOff * 2 + k;
+      filas[i][idxR] = Frac.UNO;
+      basica.push(variables[idxR]);
+      indices.push(idxR);
+    }
+  }
 
   let rhs = b.map((v) => Frac.deDecimal(v));
+  const M = Frac.deDecimal(1000000);
   let reducidos = new Array<Frac>(tot).fill(Frac.CERO);
-  for (let j = 0; j < n; j++) reducidos[j] = Frac.deDecimal(c[j]).neg();
+  for (let j = 0; j < n; j++) {
+    reducidos[j] = objetivo === 'max' ? Frac.deDecimal(c[j]).neg() : Frac.deDecimal(c[j]);
+  }
+  // penalizar artificiales
+  if (objetivo === 'max') {
+    // restar M*R
+    let kR = 0;
+    for (let i = 0; i < m; i++) {
+      const t = tList[i];
+      if (t === 'GE' || t === 'EQ') {
+        let rIdx = 0;
+        if (t === 'GE') {
+          let kg = 0;
+          for (let x = 0; x < i; x++) if (tList[x] === 'GE') kg++;
+          rIdx = n + sOff + kg * 2 + 1;
+        } else {
+          let keq = 0;
+          for (let x = 0; x < i; x++) if (tList[x] === 'EQ') keq++;
+          rIdx = n + sOff + geOff * 2 + keq;
+        }
+        reducidos[rIdx] = M; // en forma estándar con -c
+      }
+    }
+  } else {
+    // minimización: sumar M*R -> en max convertir o ajustar; en este código usamos el criterio con objetivo
+    let kR = 0;
+    for (let i = 0; i < m; i++) {
+      const t = tList[i];
+      if (t === 'GE' || t === 'EQ') {
+        let rIdx = 0;
+        if (t === 'GE') {
+          let kg = 0;
+          for (let x = 0; x < i; x++) if (tList[x] === 'GE') kg++;
+          rIdx = n + sOff + kg * 2 + 1;
+        } else {
+          let keq = 0;
+          for (let x = 0; x < i; x++) if (tList[x] === 'EQ') keq++;
+          rIdx = n + sOff + geOff * 2 + keq;
+        }
+        reducidos[rIdx] = M.neg();
+      }
+    }
+  }
+  // hacer ceros en fila Z para base
+  for (let i = 0; i < m; i++) {
+    const bi = indices[i];
+    const val = reducidos[bi];
+    if (!val.esCero) {
+      for (let j = 0; j < tot; j++) reducidos[j] = reducidos[j].sub(filas[i][j].mul(val));
+    }
+  }
   let z = Frac.CERO;
-
-  const basica = variables.slice(n);
-  const indices: number[] = [];
-  for (let i = 0; i < m; i++) indices.push(n + i);
+  for (let i = 0; i < m; i++) {
+    const bi = indices[i];
+    // costo
+    let cbi = Frac.CERO;
+    if (bi < n) cbi = Frac.deDecimal(c[bi]);
+    else {
+      // holgura/exceso/artificial
+      const v = variables[bi];
+      if (v.startsWith('R')) {
+        cbi = objetivo === 'max' ? M.neg() : M;
+      } else cbi = Frac.CERO;
+    }
+    z = z.add(cbi.mul(rhs[i]));
+  }
 
   const tablas: IteracionTabular[] = [];
   const snap = (iter: number, extra: { e: number; sal: number; pivote: Frac; ratios: RazonSimplex[] } | null): IteracionTabular => ({
@@ -444,13 +556,14 @@ export function calcularSimplexCore(
   A: number[][],
   b: number[],
   objetivo: ObjetivoSimplex,
-  metodo: 'tabular' | 'revisado'
+  metodo: 'tabular' | 'revisado',
+  tipos?: Array<'LE' | 'GE' | 'EQ'>
 ): ResultadoSimplexCore {
   const n = c.length;
   const m = A.length;
-  const variables = nombresVariables(n, m);
+  const variables = nombresVariables(n, m, tipos);
 
-  const tabular = resolverTabular(c, A, b, objetivo);
+  const tabular = resolverTabular(c, A, b, objetivo, tipos);
   const revisado = resolverRevisado(c, A, b, objetivo);
 
   // Tabular y revisado deben coincidir (misma base final y mismo Z).

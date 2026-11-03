@@ -579,7 +579,7 @@ export default function SimplexPage() {
             <div>
               <h2 className="text-lg font-semibold text-slate-700  dark:text-gray-100">Configuración del problema</h2>
               <p className="text-sm text-slate-400  dark:text-gray-500">
-                Forma estándar: solo restricciones ≤ con b ≥ 0.
+                Soporta ≤, ≥, = con b ≥ 0 (Gran M / Penalización).
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
