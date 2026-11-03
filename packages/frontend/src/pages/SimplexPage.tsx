@@ -924,7 +924,7 @@ export default function SimplexPage() {
                   ? resultado.tablas.map((t) => (
                       <div key={t.iteracion} className="space-y-2">
                         <p className="text-sm font-semibold text-slate-600 dark:text-gray-300">
-                          Tableau {t.iteracion}
+                          TABLA {t.iteracion}
                         </p>
                         <TablaTabular t={t} />
                         {t.ratios ? (
@@ -963,38 +963,56 @@ export default function SimplexPage() {
                               onClick={() =>
                                 setExplicacionModal({
                                   titulo: '¿Es óptima?',
-                                  texto: resultado.estado === 'optimo'
-                                    ? 'Para maximización, una solución es óptima si todos los costos reducidos son ≥ 0. Respuesta: SI.'
-                                    : 'Aún existen costos reducidos negativos, por lo que es posible mejorar el valor de Z. Respuesta: NO.',
+                                  texto: (() => {
+                                    const tieneNegativo = Array.isArray((t as any).reducidos)
+                                      ? (t as any).reducidos.some((r: any) => {
+                                          const s = String(r).replace(/[{}]/g, '');
+                                          // crude check: if has minus sign
+                                          return s.trim().startsWith('-');
+                                        })
+                                      : false;
+                                    const columnaEntrante = (t as any).columnaEntrante !== null && (t as any).columnaEntrante !== undefined;
+                                    if (!tieneNegativo && !columnaEntrante) return 'Para maximización, óptimo si no hay costos reducidos negativos (todos ≥ 0). No hay columna entrante, por lo que la tabla es óptima. Respuesta: SI.';
+                                    if (tieneNegativo) return 'Existen costos reducidos negativos, hay columna entrante candidata. Aún no es óptima. Respuesta: NO.';
+                                    return 'Sin costos reducidos negativos y sin columna entrante. Respuesta: SI.';
+                                  })(),
                                 })
                               }
                               className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800"
                             >
-                              Es óptima? <span className="font-semibold">{resultado.estado === 'optimo' ? 'SI' : 'NO'}</span>
+                              Es óptima? <span className="font-semibold">{(() => {
+                                const tieneNegativo = Array.isArray((t as any).reducidos)
+                                  ? (t as any).reducidos.some((r: any) => String(r).replace(/[{}]/g, '').trim().startsWith('-'))
+                                  : false;
+                                const columnaEntrante = (t as any).columnaEntrante !== null && (t as any).columnaEntrante !== undefined;
+                                if (!tieneNegativo && !columnaEntrante) return 'SI';
+                                if (tieneNegativo) return 'NO';
+                                return columnaEntrante ? 'NO' : 'SI';
+                              })()}</span>
                             </button>
                             <button
                               type="button"
                               onClick={() =>
                                 setExplicacionModal({
                                   titulo: '¿Por qué entra esta variable?',
-                                  texto: `En maximización entra la variable no básica con el costo reducido más negativo. Entra ${String(t.variables[t.columnaEntrante!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1_$2')}.`,
+                                  texto: `En maximización entra la variable no básica con el costo reducido más negativo. Entra ${String(t.variables[t.columnaEntrante!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1$2')}.`,
                                 })
                               }
                               className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800"
                             >
-                              Entra {String(t.variables[t.columnaEntrante!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1_$2')}
+                              Entra {String(t.variables[t.columnaEntrante!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1$2')}
                             </button>
                             <button
                               type="button"
                               onClick={() =>
                                 setExplicacionModal({
                                   titulo: '¿Por qué sale esta variable?',
-                                  texto: `Se aplica la prueba de la razón mínima: razón = RHS / a_{ij} con a_{ij} > 0. Sale la variable de la fila con la menor razón no negativa para mantener la factibilidad. Sale ${String(t.basica[t.filaSaliente!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1_$2')}.`,
+                                  texto: `Se aplica la prueba de la razón mínima: razón = RHS / a_{ij} con a_{ij} > 0. Sale la variable de la fila con la menor razón no negativa para mantener la factibilidad. Sale ${String(t.basica[t.filaSaliente!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1$2')}.`,
                                 })
                               }
                               className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800"
                             >
-                              Sale {String(t.basica[t.filaSaliente!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1_$2')}
+                              Sale {String(t.basica[t.filaSaliente!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1$2')}
                             </button>
                           </div>
                         ) : null}
