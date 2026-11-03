@@ -964,30 +964,38 @@ export default function SimplexPage() {
                                 setExplicacionModal({
                                   titulo: '¿Es óptima?',
                                   texto: (() => {
-                                    const tieneNegativo = Array.isArray((t as any).reducidos)
-                                      ? (t as any).reducidos.some((r: any) => {
-                                          const s = String(r).replace(/[{}]/g, '');
-                                          // crude check: if has minus sign
-                                          return s.trim().startsWith('-');
+                                    const reducidos = (t as any).reducidos;
+                                    const tieneNegativo = Array.isArray(reducidos)
+                                      ? reducidos.some((r: any) => {
+                                          const s = String(r).replace(/[{}]/g, '').trim();
+                                          return s !== '0' && s.startsWith('-');
                                         })
                                       : false;
                                     const columnaEntrante = (t as any).columnaEntrante !== null && (t as any).columnaEntrante !== undefined;
-                                    if (!tieneNegativo && !columnaEntrante) return 'Para maximización, óptimo si no hay costos reducidos negativos (todos ≥ 0). No hay columna entrante, por lo que la tabla es óptima. Respuesta: SI.';
-                                    if (tieneNegativo) return 'Existen costos reducidos negativos, hay columna entrante candidata. Aún no es óptima. Respuesta: NO.';
-                                    return 'Sin costos reducidos negativos y sin columna entrante. Respuesta: SI.';
+                                    if (resultado.estado === 'optimo' || (!tieneNegativo && !columnaEntrante)) {
+                                      return 'Para maximización, óptimo si todos los costos reducidos ≥ 0 y no hay columna entrante. Respuesta: SI.';
+                                    }
+                                    if (tieneNegativo || columnaEntrante) {
+                                      return 'Existen costos reducidos negativos o hay columna entrante candidata, por lo que aún no es óptima. Respuesta: NO.';
+                                    }
+                                    return 'No es óptima. Respuesta: NO.';
                                   })(),
                                 })
                               }
                               className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800"
                             >
                               Es óptima? <span className="font-semibold">{(() => {
-                                const tieneNegativo = Array.isArray((t as any).reducidos)
-                                  ? (t as any).reducidos.some((r: any) => String(r).replace(/[{}]/g, '').trim().startsWith('-'))
+                                const reducidos = (t as any).reducidos;
+                                const tieneNegativo = Array.isArray(reducidos)
+                                  ? reducidos.some((r: any) => {
+                                      const s = String(r).replace(/[{}]/g, '').trim();
+                                      return s !== '0' && s.startsWith('-');
+                                    })
                                   : false;
                                 const columnaEntrante = (t as any).columnaEntrante !== null && (t as any).columnaEntrante !== undefined;
-                                if (!tieneNegativo && !columnaEntrante) return 'SI';
-                                if (tieneNegativo) return 'NO';
-                                return columnaEntrante ? 'NO' : 'SI';
+                                if (resultado.estado === 'optimo' || (!tieneNegativo && !columnaEntrante)) return 'SI';
+                                if (tieneNegativo || columnaEntrante) return 'NO';
+                                return 'NO';
                               })()}</span>
                             </button>
                             <button
@@ -995,24 +1003,24 @@ export default function SimplexPage() {
                               onClick={() =>
                                 setExplicacionModal({
                                   titulo: '¿Por qué entra esta variable?',
-                                  texto: `En maximización entra la variable no básica con el costo reducido más negativo. Entra ${String(t.variables[t.columnaEntrante!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1$2')}.`,
+                                  texto: `En maximización entra la variable no básica con el costo reducido más negativo. Entra ${String(t.variables[t.columnaEntrante!]).replace(/[{}]/g, '').replace(/X(\d+)/g, 'X$1').replace(/S(\d+)/g, 'S$1').replace(/_([0-9]+)/g, '$1')}.`,
                                 })
                               }
                               className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800"
                             >
-                              Entra {String(t.variables[t.columnaEntrante!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1$2')}
+                              Entra {String(t.variables[t.columnaEntrante!]).replace(/[{}]/g, '').replace(/X(\d+)/g, 'X$1').replace(/S(\d+)/g, 'S$1').replace(/_([0-9]+)/g, '$1')}
                             </button>
                             <button
                               type="button"
                               onClick={() =>
                                 setExplicacionModal({
                                   titulo: '¿Por qué sale esta variable?',
-                                  texto: `Se aplica la prueba de la razón mínima: razón = RHS / a_{ij} con a_{ij} > 0. Sale la variable de la fila con la menor razón no negativa para mantener la factibilidad. Sale ${String(t.basica[t.filaSaliente!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1$2')}.`,
+                                  texto: `Se aplica la prueba de la razón mínima: razón = RHS / a_{ij} con a_{ij} > 0. Sale la variable de la fila con la menor razón no negativa para mantener la factibilidad. Sale ${String(t.basica[t.filaSaliente!]).replace(/[{}]/g, '').replace(/X(\d+)/g, 'X$1').replace(/S(\d+)/g, 'S$1').replace(/_([0-9]+)/g, '$1')}.`,
                                 })
                               }
                               className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800"
                             >
-                              Sale {String(t.basica[t.filaSaliente!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1$2')}
+                              Sale {String(t.basica[t.filaSaliente!]).replace(/[{}]/g, '').replace(/X(\d+)/g, 'X$1').replace(/S(\d+)/g, 'S$1').replace(/_([0-9]+)/g, '$1')}
                             </button>
                           </div>
                         ) : null}
