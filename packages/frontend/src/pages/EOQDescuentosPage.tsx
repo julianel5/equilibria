@@ -717,7 +717,7 @@ function DesgloseNiveles({ resultado, activo, onActivo, unidad, moneda }: Desglo
               por el proveedor.
             </p>
             <p className="mt-1 text-xs text-slate-500  dark:text-gray-400">
-              Q* local = {fmtDecimal(rangoActivo.qOriginal)} {unidad} &gt; q_max ={' '}
+              Q* local = {fmtDecimal(rangoActivo.qOriginal)} {unidad} &gt; q<sub>max</sub> ={' '}
               {rangoActivo.cantidadMaxima === null
                 ? '∞'
                 : fmtDecimal(rangoActivo.cantidadMaxima)}{' '}

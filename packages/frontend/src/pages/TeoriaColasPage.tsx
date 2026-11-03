@@ -291,7 +291,7 @@ export default function TeoriaColasPage() {
                 ))}
               </select>
               <span className="mt-0.5 block text-xs text-slate-400  dark:text-gray-500">
-                Unidad de tiempo con la que se expresan λ, μ y los tiempos W_q y W.
+                Unidad de tiempo con la que se expresan λ, μ y los tiempos W<sub>q</sub> y W.
               </span>
             </label>
 
@@ -480,7 +480,7 @@ export default function TeoriaColasPage() {
             />
           </div>
           <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500  dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-            Los tiempos <strong>W_q</strong> y <strong>W</strong> se expresan en las unidades
+            Los tiempos <strong>W<sub>q</sub></strong> y <strong>W</strong> se expresan en las unidades
             seleccionadas (<strong>{ETIQUETA_UNIDAD[unidadTiempo]}</strong>). Si el valor es menor a 1
             se agrega su equivalente en minutos o segundos.
           </p>

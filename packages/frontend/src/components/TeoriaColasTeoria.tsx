@@ -1,4 +1,5 @@
 import Formula from '@shared/components/Formula';
+import { conSubindices } from '@shared/components/Subindices';
 
 const FORMULAS_MM1: { nombre: string; tex: string; detalle: string }[] = [
   {
@@ -115,13 +116,13 @@ export default function TeoriaColasTeoria() {
               className="rounded-md border border-slate-200 bg-slate-50 p-3  dark:border-gray-600 dark:bg-gray-900"
             >
               <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500  dark:text-gray-400">
-                {f.nombre}
+                {conSubindices(f.nombre)}
               </dt>
               <dd className="mt-2 rounded-md bg-white px-3 py-2  dark:bg-gray-800">
                 <Formula tex={f.tex} />
               </dd>
               <dd className="mt-1.5 text-xs leading-relaxed text-slate-500  dark:text-gray-400">
-                {f.detalle}
+                {conSubindices(f.detalle)}
               </dd>
             </div>
           ))}
@@ -143,13 +144,13 @@ export default function TeoriaColasTeoria() {
               className="rounded-md border border-slate-200 bg-slate-50 p-3  dark:border-gray-600 dark:bg-gray-900"
             >
               <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500  dark:text-gray-400">
-                {f.nombre}
+                {conSubindices(f.nombre)}
               </dt>
               <dd className="mt-2 rounded-md bg-white px-3 py-2  dark:bg-gray-800">
                 <Formula tex={f.tex} />
               </dd>
               <dd className="mt-1.5 text-xs leading-relaxed text-slate-500  dark:text-gray-400">
-                {f.detalle}
+                {conSubindices(f.detalle)}
               </dd>
             </div>
           ))}
@@ -192,7 +193,7 @@ export default function TeoriaColasTeoria() {
           </div>
           <p>
             Si ρ ≥ 1 los servidores nunca logran ponerse al día: la cola crecerá infinitamente y
-            los promedios L_q, L, W_q y W divergen. Por eso la calculadora bloquea esos valores con
+            los promedios L<sub>q</sub>, L, W<sub>q</sub> y W divergen. Por eso la calculadora bloquea esos valores con
             un mensaje de sistema inestable.
           </p>
         </div>

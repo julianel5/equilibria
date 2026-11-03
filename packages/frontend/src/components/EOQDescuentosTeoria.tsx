@@ -1,4 +1,5 @@
 import Formula from '@shared/components/Formula';
+import { conSubindices } from '@shared/components/Subindices';
 
 const SUPUESTOS: { titulo: string; detalle: string }[] = [
   {
@@ -106,7 +107,7 @@ export default function EOQDescuentosTeoria() {
         </h2>
         <ol className="list-decimal space-y-3 pl-5 text-sm text-slate-600  dark:text-gray-300">
           {ALGORITMO.map((paso, i) => (
-            <li key={i}>{paso}</li>
+            <li key={i}>{conSubindices(paso)}</li>
           ))}
         </ol>
       </section>
@@ -119,7 +120,7 @@ export default function EOQDescuentosTeoria() {
           {SUPUESTOS.map((s) => (
             <li key={s.titulo}>
               <strong className="text-slate-700 dark:text-gray-100">{s.titulo}: </strong>
-              {s.detalle}
+              {conSubindices(s.detalle)}
             </li>
           ))}
         </ul>
@@ -142,7 +143,7 @@ export default function EOQDescuentosTeoria() {
               <div className="w-full text-[1.4rem] text-slate-800  dark:text-slate-100">
                 <Formula tex={f.tex} display />
               </div>
-              <p className="text-xs leading-relaxed text-slate-500  dark:text-gray-400">{f.detalle}</p>
+              <p className="text-xs leading-relaxed text-slate-500  dark:text-gray-400">{conSubindices(f.detalle)}</p>
             </div>
           ))}
         </div>

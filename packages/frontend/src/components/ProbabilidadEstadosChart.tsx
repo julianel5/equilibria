@@ -82,7 +82,7 @@ export default function ProbabilidadEstadosChart({
               tickLine={{ stroke: tickLineColor }}
               tickFormatter={(v: number) => Number(v).toFixed(3)}
               label={{
-                value: 'Probabilidad P_n',
+                value: 'Probabilidad Pₙ',
                 angle: -90,
                 position: 'insideLeft',
                 fill: axisLabelColor,

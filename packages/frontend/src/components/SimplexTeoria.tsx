@@ -1,4 +1,5 @@
 import Formula from '@shared/components/Formula';
+import { conSubindices } from '@shared/components/Subindices';
 
 const ETAPAS: { titulo: string; detalle: string }[] = [
   {
@@ -9,7 +10,7 @@ const ETAPAS: { titulo: string; detalle: string }[] = [
   {
     titulo: 'Criterio de entrada (Zⱼ − Cⱼ)',
     detalle:
-      'Con la fila de costos reducidos Zⱼ − Cⱼ = c_BB⁻¹aⱼ − cⱼ, en MAXIMIZACIÓN entra la columna más negativa y se detiene cuando todos son ≥ 0. En MINIMIZACIÓN el criterio se invierte: entra la más positiva y se detiene cuando todos son ≤ 0.',
+      'Con la fila de costos reducidos Zⱼ − Cⱼ = c_{B}B⁻¹aⱼ − cⱼ, en MAXIMIZACIÓN entra la columna más negativa y se detiene cuando todos son ≥ 0. En MINIMIZACIÓN el criterio se invierte: entra la más positiva y se detiene cuando todos son ≤ 0.',
   },
   {
     titulo: 'Prueba de la razón mínima',
@@ -32,7 +33,7 @@ const DIFERENCIAS: { clave: string; tabular: string; revisado: string }[] = [
   {
     clave: 'Pivote',
     tabular: 'Pivoteo completo: cada fila se refactoriza contra el pivote.',
-    revisado: 'No se pivotea: se resuelve yᵀ = c_BB⁻¹ y d = B⁻¹a_e desde cero.',
+    revisado: 'No se pivotea: se resuelve yᵀ = c_{B}B⁻¹ y d = B⁻¹a_e desde cero.',
   },
   {
     clave: 'Entrada',
@@ -68,11 +69,11 @@ export default function SimplexTeoria() {
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
               <strong>Simplex Tabular</strong>: el tableau o tabla simplex, fila a fila con la fila de
-              costos reducidos Z_j − C_j y el pivote resaltado.
+              costos reducidos Z<sub>j</sub> − C<sub>j</sub> y el pivote resaltado.
             </li>
             <li>
               <strong>Simplex Revisado</strong>: la versión matricial que solo trabaja con la base B,
-              su inversa B⁻¹ y los multiplicadores yᵀ = c_BB⁻¹, ideal para ver de dónde sale cada
+              su inversa B⁻¹ y los multiplicadores yᵀ = c<sub>B</sub>B⁻¹, ideal para ver de dónde sale cada
               costo reducido.
             </li>
           </ul>
@@ -87,7 +88,7 @@ export default function SimplexTeoria() {
           {ETAPAS.map((s) => (
             <li key={s.titulo}>
               <strong className="text-slate-700 dark:text-gray-100">{s.titulo}: </strong>
-              {s.detalle}
+              {conSubindices(s.detalle)}
             </li>
           ))}
         </ul>
@@ -125,8 +126,8 @@ export default function SimplexTeoria() {
                   <td className="py-2.5 pr-4 align-top font-semibold text-slate-700  dark:text-gray-100">
                     {f.clave}
                   </td>
-                  <td className="py-2.5 pr-4 align-top text-slate-600  dark:text-gray-300">{f.tabular}</td>
-                  <td className="py-2.5 align-top text-slate-600  dark:text-gray-300">{f.revisado}</td>
+                  <td className="py-2.5 pr-4 align-top text-slate-600  dark:text-gray-300">{conSubindices(f.tabular)}</td>
+                  <td className="py-2.5 align-top text-slate-600  dark:text-gray-300">{conSubindices(f.revisado)}</td>
                 </tr>
               ))}
             </tbody>
@@ -140,7 +141,7 @@ export default function SimplexTeoria() {
         </h2>
         <p className="text-sm leading-relaxed text-amber-800  dark:text-amber-200">
           El módulo resuelve programas en forma estándar: restricciones{' '}
-          <strong>únicamente ≤</strong> con <strong>b_i ≥ 0</strong>. Las restricciones con ≥ o =
+          <strong>únicamente ≤</strong> con <strong>b<sub>i</sub> ≥ 0</strong>. Las restricciones con ≥ o =
           requieren una base artificial y pertenecen al módulo{' '}
           <strong>Dos Fases / Penalización</strong> (fuera de alcance). Si el pivoteo no encuentra
           ninguna razón válida, el motor reporta el problema como <strong>no acotado</strong>.
