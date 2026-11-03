@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 import Formula from './Formula';
+import { conSubindices } from './Subindices';
 
 export interface PuntoCosto {
   cantidad: number;
@@ -83,7 +84,7 @@ function Stat({ label, value, formula, dot, resaltado, badge }: StatProps) {
             : 'bg-transparent text-transparent'
         }`}
       >
-        {badge ?? ''}
+        {conSubindices(badge ?? '')}
       </p>
       {formula ? (
         <p className="mt-0.5 text-xs text-slate-400  dark:text-gray-500">

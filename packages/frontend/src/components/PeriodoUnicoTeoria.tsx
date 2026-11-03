@@ -1,4 +1,5 @@
 import Formula from '@shared/components/Formula';
+import { conSubindices } from '@shared/components/Subindices';
 
 const SUPUESTOS: { titulo: string; detalle: string }[] = [
   {
@@ -78,15 +79,15 @@ export default function PeriodoUnicoTeoria() {
           <p>
             Si se piden pocas unidades se pierden ventas y utilidad; si se piden demasiadas, las
             sobrantes deben liquidarse con pérdida. El modelo <strong>newsvendor</strong> resuelve
-            ese dilema comparando el <strong>costo de subestimación</strong> (C_u, por cada unidad
-            que falta) con el <strong>costo de sobreestimación</strong> (C_o, por cada unidad que
+            ese dilema comparando el <strong>costo de subestimación</strong> (C<sub>u</sub>, por cada unidad
+            que falta) con el <strong>costo de sobreestimación</strong> (C<sub>o</sub>, por cada unidad que
             sobra).
           </p>
           <p>
             La solución no es un punto medio arbitrario: la cantidad óptima Q* se escoge de modo que
             la probabilidad de que la demanda no la supere sea exactamente la{' '}
-            <strong>razón crítica</strong> C_u / (C_u + C_o). A mayor margen de venta (C_u alto),
-            conviene pedir más; a mayor castigo por el excedente (C_o alto), conviene pedir menos.
+            <strong>razón crítica</strong> C<sub>u</sub> / (C<sub>u</sub> + C<sub>o</sub>). A mayor margen de venta (C<sub>u</sub> alto),
+            conviene pedir más; a mayor castigo por el excedente (C<sub>o</sub> alto), conviene pedir menos.
           </p>
         </div>
       </section>
@@ -102,7 +103,7 @@ export default function PeriodoUnicoTeoria() {
           {SUPUESTOS.map((s) => (
             <li key={s.titulo}>
               <strong className="text-slate-700 dark:text-gray-100">{s.titulo}: </strong>
-              {s.detalle}
+              {conSubindices(s.detalle)}
             </li>
           ))}
         </ul>
@@ -126,7 +127,7 @@ export default function PeriodoUnicoTeoria() {
               <div className="w-full text-[1.4rem] text-slate-800  dark:text-slate-100">
                 <Formula tex={f.tex} display />
               </div>
-              <p className="text-xs leading-relaxed text-slate-500  dark:text-gray-400">{f.detalle}</p>
+              <p className="text-xs leading-relaxed text-slate-500  dark:text-gray-400">{conSubindices(f.detalle)}</p>
             </div>
           ))}
         </div>

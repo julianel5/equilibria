@@ -1,4 +1,5 @@
 import Formula from './Formula';
+import { conSubindices } from './Subindices';
 
 type Tone = 'blue' | 'emerald' | 'amber' | 'slate';
 
@@ -44,13 +45,13 @@ export default function KpiCard({
 
   return (
     <div className={shell}>
-      <p className={titleClass}>{title}</p>
+      <p className={titleClass}>{conSubindices(title)}</p>
       <p className={valueClass}>{value}</p>
       <div className="mt-3 rounded-md border border-transparent bg-gray-100 px-3 py-2 text-gray-800  dark:border dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
         <Formula tex={formula} />
       </div>
       {description ? (
-        <p className="mt-2 text-xs leading-relaxed text-slate-400  dark:text-gray-500">{description}</p>
+        <p className="mt-2 text-xs leading-relaxed text-slate-400  dark:text-gray-500">{conSubindices(description)}</p>
       ) : null}
     </div>
   );

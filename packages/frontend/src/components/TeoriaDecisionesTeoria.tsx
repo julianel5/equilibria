@@ -1,4 +1,5 @@
 import Formula from '@shared/components/Formula';
+import { conSubindices } from '@shared/components/Subindices';
 
 const CRITERIOS: { nombre: string; tex: string; detalle: string }[] = [
   {
@@ -122,7 +123,7 @@ export default function TeoriaDecisionesTeoria() {
               <div className="w-full text-[1.25rem] text-slate-800  dark:text-slate-100">
                 <Formula tex={c.tex} display />
               </div>
-              <p className="text-xs leading-relaxed text-slate-500  dark:text-gray-400">{c.detalle}</p>
+              <p className="text-xs leading-relaxed text-slate-500  dark:text-gray-400">{conSubindices(c.detalle)}</p>
             </div>
           ))}
         </div>

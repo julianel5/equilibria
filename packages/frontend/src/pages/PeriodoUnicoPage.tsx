@@ -434,7 +434,7 @@ export default function PeriodoUnicoPage() {
               </h3>
               <p className="mb-4 text-sm text-slate-400  dark:text-gray-500">
                 El área a la izquierda de Q* (CSL) está sombreada: al subir el costo
-                de escasez (C_u), la razón crítica crece y Q* se desplaza a la
+                de escasez (C<sub>u</sub>), la razón crítica crece y Q* se desplaza a la
                 derecha comprando más área bajo la curva.
               </p>
               <CurvaDemandaChart
