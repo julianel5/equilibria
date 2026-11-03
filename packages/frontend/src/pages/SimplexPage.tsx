@@ -922,8 +922,8 @@ export default function SimplexPage() {
                 {metodo === 'tabular'
                   ? resultado.tablas.map((t) => (
                       <div key={t.iteracion} className="space-y-2">
-                        <p className="text-sm font-semibold text-slate-600  dark:text-gray-300">
-                          Tableau T<sub>{t.iteracion}</sub>
+                        <p className="text-sm font-semibold text-slate-600 dark:text-gray-300">
+                          Tabla {t.iteracion}
                         </p>
                         <TablaTabular t={t} />
                         {t.ratios ? (
