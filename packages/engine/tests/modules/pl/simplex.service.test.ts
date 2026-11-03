@@ -208,6 +208,87 @@ describe('Problema de minimización', () => {
   });
 });
 
+describe('Minimización y Gran M (tabular y revisado coinciden)', () => {
+  type Caso = {
+    nombre: string;
+    entrada: Omit<SimplexInput, 'metodo'>;
+    z: number;
+    x: number[];
+  };
+  const casos: Caso[] = [
+    {
+      nombre: 'MIN con ≤ y costos positivos: el óptimo es el origen',
+      entrada: {
+        objetivo: 'min',
+        funcionObjetivo: [10, 8],
+        restricciones: [
+          { coeficientes: [1, 2], b: 36 },
+          { coeficientes: [5, 1], b: 60 },
+        ],
+      },
+      z: 0,
+      x: [0, 0],
+    },
+    {
+      nombre: 'MIN con ≥ (Gran M)',
+      entrada: {
+        objetivo: 'min',
+        funcionObjetivo: [10, 8],
+        restricciones: [
+          { coeficientes: [1, 2], tipo: 'GE', b: 36 },
+          { coeficientes: [5, 1], tipo: 'GE', b: 60 },
+        ],
+      },
+      z: 200,
+      x: [28 / 3, 40 / 3],
+    },
+    {
+      nombre: 'MIN mezclando ≥ y ≤',
+      entrada: {
+        objetivo: 'min',
+        funcionObjetivo: [2, 3],
+        restricciones: [
+          { coeficientes: [1, 1], tipo: 'GE', b: 5 },
+          { coeficientes: [1, 0], tipo: 'LE', b: 4 },
+        ],
+      },
+      z: 11,
+      x: [4, 1],
+    },
+    {
+      nombre: 'MAX con = (Gran M)',
+      entrada: {
+        objetivo: 'max',
+        funcionObjetivo: [3, 2],
+        restricciones: [
+          { coeficientes: [1, 1], tipo: 'EQ', b: 4 },
+          { coeficientes: [1, 0], tipo: 'LE', b: 3 },
+        ],
+      },
+      z: 11,
+      x: [3, 1],
+    },
+  ];
+
+  for (const caso of casos) {
+    for (const metodo of ['tabular', 'revisado'] as const) {
+      it(`${caso.nombre} (${metodo})`, () => {
+        const res = calcularSimplex({ ...caso.entrada, metodo });
+        expect(res.estado).toBe('optimo');
+        expect(num(res.valorObjetivo)).toBeCloseTo(caso.z, 9);
+        res.solucion.forEach((f, j) => expect(num(f)).toBeCloseTo(caso.x[j], 9));
+      });
+    }
+  }
+
+  it('nombra cada columna según su restricción al mezclar tipos', () => {
+    const res = calcularSimplex({ ...casos[2].entrada, metodo: 'tabular' });
+    expect(res.tablas[0].variables).toEqual(['x_{1}', 'x_{2}', 'E_{1}', 'R_{1}', 'S_{2}']);
+    expect(res.tablas[0].basica).toEqual(['R_{1}', 'S_{2}']);
+    expect([...res.basicaFinal].sort()).toEqual(['x_{1}', 'x_{2}']);
+  });
+});
+
 describe('Problema no acotado', () => {
   it('detecta ausencia de razones válidas', () => {
     const res = calcularSimplex({
@@ -230,18 +311,13 @@ describe('Validaciones del esquema', () => {
     ],
   };
 
-  it('rechaza restricciones >= o = apuntando a Dos Fases / Penalización', () => {
+  it('acepta restricciones >= o = (Gran M)', () => {
     for (const tipo of ['GE', 'EQ'] as const) {
-      let error = '';
-      try {
-        calcularSimplex({
-          ...base,
-          restricciones: [{ ...base.restricciones[0], tipo }],
-        });
-      } catch (e) {
-        error = e instanceof Error ? e.message : '';
-      }
-      expect(error).toContain('Dos Fases');
+      const parsed = SimplexInputSchema.safeParse({
+        ...base,
+        restricciones: [{ ...base.restricciones[0], tipo }],
+      });
+      expect(parsed.success).toBe(true);
     }
   });
 

@@ -233,125 +233,81 @@ function pruebaRazon(
   return { ratios, saliente };
 }
 
+/** Penalización de la Gran M (numérica, como en el tableau de clase). */
+const M = Frac.deDecimal(1000000);
+
+interface FormaEstandar {
+  variables: string[];
+  filas: Frac[][];
+  /** Costo c_j de cada columna en la función objetivo ampliada (±M en artificiales). */
+  costos: Frac[];
+  /** Columna básica inicial de cada fila (holgura o artificial). */
+  indices: number[];
+}
+
+/**
+ * Agrega holguras (≤), excedentes y artificiales (≥) o solo artificiales (=)
+ * en el mismo orden que `nombresVariables`, para que cada nombre coincida
+ * con su columna. La artificial cuesta −M en MAX y +M en MIN.
+ */
+function formaEstandar(
+  c: number[],
+  A: number[][],
+  objetivo: ObjetivoSimplex,
+  tipos: Array<'LE' | 'GE' | 'EQ'>
+): FormaEstandar {
+  const n = c.length;
+  const m = A.length;
+  const variables = nombresVariables(n, m, tipos);
+  const tot = variables.length;
+  const filas: Frac[][] = A.map((fila) => {
+    const f = new Array<Frac>(tot).fill(Frac.CERO);
+    for (let j = 0; j < n; j++) f[j] = Frac.deDecimal(fila[j]);
+    return f;
+  });
+  const costos = new Array<Frac>(tot).fill(Frac.CERO);
+  for (let j = 0; j < n; j++) costos[j] = Frac.deDecimal(c[j]);
+  const penalizacion = objetivo === 'max' ? M.neg() : M;
+
+  const indices: number[] = [];
+  let col = n;
+  for (let i = 0; i < m; i++) {
+    if (tipos[i] === 'GE') {
+      filas[i][col] = Frac.UNO.neg();
+      col++;
+    }
+    filas[i][col] = Frac.UNO;
+    if (tipos[i] !== 'LE') costos[col] = penalizacion;
+    indices.push(col);
+    col++;
+  }
+  return { variables, filas, costos, indices };
+}
+
 function resolverTabular(
   c: number[],
   A: number[][],
   b: number[],
   objetivo: ObjetivoSimplex,
-  tipos?: Array<'LE' | 'GE' | 'EQ'>
+  tipos: Array<'LE' | 'GE' | 'EQ'>
 ): { estado: 'optimo' | 'no-acotado'; tablas: IteracionTabular[]; basicaFinal: string[]; indices: number[]; solucion: Frac[]; z: Frac } {
-  const n = c.length;
   const m = A.length;
-  const tList = tipos || Array.from({ length: m }, () => 'LE' as const);
-  const variables = nombresVariables(n, m, tList);
+  const forma = formaEstandar(c, A, objetivo, tipos);
+  const { variables, indices } = forma;
   const tot = variables.length;
-
-  let sOff = 0;
-  for (let i = 0; i < m; i++) if (tList[i] === 'LE') sOff++;
-  let geOff = 0;
-  for (let i = 0; i < m; i++) if (tList[i] === 'GE') geOff++;
-
-  let filas: Frac[][] = Array.from({ length: m }, () => Array.from({ length: tot }, () => Frac.CERO));
-  const basica: string[] = [];
-  const indices: number[] = [];
-
-  for (let i = 0; i < m; i++) {
-    const t = tList[i];
-    for (let j = 0; j < n; j++) filas[i][j] = Frac.deDecimal(A[i][j]);
-    if (t === 'LE') {
-      let k = 0;
-      for (let x = 0; x < i; x++) if (tList[x] === 'LE') k++;
-      const idx = n + k;
-      filas[i][idx] = Frac.UNO;
-      basica.push(variables[idx]);
-      indices.push(idx);
-    } else if (t === 'GE') {
-      let k = 0;
-      for (let x = 0; x < i; x++) if (tList[x] === 'GE') k++;
-      const idxE = n + sOff + k * 2;
-      const idxR = n + sOff + k * 2 + 1;
-      filas[i][idxE] = Frac.UNO.neg();
-      filas[i][idxR] = Frac.UNO;
-      basica.push(variables[idxR]);
-      indices.push(idxR);
-    } else if (t === 'EQ') {
-      let k = 0;
-      for (let x = 0; x < i; x++) if (tList[x] === 'EQ') k++;
-      const idxR = n + sOff + geOff * 2 + k;
-      filas[i][idxR] = Frac.UNO;
-      basica.push(variables[idxR]);
-      indices.push(idxR);
-    }
-  }
-
+  let filas = forma.filas;
+  const basica = indices.map((j) => variables[j]);
   let rhs = b.map((v) => Frac.deDecimal(v));
-  const M = Frac.deDecimal(1000000);
-  let reducidos = new Array<Frac>(tot).fill(Frac.CERO);
-  for (let j = 0; j < n; j++) {
-    reducidos[j] = objetivo === 'max' ? Frac.deDecimal(c[j]).neg() : Frac.deDecimal(c[j]);
-  }
-  // penalizar artificiales
-  if (objetivo === 'max') {
-    // restar M*R
-    let kR = 0;
-    for (let i = 0; i < m; i++) {
-      const t = tList[i];
-      if (t === 'GE' || t === 'EQ') {
-        let rIdx = 0;
-        if (t === 'GE') {
-          let kg = 0;
-          for (let x = 0; x < i; x++) if (tList[x] === 'GE') kg++;
-          rIdx = n + sOff + kg * 2 + 1;
-        } else {
-          let keq = 0;
-          for (let x = 0; x < i; x++) if (tList[x] === 'EQ') keq++;
-          rIdx = n + sOff + geOff * 2 + keq;
-        }
-        reducidos[rIdx] = M; // en forma estándar con -c
-      }
-    }
-  } else {
-    // minimización: sumar M*R -> en max convertir o ajustar; en este código usamos el criterio con objetivo
-    let kR = 0;
-    for (let i = 0; i < m; i++) {
-      const t = tList[i];
-      if (t === 'GE' || t === 'EQ') {
-        let rIdx = 0;
-        if (t === 'GE') {
-          let kg = 0;
-          for (let x = 0; x < i; x++) if (tList[x] === 'GE') kg++;
-          rIdx = n + sOff + kg * 2 + 1;
-        } else {
-          let keq = 0;
-          for (let x = 0; x < i; x++) if (tList[x] === 'EQ') keq++;
-          rIdx = n + sOff + geOff * 2 + keq;
-        }
-        reducidos[rIdx] = M.neg();
-      }
-    }
-  }
-  // hacer ceros en fila Z para base
-  for (let i = 0; i < m; i++) {
-    const bi = indices[i];
-    const val = reducidos[bi];
-    if (!val.esCero) {
-      for (let j = 0; j < tot; j++) reducidos[j] = reducidos[j].sub(filas[i][j].mul(val));
-    }
-  }
+
+  // Fila Z_j − C_j: arranca en −c_j y se anulan las columnas básicas
+  // (fila Z − c_B·fila_i), con lo que el lado derecho queda en Z = c_B·b.
+  let reducidos = forma.costos.map((cj) => cj.neg());
   let z = Frac.CERO;
   for (let i = 0; i < m; i++) {
-    const bi = indices[i];
-    // costo
-    let cbi = Frac.CERO;
-    if (bi < n) cbi = Frac.deDecimal(c[bi]);
-    else {
-      // holgura/exceso/artificial
-      const v = variables[bi];
-      if (v.startsWith('R')) {
-        cbi = objetivo === 'max' ? M.neg() : M;
-      } else cbi = Frac.CERO;
-    }
-    z = z.add(cbi.mul(rhs[i]));
+    const val = reducidos[indices[i]];
+    if (val.esCero) continue;
+    reducidos = reducidos.map((v, j) => v.sub(filas[i][j].mul(val)));
+    z = z.sub(rhs[i].mul(val));
   }
 
   const tablas: IteracionTabular[] = [];
@@ -414,25 +370,17 @@ function resolverRevisado(
   c: number[],
   A: number[][],
   b: number[],
-  objetivo: ObjetivoSimplex
+  objetivo: ObjetivoSimplex,
+  tipos: Array<'LE' | 'GE' | 'EQ'>
 ): { estado: 'optimo' | 'no-acotado'; revisado: IteracionRevisada[]; basicaFinal: string[]; solucion: Frac[]; z: Frac; indices: number[] } {
-  const n = c.length;
   const m = A.length;
-  const tot = n + m;
-  const variables = nombresVariables(n, m);
-
-  const cFrac = [...c.map((v) => Frac.deDecimal(v)), ...new Array<Frac>(m).fill(Frac.CERO)];
-  const ACompleta: Frac[][] = Array.from({ length: m }, (_, i) => {
-    const fil = new Array<Frac>(tot).fill(Frac.CERO);
-    for (let j = 0; j < n; j++) fil[j] = Frac.deDecimal(A[i][j]);
-    fil[n + i] = Frac.UNO;
-    return fil;
-  });
+  const forma = formaEstandar(c, A, objetivo, tipos);
+  const { variables, indices } = forma;
+  const tot = variables.length;
+  const cFrac = forma.costos;
+  const ACompleta = forma.filas;
   const bFrac = b.map((v) => Frac.deDecimal(v));
-
-  const indices: number[] = [];
-  for (let i = 0; i < m; i++) indices.push(n + i);
-  const basica = variables.slice(n);
+  const basica = indices.map((j) => variables[j]);
 
   const revisado: IteracionRevisada[] = [];
 
@@ -561,10 +509,11 @@ export function calcularSimplexCore(
 ): ResultadoSimplexCore {
   const n = c.length;
   const m = A.length;
-  const variables = nombresVariables(n, m, tipos);
+  const tList = tipos ?? Array.from({ length: m }, () => 'LE' as const);
+  const variables = nombresVariables(n, m, tList);
 
-  const tabular = resolverTabular(c, A, b, objetivo, tipos);
-  const revisado = resolverRevisado(c, A, b, objetivo);
+  const tabular = resolverTabular(c, A, b, objetivo, tList);
+  const revisado = resolverRevisado(c, A, b, objetivo, tList);
 
   // Tabular y revisado deben coincidir (misma base final y mismo Z).
   const solucion = metodo === 'revisado' ? revisado.solucion : tabular.solucion;
