@@ -97,9 +97,11 @@ function reconciliarFilas(filas: FilaRestriccion[], n: number): FilaRestriccion[
 // Traza Tabular
 // ---------------------------------------------------------------------------
 
-function TablaTabular({ t }: { t: TablaTabularDTO }) {
-  const entra = t.columnaEntrante;
-  const sale = t.filaSaliente;
+/**
+ * `entra`/`sale` marcan la decisión que se toma SOBRE esta tabla (columna
+ * entrante y fila pivote), que el motor guarda en la tabla siguiente.
+ */
+function TablaTabular({ t, entra, sale }: { t: TablaTabularDTO; entra: number | null; sale: number | null }) {
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full border-collapse text-sm">
@@ -193,6 +195,296 @@ function ratioTexto(r: RazonTabularDTO): React.ReactNode {
 }
 
 // ---------------------------------------------------------------------------
+// Explicaciones de cada tabla (¿factible?, ¿óptima?, entra, sale)
+// ---------------------------------------------------------------------------
+
+type TipoExplicacion = 'factible' | 'optima' | 'entra' | 'sale';
+
+const esArtificial = (v: string): boolean => v.startsWith('R_');
+const signoFrac = (f: FraccionJSON): number => Math.sign(fracVal(f));
+
+interface AnalisisFactibilidad {
+  negativas: number[];
+  artificialesPositivas: number[];
+  factible: boolean;
+}
+
+function analizarFactibilidad(t: TablaTabularDTO, esFinal: boolean): AnalisisFactibilidad {
+  const negativas = t.rhs.flatMap((f, i) => (signoFrac(f) < 0 ? [i] : []));
+  const artificialesPositivas = t.rhs.flatMap((f, i) =>
+    esArtificial(t.basica[i]) && signoFrac(f) > 0 ? [i] : []
+  );
+  // Una artificial positiva en la tabla final significa que el problema original no tiene solución factible.
+  const factible = negativas.length === 0 && !(esFinal && artificialesPositivas.length > 0);
+  return { negativas, artificialesPositivas, factible };
+}
+
+interface AnalisisOptimalidad {
+  violan: number[];
+  mejor: number | null;
+  optima: boolean;
+}
+
+/** Mismo criterio que el motor: MAX → óptimo si todo Z_j − C_j ≥ 0; MIN → si todo Z_j − C_j ≤ 0. */
+function analizarOptimalidad(t: TablaTabularDTO, objetivo: ObjetivoSimplex): AnalisisOptimalidad {
+  const violan = t.reducidos.flatMap((f, j) => {
+    const s = signoFrac(f);
+    return (objetivo === 'max' ? s < 0 : s > 0) ? [j] : [];
+  });
+  let mejor: number | null = null;
+  for (const j of violan) {
+    const v = fracVal(t.reducidos[j]);
+    if (mejor === null || (objetivo === 'max' ? v < fracVal(t.reducidos[mejor]) : v > fracVal(t.reducidos[mejor]))) {
+      mejor = j;
+    }
+  }
+  return { violan, mejor, optima: violan.length === 0 };
+}
+
+const celdaModal = 'border border-slate-200 px-2 py-1 dark:border-gray-700';
+
+function Veredicto({ ok, children }: { ok: boolean; children: React.ReactNode }) {
+  return (
+    <p
+      className={`mt-3 rounded-md border px-3 py-2 text-sm font-semibold ${
+        ok
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-400'
+          : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-500/10 dark:text-amber-400'
+      }`}
+    >
+      {children}
+    </p>
+  );
+}
+
+function ExplicacionFactible({ t, esFinal }: { t: TablaTabularDTO; esFinal: boolean }) {
+  const { negativas, artificialesPositivas, factible } = analizarFactibilidad(t, esFinal);
+  const noBasicas = t.variables.filter((v) => !t.basica.includes(v));
+  return (
+    <div className="space-y-3 text-sm text-slate-600 dark:text-gray-300">
+      <p>
+        Una solución básica es factible si todas las variables básicas toman valores{' '}
+        <Formula tex="x_B = b \ge 0" />. Las variables no básicas valen 0.
+      </p>
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="bg-slate-50 text-xs text-slate-500 dark:bg-gray-800 dark:text-gray-400">
+            <th className={`${celdaModal} text-left`}>Variable básica</th>
+            <th className={`${celdaModal} text-right`}>Valor (b)</th>
+            <th className={`${celdaModal} text-center`}>¿≥ 0?</th>
+          </tr>
+        </thead>
+        <tbody>
+          {t.basica.map((v, i) => {
+            const negativa = negativas.includes(i);
+            return (
+              <tr key={i} className={negativa ? 'bg-red-50 dark:bg-red-900/20' : ''}>
+                <td className={celdaModal}>
+                  <Formula tex={v} />
+                </td>
+                <td className={`${celdaModal} text-right tabular-nums`}>
+                  <Formula tex={`${t.rhs[i].tex}${t.rhs[i].den !== '1' ? ` \\approx ${t.rhs[i].dec}` : ''}`} />
+                </td>
+                <td className={`${celdaModal} text-center font-semibold ${negativa ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                  {negativa ? '✗' : '✓'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {noBasicas.length > 0 ? (
+        <p className="text-xs">
+          No básicas: <Formula tex={`${noBasicas.join(' = ')} = 0`} />
+        </p>
+      ) : null}
+      {artificialesPositivas.length > 0 ? (
+        <p className="rounded-md bg-slate-50 px-3 py-2 text-xs dark:bg-gray-800">
+          Gran M: {artificialesPositivas.map((i) => (
+            <React.Fragment key={i}>
+              <Formula tex={`${t.basica[i]} = ${t.rhs[i].tex}`} />{' '}
+            </React.Fragment>
+          ))}
+          {esFinal
+            ? 'sigue en la base con valor positivo en la tabla final: el problema original no tiene solución factible.'
+            : 'todavía es positiva. La solución es factible para el problema ampliado, y el método la irá expulsando de la base (penalización M).'}
+        </p>
+      ) : null}
+      <Veredicto ok={factible}>
+        {negativas.length > 0
+          ? `Hay ${negativas.length} valor(es) negativos en b → NO es factible.`
+          : factible
+            ? 'Todos los valores de b son ≥ 0 → SÍ es factible.'
+            : 'b ≥ 0 pero quedan artificiales positivas en la tabla final → NO es factible para el problema original.'}
+      </Veredicto>
+    </div>
+  );
+}
+
+function ExplicacionOptima({
+  t,
+  objetivo,
+  noAcotado,
+}: {
+  t: TablaTabularDTO;
+  objetivo: ObjetivoSimplex;
+  noAcotado: boolean;
+}) {
+  const { violan, mejor, optima } = analizarOptimalidad(t, objetivo);
+  const condicion = objetivo === 'max' ? 'Z_j - C_j \\ge 0' : 'Z_j - C_j \\le 0';
+  return (
+    <div className="space-y-3 text-sm text-slate-600 dark:text-gray-300">
+      <p>
+        Criterio de optimalidad ({objetivo === 'max' ? 'maximización' : 'minimización'}): la tabla es óptima si para
+        toda variable <Formula tex={condicion} />. Un valor{' '}
+        {objetivo === 'max' ? 'negativo' : 'positivo'} indica que esa variable, al entrar, todavía mejora Z.
+      </p>
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="bg-slate-50 text-xs text-slate-500 dark:bg-gray-800 dark:text-gray-400">
+            <th className={`${celdaModal} text-left`}>Variable</th>
+            <th className={`${celdaModal} text-right`}>
+              <Formula tex="Z_j - C_j" />
+            </th>
+            <th className={`${celdaModal} text-center`}>
+              ¿<Formula tex={objetivo === 'max' ? '\\ge 0' : '\\le 0'} />?
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {t.variables.map((v, j) => {
+            const viola = violan.includes(j);
+            const basica = t.basica.includes(v);
+            return (
+              <tr key={j} className={j === mejor ? 'bg-blue-50 dark:bg-blue-500/10' : ''}>
+                <td className={celdaModal}>
+                  <Formula tex={v} />
+                  {basica ? <span className="ml-1 text-xs text-slate-400">(básica)</span> : null}
+                </td>
+                <td className={`${celdaModal} text-right tabular-nums`}>
+                  <Formula tex={t.reducidos[j].tex} />
+                </td>
+                <td className={`${celdaModal} text-center font-semibold ${viola ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                  {viola ? '✗' : '✓'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className="text-xs">
+        Valor actual de la función objetivo: <Formula tex={`Z = ${t.z.tex}`} />
+      </p>
+      <Veredicto ok={optima}>
+        {optima ? (
+          <>Ningún <Formula tex="Z_j - C_j" /> viola la condición → SÍ es óptima. Z* = <Formula tex={t.z.tex} /></>
+        ) : (
+          <>
+            {violan.length} variable(s) violan la condición → NO es óptima.{' '}
+            {mejor !== null ? (
+              <>
+                Candidata a entrar: <Formula tex={t.variables[mejor]} /> (
+                <Formula tex={`Z_j - C_j = ${t.reducidos[mejor].tex}`} />, el {objetivo === 'max' ? 'más negativo' : 'más positivo'}).
+              </>
+            ) : null}
+            {noAcotado ? ' Sin embargo, su columna no tiene ningún coeficiente positivo: el problema es no acotado.' : ''}
+          </>
+        )}
+      </Veredicto>
+    </div>
+  );
+}
+
+function ExplicacionEntra({ t, decision, objetivo }: { t: TablaTabularDTO; decision: TablaTabularDTO; objetivo: ObjetivoSimplex }) {
+  const { violan } = analizarOptimalidad(t, objetivo);
+  const e = decision.columnaEntrante!;
+  const fn = objetivo === 'max' ? '\\min' : '\\max';
+  return (
+    <div className="space-y-3 text-sm text-slate-600 dark:text-gray-300">
+      <p>
+        Entre las variables que violan el criterio de optimalidad se elige la que más mejora Z por unidad:{' '}
+        {objetivo === 'max' ? 'el Z_j − C_j más negativo' : 'el Z_j − C_j más positivo'}.
+      </p>
+      <div className="rounded-md bg-slate-50 px-3 py-2 dark:bg-gray-800">
+        <Formula
+          display
+          tex={`${fn}\\{ ${violan.map((j) => `\\underbrace{${t.reducidos[j].tex}}_{${t.variables[j]}}`).join(',\\; ')} \\} = ${t.reducidos[e].tex}`}
+        />
+      </div>
+      <Veredicto ok>
+        Entra <Formula tex={t.variables[e]} /> (columna pivote, en azul en la tabla).
+      </Veredicto>
+    </div>
+  );
+}
+
+function ExplicacionSale({ t, decision }: { t: TablaTabularDTO; decision: TablaTabularDTO }) {
+  const e = decision.columnaEntrante!;
+  const sal = decision.filaSaliente!;
+  const ratios = decision.ratios ?? [];
+  const noAcotado = sal < 0;
+  return (
+    <div className="space-y-3 text-sm text-slate-600 dark:text-gray-300">
+      <p>
+        Prueba de la razón mínima con la columna de <Formula tex={t.variables[e]} />: para cada fila con{' '}
+        <Formula tex="a_{ie} > 0" /> se calcula <Formula tex="b_i / a_{ie}" />. Sale la variable de la fila con la
+        menor razón, porque es la primera que llega a 0 y así ninguna variable básica se vuelve negativa (se mantiene la
+        factibilidad).
+      </p>
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="bg-slate-50 text-xs text-slate-500 dark:bg-gray-800 dark:text-gray-400">
+            <th className={`${celdaModal} text-left`}>Básica</th>
+            <th className={`${celdaModal} text-right`}>
+              <Formula tex="b_i" />
+            </th>
+            <th className={`${celdaModal} text-right`}>
+              <Formula tex="a_{ie}" />
+            </th>
+            <th className={`${celdaModal} text-right`}>
+              <Formula tex="b_i / a_{ie}" />
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {ratios.map((r) => (
+            <tr key={r.fila} className={r.fila === sal ? 'bg-amber-50 dark:bg-amber-500/10' : ''}>
+              <td className={celdaModal}>
+                <Formula tex={r.variable} />
+              </td>
+              <td className={`${celdaModal} text-right tabular-nums`}>
+                <Formula tex={r.numerador.tex} />
+              </td>
+              <td className={`${celdaModal} text-right tabular-nums`}>
+                <Formula tex={r.denominador.tex} />
+              </td>
+              <td className={`${celdaModal} text-right tabular-nums ${r.descartada ? 'text-xs text-red-500 dark:text-red-400' : ''}`}>
+                {r.descartada ? (
+                  signoFrac(r.denominador) < 0 ? 'a < 0 → no se considera' : 'a = 0 → no se considera'
+                ) : (
+                  <Formula tex={`${r.numerador.tex} / ${r.denominador.tex} = ${r.razon!.tex}${r.razon!.den !== '1' ? ` \\approx ${r.razon!.dec}` : ''}`} />
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {noAcotado ? (
+        <Veredicto ok={false}>
+          Ningún <Formula tex="a_{ie}" /> es positivo: <Formula tex={t.variables[e]} /> puede crecer sin límite → el
+          problema es no acotado.
+        </Veredicto>
+      ) : (
+        <Veredicto ok>
+          Razón mínima = <Formula tex={ratios[sal].razon!.tex} /> en la fila de <Formula tex={ratios[sal].variable} /> →
+          sale <Formula tex={ratios[sal].variable} />. Pivote = <Formula tex={t.filas[sal][e].tex} />.
+        </Veredicto>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Traza Revisada
 // ---------------------------------------------------------------------------
 
@@ -275,7 +567,7 @@ function IteracionRevisada({ it, objetivo }: { it: IteracionRevisadaDTO; objetiv
                 <thead>
                   <tr className="border-b border-slate-300 text-left text-xs text-slate-400  dark:border-gray-600">
                     <th className="pr-3 py-1">Variable</th>
-                    <th className="pr-3 py-1 text-right">c_j</th>
+                    <th className="pr-3 py-1 text-right"><Formula tex="c_j" /></th>
                     <th className="py-1 text-right">
                       <Formula tex={'\\bar c_j'} />
                     </th>
@@ -318,9 +610,9 @@ function IteracionRevisada({ it, objetivo }: { it: IteracionRevisadaDTO; objetiv
                   <thead>
                     <tr className="border-b border-slate-300 text-left text-xs text-slate-400  dark:border-gray-600">
                       <th className="pr-3 py-1">Fila</th>
-                      <th className="pr-3 py-1 text-right">b_B</th>
+                      <th className="pr-3 py-1 text-right"><Formula tex="b_B" /></th>
                       <th className="pr-3 py-1 text-right">d</th>
-                      <th className="py-1 text-right">b_B/d</th>
+                      <th className="py-1 text-right"><Formula tex="b_B / d" /></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -363,7 +655,8 @@ function IteracionRevisada({ it, objetivo }: { it: IteracionRevisadaDTO; objetiv
 
       <p className="mt-3 text-xs text-slate-400  dark:text-gray-500">
         Z = <Formula tex={it.z.tex} />
-        {objetivo === 'max' ? ' · óptimo cuando ningún \\bar c_j > 0' : ' · óptimo cuando ningún \\bar c_j < 0'}
+        {' · óptimo cuando ningún '}
+        <Formula tex={objetivo === 'max' ? '\\bar c_j > 0' : '\\bar c_j < 0'} />
       </p>
     </div>
   );
@@ -384,7 +677,7 @@ export default function SimplexPage() {
   const [errors, setErrors] = useState<string[]>([]);
   const [pestana, setPestana] = useState<Pestana>('calculadora');
   const [modalProblema, setModalProblema] = useState<ProblemaTipico | null>(null);
-  const [explicacionModal, setExplicacionModal] = useState<{ titulo: string; texto: string } | null>(null);
+  const [explicacionModal, setExplicacionModal] = useState<{ tipo: TipoExplicacion; indice: number } | null>(null);
   const versionAuto = useRef(0);
   const location = useLocation();
 
@@ -470,6 +763,7 @@ export default function SimplexPage() {
   const calcular = useCallback(async () => {
     setCargando(true);
     setErrors([]);
+    setExplicacionModal(null);
     versionAuto.current += 1;
 
     const hayVacio = [...coefsObj, ...filas.flatMap((r) => [...r.coeficientes, r.b])].some(
@@ -919,111 +1213,75 @@ export default function SimplexPage() {
                 </div>
 
                 {metodo === 'tabular'
-                  ? resultado.tablas.map((t) => (
-                      <div key={t.iteracion} className="space-y-2">
-                        <p className="text-sm font-semibold text-slate-600 dark:text-gray-300">
-                          TABLA {t.iteracion}
-                        </p>
-                        <TablaTabular t={t} />
-                        {t.ratios ? (
-                          <p className="text-xs text-slate-500 dark:text-gray-400">
-                            Entra <Formula tex={t.variables[t.columnaEntrante!]} /> · Razones:{' '}
-                            {t.ratios!.map((r, idx) => (
-                              <React.Fragment key={idx}>
-                                {ratioTexto(r)}
-                                {idx < t.ratios!.length - 1 ? '  ·  ' : null}
-                              </React.Fragment>
-                            ))}
-                            {' '}· Sale{' '}
-                            <Formula tex={t.basica[t.filaSaliente!]} />
+                  ? resultado.tablas.map((t, k) => {
+                      // El motor repite la última tabla (sin pivotear) al detectar no acotamiento.
+                      if (t.filaSaliente === -1) return null;
+                      // La decisión tomada sobre esta tabla (entra/sale) viaja en la tabla siguiente.
+                      const decision = resultado.tablas[k + 1] ?? null;
+                      const noAcotado = decision?.filaSaliente === -1;
+                      const esFinal = decision === null;
+                      const factible = analizarFactibilidad(t, esFinal).factible;
+                      const optima = analizarOptimalidad(t, resultado.objetivo).optima;
+                      const botonClase =
+                        'rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800';
+                      const respuesta = (ok: boolean) => (
+                        <span className={`font-semibold ${ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                          {ok ? 'SÍ' : 'NO'}
+                        </span>
+                      );
+                      return (
+                        <div key={t.iteracion} className="mt-6 space-y-2 first:mt-0">
+                          <p className="text-sm font-semibold text-slate-600 dark:text-gray-300">
+                            TABLA {t.iteracion}
                           </p>
-                        ) : (
-                          <p className="text-xs text-slate-500 dark:text-gray-400">
-                            Base inicial de holguras: sin pivoteo.
-                          </p>
-                        )}
-                        {t.ratios ? (
+                          <TablaTabular
+                            t={t}
+                            entra={decision?.columnaEntrante ?? null}
+                            sale={decision && !noAcotado ? decision.filaSaliente : null}
+                          />
+                          {decision?.ratios ? (
+                            <p className="text-xs text-slate-500 dark:text-gray-400">
+                              Entra <Formula tex={t.variables[decision.columnaEntrante!]} /> · Razones:{' '}
+                              {decision.ratios.map((r, idx) => (
+                                <React.Fragment key={idx}>
+                                  {ratioTexto(r)}
+                                  {idx < decision.ratios!.length - 1 ? '  ·  ' : null}
+                                </React.Fragment>
+                              ))}
+                              {noAcotado ? (
+                                ' · Ninguna razón válida: no acotado'
+                              ) : (
+                                <>
+                                  {' '}· Sale <Formula tex={t.basica[decision.filaSaliente!]} />
+                                </>
+                              )}
+                            </p>
+                          ) : null}
                           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-gray-300">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExplicacionModal({
-                                  titulo: '¿Es factible?',
-                                  texto: 'Con base inicial de holguras y b ≥ 0, la solución básica es factible si todos los valores de RHS son ≥ 0. Respuesta: SI.',
-                                })
-                              }
-                              className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800"
-                            >
-                              Es factible? <span className="font-semibold">SI</span>
+                            <button type="button" onClick={() => setExplicacionModal({ tipo: 'factible', indice: k })} className={botonClase}>
+                              ¿Es factible? {respuesta(factible)}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExplicacionModal({
-                                  titulo: '¿Es óptima?',
-                                  texto: (() => {
-                                    const reducidos = (t as any).reducidos;
-                                    const tieneNegativo = Array.isArray(reducidos)
-                                      ? reducidos.some((r: any) => {
-                                          const s = String(r).replace(/[{}]/g, '').trim();
-                                          return s !== '0' && s.startsWith('-');
-                                        })
-                                      : false;
-                                    const columnaEntrante = (t as any).columnaEntrante !== null && (t as any).columnaEntrante !== undefined;
-                                    if (resultado.estado === 'optimo' || (!tieneNegativo && !columnaEntrante)) {
-                                      return 'Para maximización, óptimo si todos los costos reducidos ≥ 0 y no hay columna entrante. Respuesta: SI.';
-                                    }
-                                    if (tieneNegativo || columnaEntrante) {
-                                      return 'Existen costos reducidos negativos o hay columna entrante candidata, por lo que aún no es óptima. Respuesta: NO.';
-                                    }
-                                    return 'No es óptima. Respuesta: NO.';
-                                  })(),
-                                })
-                              }
-                              className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800"
-                            >
-                              Es óptima? <span className="font-semibold">{(() => {
-                                const reducidos = (t as any).reducidos;
-                                const tieneNegativo = Array.isArray(reducidos)
-                                  ? reducidos.some((r: any) => {
-                                      const s = String(r).replace(/[{}]/g, '').trim();
-                                      return s !== '0' && s.startsWith('-');
-                                    })
-                                  : false;
-                                const columnaEntrante = (t as any).columnaEntrante !== null && (t as any).columnaEntrante !== undefined;
-                                if (resultado.estado === 'optimo' || (!tieneNegativo && !columnaEntrante)) return 'SI';
-                                if (tieneNegativo || columnaEntrante) return 'NO';
-                                return 'NO';
-                              })()}</span>
+                            <button type="button" onClick={() => setExplicacionModal({ tipo: 'optima', indice: k })} className={botonClase}>
+                              ¿Es óptima? {respuesta(optima)}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExplicacionModal({
-                                  titulo: '¿Por qué entra esta variable?',
-                                  texto: `En maximización entra la variable no básica con el costo reducido más negativo. Entra ${String(t.variables[t.columnaEntrante!]).replace(/[{}]/g, '').replace(/X(\d+)/g, 'X$1').replace(/S(\d+)/g, 'S$1').replace(/_([0-9]+)/g, '$1')}.`,
-                                })
-                              }
-                              className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800"
-                            >
-                              Entra {String(t.variables[t.columnaEntrante!]).replace(/[{}]/g, '').replace(/X(\d+)/g, 'X$1').replace(/S(\d+)/g, 'S$1').replace(/_([0-9]+)/g, '$1')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExplicacionModal({
-                                  titulo: '¿Por qué sale esta variable?',
-                                  texto: `Se aplica la prueba de la razón mínima: razón = RHS / a_{ij} con a_{ij} > 0. Sale la variable de la fila con la menor razón no negativa para mantener la factibilidad. Sale ${String(t.basica[t.filaSaliente!]).replace(/[{}]/g, '').replace(/X(\d+)/g, 'X$1').replace(/S(\d+)/g, 'S$1').replace(/_([0-9]+)/g, '$1')}.`,
-                                })
-                              }
-                              className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800"
-                            >
-                              Sale {String(t.basica[t.filaSaliente!]).replace(/[{}]/g, '').replace(/X(\d+)/g, 'X$1').replace(/S(\d+)/g, 'S$1').replace(/_([0-9]+)/g, '$1')}
-                            </button>
+                            {decision ? (
+                              <>
+                                <button type="button" onClick={() => setExplicacionModal({ tipo: 'entra', indice: k })} className={botonClase}>
+                                  Entra <Formula tex={t.variables[decision.columnaEntrante!]} />
+                                </button>
+                                <button type="button" onClick={() => setExplicacionModal({ tipo: 'sale', indice: k })} className={botonClase}>
+                                  {noAcotado ? 'Sale: ninguna (no acotado)' : (
+                                    <>
+                                      Sale <Formula tex={t.basica[decision.filaSaliente!]} />
+                                    </>
+                                  )}
+                                </button>
+                              </>
+                            ) : null}
                           </div>
-                        ) : null}
-                      </div>
-                    ))
+                        </div>
+                      );
+                    })
                   : resultado.revisado.map((it) => (
                       <div key={it.iteracion} className="mt-4 space-y-2 first:mt-0">
                         <IteracionRevisada it={it} objetivo={objetivo} />
@@ -1074,20 +1332,67 @@ export default function SimplexPage() {
         </section>
       </div>
 
-      {explicacionModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-          <div className="max-w-lg w-full rounded-lg bg-white p-5 shadow-xl dark:bg-gray-900">
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="font-semibold text-slate-800 dark:text-gray-100">{explicacionModal.titulo}</h3>
-              <button onClick={() => setExplicacionModal(null)} className="text-slate-500 hover:text-slate-700 dark:text-gray-400">×</button>
-            </div>
-            <p className="text-sm text-slate-600 dark:text-gray-300">{explicacionModal.texto}</p>
-            <div className="mt-4 text-right">
-              <button onClick={() => setExplicacionModal(null)} className="rounded border px-3 py-1 text-sm">Cerrar</button>
+      {explicacionModal && resultado?.tablas[explicacionModal.indice] ? (() => {
+        const k = explicacionModal.indice;
+        const t = resultado.tablas[k];
+        const decision = resultado.tablas[k + 1] ?? null;
+        const titulos: Record<TipoExplicacion, string> = {
+          factible: '¿Es factible?',
+          optima: '¿Es óptima?',
+          entra: '¿Por qué entra esta variable?',
+          sale: '¿Por qué sale esta variable?',
+        };
+        let contenido: React.ReactNode = null;
+        if (explicacionModal.tipo === 'factible') contenido = <ExplicacionFactible t={t} esFinal={decision === null} />;
+        else if (explicacionModal.tipo === 'optima')
+          contenido = <ExplicacionOptima t={t} objetivo={resultado.objetivo} noAcotado={decision?.filaSaliente === -1} />;
+        else if (decision && explicacionModal.tipo === 'entra')
+          contenido = <ExplicacionEntra t={t} decision={decision} objetivo={resultado.objetivo} />;
+        else if (decision) contenido = <ExplicacionSale t={t} decision={decision} />;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4"
+            onClick={() => setExplicacionModal(null)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="explicacion-titulo"
+              onClick={(e) => e.stopPropagation()}
+              className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
+            >
+              <div className="flex items-start justify-between border-b border-slate-200 p-5 dark:border-gray-700">
+                <div>
+                  <h3 id="explicacion-titulo" className="text-lg font-semibold text-slate-800 dark:text-gray-100">
+                    {titulos[explicacionModal.tipo]}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-gray-400">TABLA {t.iteracion}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExplicacionModal(null)}
+                  className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                  aria-label="Cerrar"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+                    <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                  </svg>
+                </button>
+              </div>
+              <div className="p-5">{contenido}</div>
+              <div className="flex justify-end border-t border-slate-200 p-4 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setExplicacionModal(null)}
+                  className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      ) : null}
+        );
+      })() : null}
 
       {modalProblema ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">

@@ -301,7 +301,7 @@ export function calcularSimplex(input: SimplexInput): SimplexResultado {
           simbolo: `T_{${t.iteracion}}`,
           formula: textoTableau(t),
           sustitucion: t.ratios
-            ? `\\text{Entra } ${entrante ?? '\\text{—'}}\\; (\\text{criterio } Z_j - C_j). \\text{Razones: } ${textoRatios(t.ratios)}`
+            ? `\\text{Entra } ${entrante ?? '\\text{—}'}\\; (\\text{criterio } Z_j - C_j). \\text{Razones: } ${textoRatios(t.ratios)}`
             : `\\text{Tableau inicial (sin pivoteo).}`,
           resultado:
             t.iteracion === tablas.length - 1 && core.estado === 'optimo'
