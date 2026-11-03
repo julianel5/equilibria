@@ -383,6 +383,7 @@ export default function SimplexPage() {
   const [errors, setErrors] = useState<string[]>([]);
   const [pestana, setPestana] = useState<Pestana>('calculadora');
   const [modalProblema, setModalProblema] = useState<ProblemaTipico | null>(null);
+  const [explicacionModal, setExplicacionModal] = useState<{ titulo: string; texto: string } | null>(null);
   const versionAuto = useRef(0);
 
   const numVariables = useMemo(() => {
@@ -906,7 +907,7 @@ export default function SimplexPage() {
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h3 className="text-lg font-semibold text-slate-700  dark:text-gray-100">
-                      Traza del método {metodo === 'tabular' ? 'tabulares' : 'revisado'}
+                      Traza del método {metodo === 'tabular' ? 'tabular' : 'revisado'}
                     </h3>
                     <p className="text-sm text-slate-400  dark:text-gray-500">
                       {metodo === 'tabular'
@@ -923,11 +924,11 @@ export default function SimplexPage() {
                   ? resultado.tablas.map((t) => (
                       <div key={t.iteracion} className="space-y-2">
                         <p className="text-sm font-semibold text-slate-600 dark:text-gray-300">
-                          Tabla {t.iteracion}
+                          Tableau {t.iteracion}
                         </p>
                         <TablaTabular t={t} />
                         {t.ratios ? (
-                          <p className="text-xs text-slate-500  dark:text-gray-400">
+                          <p className="text-xs text-slate-500 dark:text-gray-400">
                             Entra <Formula tex={t.variables[t.columnaEntrante!]} /> · Razones:{' '}
                             {t.ratios!.map((r, idx) => (
                               <React.Fragment key={idx}>
@@ -939,10 +940,64 @@ export default function SimplexPage() {
                             <Formula tex={t.basica[t.filaSaliente!]} />
                           </p>
                         ) : (
-                          <p className="text-xs text-slate-500  dark:text-gray-400">
+                          <p className="text-xs text-slate-500 dark:text-gray-400">
                             Base inicial de holguras: sin pivoteo.
                           </p>
                         )}
+                        {t.ratios ? (
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-gray-300">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExplicacionModal({
+                                  titulo: '¿Es factible?',
+                                  texto: 'Con base inicial de holguras y b ≥ 0, la solución básica es factible si todos los valores de RHS son ≥ 0. Respuesta: SI.',
+                                })
+                              }
+                              className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800"
+                            >
+                              Es factible? <span className="font-semibold">SI</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExplicacionModal({
+                                  titulo: '¿Es óptima?',
+                                  texto: resultado.estado === 'optimo'
+                                    ? 'Para maximización, una solución es óptima si todos los costos reducidos son ≥ 0. Respuesta: SI.'
+                                    : 'Aún existen costos reducidos negativos, por lo que es posible mejorar el valor de Z. Respuesta: NO.',
+                                })
+                              }
+                              className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800"
+                            >
+                              Es óptima? <span className="font-semibold">{resultado.estado === 'optimo' ? 'SI' : 'NO'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExplicacionModal({
+                                  titulo: '¿Por qué entra esta variable?',
+                                  texto: `En maximización entra la variable no básica con el costo reducido más negativo. Entra ${String(t.variables[t.columnaEntrante!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1_$2')}.`,
+                                })
+                              }
+                              className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800"
+                            >
+                              Entra {String(t.variables[t.columnaEntrante!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1_$2')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExplicacionModal({
+                                  titulo: '¿Por qué sale esta variable?',
+                                  texto: `Se aplica la prueba de la razón mínima: razón = RHS / a_{ij} con a_{ij} > 0. Sale la variable de la fila con la menor razón no negativa para mantener la factibilidad. Sale ${String(t.basica[t.filaSaliente!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1_$2')}.`,
+                                })
+                              }
+                              className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800"
+                            >
+                              Sale {String(t.basica[t.filaSaliente!]).replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1_$2')}
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     ))
                   : resultado.revisado.map((it) => (
@@ -994,6 +1049,21 @@ export default function SimplexPage() {
 
         </section>
       </div>
+
+      {explicacionModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+          <div className="max-w-lg w-full rounded-lg bg-white p-5 shadow-xl dark:bg-gray-900">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="font-semibold text-slate-800 dark:text-gray-100">{explicacionModal.titulo}</h3>
+              <button onClick={() => setExplicacionModal(null)} className="text-slate-500 hover:text-slate-700 dark:text-gray-400">×</button>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-gray-300">{explicacionModal.texto}</p>
+            <div className="mt-4 text-right">
+              <button onClick={() => setExplicacionModal(null)} className="rounded border px-3 py-1 text-sm">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {modalProblema ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
