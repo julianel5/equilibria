@@ -11,6 +11,7 @@ import TeoriaDecisionesPage from './pages/TeoriaDecisionesPage';
 import TeoriaColasPage from './pages/TeoriaColasPage';
 import MetodoGraficoPage from './pages/MetodoGraficoPage';
 import SimplexPage from './pages/SimplexPage';
+import PenalizacionPage from './pages/PenalizacionPage';
 import ThemeToggle from './components/ThemeToggle';
 import { ThemeProvider } from './hooks/useTheme';
 
@@ -26,6 +27,7 @@ const TITULOS: Record<string, string> = {
   '/stochastic/teoria-colas': 'Teoría de Colas - Equilibria',
   '/pl/metodo-grafico': 'Método Gráfico - Equilibria',
   '/pl/simplex': 'Método Simplex - Equilibria',
+  '/pl/penalizacion': 'Penalización / Gran M - Equilibria',
 };
 
 type LinkNav = { nombre: string; ruta: string };
@@ -47,6 +49,7 @@ const NAV_GRUPOS: GrupoNav[] = [
     links: [
       { nombre: 'Mét. Gráfico', ruta: '/pl/metodo-grafico' },
       { nombre: 'Simplex', ruta: '/pl/simplex' },
+      { nombre: 'Penalización / Gran M', ruta: '/pl/penalizacion' },
     ],
   },
   {
@@ -290,6 +293,7 @@ export default function App() {
             <Route path="/stochastic/teoria-colas" element={<TeoriaColasPage />} />
             <Route path="/pl/metodo-grafico" element={<MetodoGraficoPage />} />
             <Route path="/pl/simplex" element={<SimplexPage />} />
+            <Route path="/pl/penalizacion" element={<PenalizacionPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
