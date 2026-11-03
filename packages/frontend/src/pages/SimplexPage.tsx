@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   calcularSimplex,
   ApiError,
@@ -385,6 +386,7 @@ export default function SimplexPage() {
   const [modalProblema, setModalProblema] = useState<ProblemaTipico | null>(null);
   const [explicacionModal, setExplicacionModal] = useState<{ titulo: string; texto: string } | null>(null);
   const versionAuto = useRef(0);
+  const location = useLocation();
 
   const numVariables = useMemo(() => {
     const v = Number.parseInt(n, 10);
@@ -509,7 +511,7 @@ export default function SimplexPage() {
 
   const cabecera = (
     <header>
-      <h1 className="text-2xl font-bold text-slate-800  dark:text-gray-100">Método Simplex</h1>
+      <h1 className="text-2xl font-bold text-slate-800 dark:text-gray-100">{location.pathname === '/pl/penalizacion' ? 'Método de Penalización (Gran M)' : 'Método Simplex'}</h1>
       <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
         Programación Lineal en forma estándar: Simplex Tabular y Revisado con fracciones exactas.
       </p>
@@ -575,8 +577,8 @@ export default function SimplexPage() {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-lg font-semibold text-slate-700  dark:text-gray-100">Configuración del problema</h2>
-              <p className="text-sm text-slate-400  dark:text-gray-500">
-                Soporta ≤, ≥, = con b ≥ 0 (Gran M / Penalización).
+              <p className="text-sm text-slate-400 dark:text-gray-500">
+                {location.pathname === '/pl/penalizacion' ? 'Método de Gran M para restricciones ≥, = con variables artificiales.' : 'Soporta ≤, ≥, = con b ≥ 0 (Gran M / Penalización).'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -776,12 +778,12 @@ export default function SimplexPage() {
               className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm  dark:border-amber-800 dark:bg-amber-500/10"
             >
               <p className="font-bold text-amber-700  dark:text-amber-400">
-                Restricciones ≥ o = → Dos Fases / Penalización
+                Restricciones ≥ o = → Gran M / Penalización
               </p>
               <p className="mt-1 text-amber-700  dark:text-amber-300">
                 Este módulo resuelve la forma estándar (solo ≤ con b ≥ 0). Las restricciones de tipo
                 ≥ o = requieren una base artificial, que se trata en el módulo{' '}
-                <strong>Dos Fases / Penalización</strong>. Ajusta el operador para continuar.
+                <strong>Gran M / Penalización</strong>. Ahora soportado.
               </p>
             </div>
           ) : null}
@@ -824,12 +826,11 @@ export default function SimplexPage() {
           {hayDobleFase ? (
             <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-amber-400 bg-white p-8 text-center shadow-md  dark:border-gray-700 dark:bg-gray-800">
               <p className="text-3xl">🛠️</p>
-              <p className="text-lg font-semibold text-slate-700  dark:text-gray-100">
-                Dos Fases / Penalización
+              <p className="text-lg font-semibold text-slate-700 dark:text-gray-100">
+                Gran M / Penalización
               </p>
-              <p className="max-w-sm text-sm text-slate-500  dark:text-gray-400">
-                El simplex en forma estándar no puede iniciar sin una base factible de holguras.
-                Usa solo restricciones ≤ con b ≥ 0.
+              <p className="max-w-sm text-sm text-slate-500 dark:text-gray-400">
+                Para restricciones ≥ o = con b ≥ 0 se añaden variables artificiales (Gran M). Asegúrate de tener una base factible.
               </p>
             </div>
           ) : null}
