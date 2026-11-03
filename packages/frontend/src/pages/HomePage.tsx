@@ -108,23 +108,20 @@ export default function HomePage() {
             </div>
           </NavLink>
 
-          <div
-            aria-disabled="true"
-            className="relative rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5  dark:border-gray-700 dark:bg-gray-900"
+          <NavLink
+            to="/pl/simplex"
+            className="rounded-lg border border-amber-200 bg-white p-5 shadow-md  hover:scale-[1.02] dark:border-amber-900 dark:bg-gray-800"
           >
-            <span className="absolute right-3 top-3 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500  dark:bg-gray-700 dark:text-gray-400">
-              Próximamente
-            </span>
-            <p className="text-base font-bold text-slate-400  dark:text-gray-500">
-              Penalización y Dos Fases (Charnes)
+            <p className="text-base font-bold text-amber-600  dark:text-amber-400">
+              Penalización (Gran M) y Dos Fases
             </p>
-            <p className="mt-1 text-sm text-slate-400  dark:text-gray-500">
-              Variables artificiales y solución inicial factible.
+            <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
+              Variables artificiales para ≥ y =. Soportado en el módulo Simplex.
             </p>
-            <div className="mt-3 rounded-md bg-slate-100 px-3 py-2 text-slate-400  dark:bg-gray-800 dark:text-gray-400">
+            <div className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-slate-600  dark:bg-amber-500/20 dark:text-amber-300">
               <Formula tex="\max Z = cX - M \sum R_i" />
             </div>
-          </div>
+          </NavLink>
 
           <div
             aria-disabled="true"
