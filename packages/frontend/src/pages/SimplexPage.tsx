@@ -1437,16 +1437,45 @@ export default function SimplexPage() {
                 <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-100">{modalProblema.nombre}</h3>
                 <p className="mt-1 text-sm text-slate-500 dark:text-gray-400">{modalProblema.descripcion}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setModalProblema(null)}
-                className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
-                aria-label="Cerrar"
-              >
-                <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
-                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const idx = PROBLEMAS_TIPICOS.findIndex((p) => p.id === modalProblema.id);
+                    const prev = PROBLEMAS_TIPICOS[(idx - 1 + PROBLEMAS_TIPICOS.length) % PROBLEMAS_TIPICOS.length];
+                    setModalProblema(prev);
+                  }}
+                  className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                  aria-label="Problema anterior"
+                >
+                  ←
+                </button>
+                <span className="text-xs text-slate-400 dark:text-gray-500">
+                  {PROBLEMAS_TIPICOS.findIndex((p) => p.id === modalProblema.id) + 1}/{PROBLEMAS_TIPICOS.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const idx = PROBLEMAS_TIPICOS.findIndex((p) => p.id === modalProblema.id);
+                    const next = PROBLEMAS_TIPICOS[(idx + 1) % PROBLEMAS_TIPICOS.length];
+                    setModalProblema(next);
+                  }}
+                  className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                  aria-label="Problema siguiente"
+                >
+                  →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalProblema(null)}
+                  className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                  aria-label="Cerrar"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+                    <path d="M6.28 5.22a.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75 0 001.06 1.06L10 11.06l3.72 3.72a.75 0 001.06-1.06L11.06 10l3.72-3.72a.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                  </svg>
+                </button>
+              </div>
             </div>
             <div className="space-y-4 p-5">
               <div>
