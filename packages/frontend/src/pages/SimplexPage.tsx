@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   calcularSimplex,
   ApiError,
@@ -243,14 +243,18 @@ interface AnalisisOptimalidad {
 
 /** Mismo criterio que el motor: MAX → óptimo si todo Z_j − C_j ≥ 0; MIN → si todo Z_j − C_j ≤ 0. */
 function analizarOptimalidad(t: TablaTabularDTO, objetivo: ObjetivoSimplex): AnalisisOptimalidad {
+  // En Gran M el motor convierte el problema a MAX internamente (negando coeficientes
+  // para MIN), por lo que el criterio siempre es MAX (Z_j - C_j >= 0).
+  const esGranM = t.variables.some((v) => v.startsWith('R_') || v.startsWith('R{'));
+  const usarMax = esGranM ? true : objetivo === 'max';
   const violan = t.reducidos.flatMap((f, j) => {
     const s = signoFrac(f);
-    return (objetivo === 'max' ? s < 0 : s > 0) ? [j] : [];
+    return (usarMax ? s < 0 : s > 0) ? [j] : [];
   });
   let mejor: number | null = null;
   for (const j of violan) {
     const v = fracVal(t.reducidos[j]);
-    if (mejor === null || (objetivo === 'max' ? v < fracVal(t.reducidos[mejor]) : v > fracVal(t.reducidos[mejor]))) {
+    if (mejor === null || (usarMax ? v < fracVal(t.reducidos[mejor]) : v > fracVal(t.reducidos[mejor]))) {
       mejor = j;
     }
   }
@@ -346,14 +350,16 @@ function ExplicacionOptima({
   objetivo: ObjetivoSimplex;
   noAcotado: boolean;
 }) {
+  const esGranM = t.variables.some((v) => v.startsWith('R_') || v.startsWith('R{'));
+  const usarMax = esGranM ? true : objetivo === 'max';
   const { violan, mejor, optima } = analizarOptimalidad(t, objetivo);
-  const condicion = objetivo === 'max' ? 'Z_j - C_j \\ge 0' : 'Z_j - C_j \\le 0';
+  const condicion = usarMax ? 'Z_j - C_j \\ge 0' : 'Z_j - C_j \\le 0';
   return (
     <div className="space-y-3 text-sm text-slate-600 dark:text-gray-300">
       <p>
-        Criterio de optimalidad ({objetivo === 'max' ? 'maximización' : 'minimización'}): la tabla es óptima si para
+        Criterio de optimalidad ({usarMax ? 'maximización' : 'minimización'}): la tabla es óptima si para
         toda variable <Formula tex={condicion} />. Un valor{' '}
-        {objetivo === 'max' ? 'negativo' : 'positivo'} indica que esa variable, al entrar, todavía mejora Z.
+        {usarMax ? 'negativo' : 'positivo'} indica que esa variable, al entrar, todavía mejora Z.
       </p>
       <table className="w-full border-collapse text-sm">
         <thead>
@@ -695,6 +701,9 @@ export default function SimplexPage() {
   const [modalProblema, setModalProblema] = useState<ProblemaTipico | null>(null);
   const [explicacionModal, setExplicacionModal] = useState<{ tipo: TipoExplicacion; indice: number } | null>(null);
   const versionAuto = useRef(0);
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const transferredRef = useRef(false);
   const location = useLocation();
 
   const numVariables = useMemo(() => {
@@ -702,10 +711,39 @@ export default function SimplexPage() {
     return Number.isFinite(v) ? Math.min(Math.max(v, 1), 12) : 1;
   }, [n]);
 
-  const hayDobleFase = useMemo(() => false, [filas]);
+  const esGranM = location.pathname === '/pl/penalizacion';
+  const hayDobleFase = useMemo(
+    () => !esGranM && filas.some((r) => r.operador === 'GE' || r.operador === 'EQ'),
+    [filas, esGranM]
+  );
+
+  // Transfiere datos del formulario si vienen por query param (al saltar de Simplex a Gran M).
+  useEffect(() => {
+    const data = searchParams.get('data');
+    if (data) {
+      try {
+        const parsed = JSON.parse(atob(data));
+        if (parsed.metodo) setMetodo(parsed.metodo);
+        if (parsed.objetivo) setObjetivo(parsed.objetivo);
+        if (parsed.n) setN(String(parsed.n));
+        if (parsed.coefsObj) setCoefsObj(parsed.coefsObj);
+        if (parsed.filas) setFilas(parsed.filas);
+        transferredRef.current = true;
+        // Limpia el query param de la URL para no mostrar datos en la barra.
+        navigate(location.pathname, { replace: true });
+      } catch {
+        /* ignore */
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Mantiene los arreglos sincronizados con el número de variables elegido.
   useEffect(() => {
+    if (transferredRef.current) {
+      transferredRef.current = false;
+      return;
+    }
     setCoefsObj((prev) =>
       Array.from({ length: numVariables }, (_, j) => prev[j] ?? '0')
     );
@@ -778,6 +816,12 @@ export default function SimplexPage() {
   );
 
   const calcular = useCallback(async () => {
+    if (hayDobleFase) {
+      setResultado(null);
+      setErrors([]);
+      setCargando(false);
+      return;
+    }
     setCargando(true);
     setErrors([]);
     setExplicacionModal(null);
@@ -808,7 +852,7 @@ export default function SimplexPage() {
     } finally {
       setCargando(false);
     }
-  }, [construirPayload, coefsObj, filas]);
+  }, [construirPayload, coefsObj, filas, hayDobleFase]);
 
   useEffect(() => {
     void calcular();
@@ -899,13 +943,6 @@ export default function SimplexPage() {
                 className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20"
               >
                 Problemas típicos
-              </button>
-              <button
-                type="button"
-                onClick={() => aplicarProblemaTipico(PROBLEMAS_TIPICOS[0])}
-                className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20"
-              >
-                Auto-rellenar Agro-Tech
               </button>
             </div>
           </div>
@@ -1089,12 +1126,32 @@ export default function SimplexPage() {
               className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm  dark:border-amber-800 dark:bg-amber-500/10"
             >
               <p className="font-bold text-amber-700  dark:text-amber-400">
-                Restricciones ≥ o = → Gran M / Penalización
+                Restricciones ≥ o = → No resoluble con Simplex estándar
               </p>
               <p className="mt-1 text-amber-700  dark:text-amber-300">
-                Este módulo resuelve la forma estándar (solo ≤ con b ≥ 0). Las restricciones de tipo
-                ≥ o = requieren una base artificial, que se trata en el módulo{' '}
-                <strong>Gran M / Penalización</strong>. Ahora soportado.
+                El método Simplex estándar resuelve únicamente restricciones de tipo ≤ con b ≥ 0. Las
+                restricciones de tipo ≥ o = requieren variables artificiales (base artificial), que se
+                tratan con el método de <strong>Penalización (Gran M)</strong>. Para resolver este
+                problema, ve a la sección{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const data = btoa(
+                      JSON.stringify({
+                        metodo,
+                        objetivo,
+                        n,
+                        coefsObj,
+                        filas,
+                      })
+                    );
+                    navigate(`/pl/penalizacion?data=${encodeURIComponent(data)}`);
+                  }}
+                  className="font-semibold underline hover:text-amber-900 dark:hover:text-amber-100"
+                >
+                  Ir al Método de Penalización (Gran M)
+                </button>{' '}
+                donde puedes introducir el mismo modelo y obtener la solución.
               </p>
             </div>
           ) : null}
@@ -1323,6 +1380,58 @@ export default function SimplexPage() {
               </p>
             </>
           ) : null}
+          {(() => {
+            const esGranM = filas.some((r) => r.operador === 'GE' || r.operador === 'EQ');
+            if (!esGranM) return null;
+            return (
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900/50 dark:bg-blue-950/20">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-gray-100">
+                  Problema estandarizado (forma canónica con Gran M)
+                </h3>
+                <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">
+                  Restricciones ≤ suman holgura Sᵢ; restricciones ≥ restan exceso Eᵢ y suman artificial Rᵢ;
+                  restricciones = suman artificial Rᵢ. Las artificiales llevan penalización ∓M en Z.
+                </p>
+                <div className="mt-2 space-y-1 text-sm text-slate-700 dark:text-gray-200">
+                  <div>
+                    <Formula
+                      tex={`${objetivo === 'max' ? '\\max' : '\\min'} Z = ${coefsObj
+                        .map((c, j) => `${c}X_${j + 1}`)
+                        .join(' + ')}${filas
+                        .map((r, i) => {
+                          if (r.operador === 'LE') return ` + 0S_${i + 1}`;
+                          if (r.operador === 'GE') return ` + 0E_${i + 1} ${objetivo === 'max' ? '-' : '+'} M R_${i + 1}`;
+                          return ` ${objetivo === 'max' ? '-' : '+'} M R_${i + 1}`;
+                        })
+                        .join('')}`}
+                    />
+                  </div>
+                  {filas.map((r, i) => {
+                    const coefStr = r.coeficientes.map((c, j) => `${c}X_${j + 1}`).join(' + ');
+                    if (r.operador === 'LE') {
+                      return (
+                        <div key={i}>
+                          <Formula tex={`${coefStr} + S_${i + 1} = ${r.b}`} />
+                        </div>
+                      );
+                    }
+                    if (r.operador === 'GE') {
+                      return (
+                        <div key={i}>
+                          <Formula tex={`${coefStr} - E_${i + 1} + R_${i + 1} = ${r.b}`} />
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={i}>
+                        <Formula tex={`${coefStr} + R_${i + 1} = ${r.b}`} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
           {(() => {
             const esMax = objetivo === 'max';
             const todasLE = filas.length > 0 && filas.every((f) => f.operador === 'LE');

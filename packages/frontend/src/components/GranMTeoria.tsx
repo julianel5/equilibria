@@ -114,7 +114,7 @@ export default function GranMTeoria() {
           <div className="text-slate-800  dark:text-slate-100">
             <Formula
               tex={
-                '\\text{opt } Z = \\sum_{j=1}^{n} c_j x_j \\pm M \\sum_{i=1}^{k} R_i \\quad \\text{s.a. } \\sum_{j=1}^{n} a_{ij}x_j \\, \{\\geq, = \\} b_i, \\; x_j \\geq 0, \\; R_i \\geq 0'
+                '\\text{opt } Z = \\sum_{j=1}^{n} c_j x_j \\pm M \\sum_{i=1}^{k} R_i \\quad \\text{s.a. } \\sum_{j=1}^{n} a_{ij}x_j \\geq b_i \\text{ (o } =\\text{)}, \\; x_j \\geq 0, \\; R_i \\geq 0'
               }
               display
             />
