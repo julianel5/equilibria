@@ -64,6 +64,21 @@ Los dos fertilizantes que la Agro-Tech fabrica son las mezclas denominadas 5-5-1
       { coeficientes: ['0.1', '0.05'], operador: 'LE', b: '2000' },
     ],
   },
+  {
+    id: 'mc-camisetas',
+    nombre: 'MC (Camisetas)',
+    descripcion: 'Producción de camisetas colegiales y empresariales con restricciones de tiempo, pedido especial y producción mínima.',
+    contexto: `MC confecciona dos tipos de camisetas en cada período de producción: Colegiales y Empresariales. El costo de producción de cada camiseta colegial es de $2 y de cada camiseta empresarial es de $3. Para confeccionar las camisetas hay disponibles 600 horas durante el período de producción, advirtiendo que el procesamiento de cada camiseta colegial es 2 horas y cada camiseta empresarial una hora. Se debe cumplir con un pedido especial para un cliente durante el período de producción de al menos 125 camisetas colegiales y la producción total de ambos tipos de camisetas debe ser como mínimo de 350 unidades.`,
+    objetivo: 'min',
+    metodo: 'tabular',
+    variables: ['X1', 'X2'],
+    coeficientesObjetivo: ['2', '3'],
+    restricciones: [
+      { coeficientes: ['2', '1'], operador: 'LE', b: '600' },
+      { coeficientes: ['1', '0'], operador: 'GE', b: '125' },
+      { coeficientes: ['1', '1'], operador: 'GE', b: '350' },
+    ],
+  },
 ];
 
 const inputBase =
