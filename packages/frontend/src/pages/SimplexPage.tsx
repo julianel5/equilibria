@@ -13,6 +13,7 @@ import {
   type TablaTabularDTO,
 } from '../services/api';
 import SimplexTeoria from '../components/SimplexTeoria';
+import GranMTeoria from '../components/GranMTeoria';
 import Formula from '@shared/components/Formula';
 import KpiCard from '@shared/components/KpiCard';
 import TabsPanel from '@shared/components/TabsPanel';
@@ -744,6 +745,7 @@ export default function SimplexPage() {
     setResultado(null);
     setErrors([]);
     setPestana('calculadora');
+    versionAuto.current += 1;
   };
 
   const construirPayload = useCallback(
@@ -822,7 +824,7 @@ export default function SimplexPage() {
           onCambio={(c) => setPestana(c as Pestana)}
           ariaLabel="Secciones del método simplex"
         />
-        <SimplexTeoria />
+        {location.pathname === '/pl/penalizacion' ? <GranMTeoria /> : <SimplexTeoria />}
       </div>
     );
   }
@@ -1110,7 +1112,7 @@ export default function SimplexPage() {
 
         {/* Resultados */}
         <section>
-          {!resultado && errors.length === 0 && !hayDobleFase ? (
+          {cargando && !resultado && errors.length === 0 && !hayDobleFase ? (
             <div className="mx-auto flex max-w-md flex-col items-center gap-2 rounded-lg border border-slate-200 bg-white p-8 text-center shadow-md  dark:border-gray-700 dark:bg-gray-800">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
               <p className="text-sm text-slate-500  dark:text-gray-400">Resolviendo el problema…</p>
@@ -1307,26 +1309,44 @@ export default function SimplexPage() {
             </>
           ) : null}
           {(() => {
-            if (objetivo === 'max' && coefsObj.length === 2 && filas.length === 3 && filas.every((f) => f.operador === 'LE')) {
-              const c1 = coefsObj[0];
-              const c2 = coefsObj[1];
-              const r = filas;
-              return (
-                <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900/50 dark:bg-blue-950/20">
-                  <h3 className="text-sm font-semibold text-slate-700 dark:text-gray-100">Problema estandarizado (forma canónica)</h3>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">
-                    Al convertir restricciones ≤ con b ≥ 0 se suman variables de holgura S1,S2,S3 con coeficiente 0 en Z.
-                  </p>
-                  <div className="mt-2 space-y-1 text-sm text-slate-700 dark:text-gray-200">
-                    <div><Formula tex={`\\max Z = ${c1}X_1 + ${c2}X_2 + 0S_1 + 0S_2 + 0S_3`} /></div>
-                    <div className="mt-1"><Formula tex={`${r[0].coeficientes[0]}X_1 + ${r[0].coeficientes[1]}X_2 + S_1 + 0S_2 + 0S_3 = ${r[0].b}`} /></div>
-                    <div><Formula tex={`${r[1].coeficientes[0]}X_1 + ${r[1].coeficientes[1]}X_2 + 0S_1 + S_2 + 0S_3 = ${r[1].b}`} /></div>
-                    <div><Formula tex={`${r[2].coeficientes[0]}X_1 + ${r[2].coeficientes[1]}X_2 + 0S_1 + 0S_2 + S_3 = ${r[2].b}`} /></div>
+            const esMax = objetivo === 'max';
+            const todasLE = filas.length > 0 && filas.every((f) => f.operador === 'LE');
+            if (!esMax || !todasLE) return null;
+            const m = filas.length;
+            const holguras = Array.from({ length: m }, (_, i) => `S_${i + 1}`);
+            return (
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900/50 dark:bg-blue-950/20">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-gray-100">
+                  Problema estandarizado (forma canónica)
+                </h3>
+                <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">
+                  Al convertir restricciones ≤ con b ≥ 0 se suman variables de holgura{' '}
+                  {holguras.join(', ')} con coeficiente 0 en Z.
+                </p>
+                <div className="mt-2 space-y-1 text-sm text-slate-700 dark:text-gray-200">
+                  <div>
+                    <Formula
+                      tex={`\\max Z = ${coefsObj
+                        .map((c, j) => `${c}X_${j + 1}`)
+                        .join(' + ')} + ${holguras
+                        .map((h) => `0${h}`)
+                        .join(' + ')}`}
+                    />
                   </div>
+                  {filas.map((r, i) => (
+                    <div key={i} className="mt-1">
+                      <Formula
+                        tex={`${r.coeficientes
+                          .map((c, j) => `${c}X_${j + 1}`)
+                          .join(' + ')} + ${holguras
+                          .map((h, k) => (k === i ? h : `0${h}`))
+                          .join(' + ')} = ${r.b}`}
+                      />
+                    </div>
+                  ))}
                 </div>
-              );
-            }
-            return null;
+              </div>
+            );
           })()}
 
         </section>
