@@ -16,6 +16,12 @@ export interface RazonSimplex {
   descartada: boolean;
 }
 
+/** Valor de la forma a + b·M con a, b fracciones exactas. */
+export interface TerminoM {
+  a: Frac;
+  b: Frac;
+}
+
 export interface IteracionTabular {
   iteracion: number;
   variables: string[];
@@ -24,6 +30,9 @@ export interface IteracionTabular {
   rhs: Frac[];
   reducidos: Frac[];
   z: Frac;
+  /** Gran M: costos reducidos y Z separados exactamente como a + b·M (null si no hay artificiales). */
+  reducidosM?: TerminoM[] | null;
+  zM?: TerminoM | null;
   columnaEntrante: number | null;
   filaSaliente: number | null;
   pivote: Frac | null;
@@ -300,6 +309,31 @@ function resolverTabular(
     reducidos[j] = zj.sub(costoVar(j));
   }
 
+  // Version simbolica (a + b·M) de los costos reducidos y Z, exacta.
+  const signoM = esMin ? Frac.UNO : Frac.UNO.neg();
+  const costoM = (name: string, j: number | null): TerminoM => {
+    if (name.startsWith("R_")) return { a: Frac.CERO, b: signoM };
+    if (j !== null && j < n) return { a: Frac.deDecimal(c[j]), b: Frac.CERO };
+    return { a: Frac.CERO, b: Frac.CERO };
+  };
+  let reducidosM: TerminoM[] = [];
+  for (let j = 0; j < tot; j++) {
+    let a = Frac.CERO;
+    let bm = Frac.CERO;
+    for (let i = 0; i < m; i++) {
+      const cb = costoM(basica[i], null);
+      a = a.add(cb.a.mul(filas[i][j]));
+      bm = bm.add(cb.b.mul(filas[i][j]));
+    }
+    const cj = costoM(variables[j], j);
+    reducidosM.push({ a: a.sub(cj.a), b: bm.sub(cj.b) });
+  }
+  let zM: TerminoM = { a: Frac.CERO, b: Frac.CERO };
+  for (let i = 0; i < m; i++) {
+    const cb = costoM(basica[i], null);
+    zM = { a: zM.a.add(cb.a.mul(rhs[i])), b: zM.b.add(cb.b.mul(rhs[i])) };
+  }
+
   // Z inicial
   let z = Frac.CERO;
   for (let i = 0; i < m; i++) {
@@ -317,6 +351,8 @@ function resolverTabular(
     rhs: [...rhs],
     reducidos: [...reducidos],
     z,
+    reducidosM: tieneArtificial ? reducidosM.map((t) => ({ ...t })) : null,
+    zM: tieneArtificial ? { ...zM } : null,
     columnaEntrante: extra ? extra.e : null,
     filaSaliente: extra ? extra.sal : null,
     pivote: extra ? extra.pivote : null,
@@ -353,6 +389,9 @@ function resolverTabular(
     );
     reducidos = reducidos.map((v, j) => v.sub(np[j].mul(coefObj)));
     z = z.sub(npRhs.mul(coefObj));
+    const coefM = reducidosM[e];
+    reducidosM = reducidosM.map((t, j) => ({ a: t.a.sub(np[j].mul(coefM.a)), b: t.b.sub(np[j].mul(coefM.b)) }));
+    zM = { a: zM.a.sub(npRhs.mul(coefM.a)), b: zM.b.sub(npRhs.mul(coefM.b)) };
 
     basica[r] = variables[e];
     indices[r] = e;
@@ -392,25 +431,42 @@ function resolverRevisado(
   c: number[],
   A: number[][],
   b: number[],
-  objetivo: ObjetivoSimplex
+  objetivo: ObjetivoSimplex,
+  tipos?: Array<'LE' | 'GE' | 'EQ'>
 ): { estado: 'optimo' | 'no-acotado'; revisado: IteracionRevisada[]; basicaFinal: string[]; solucion: Frac[]; z: Frac; indices: number[] } {
   const n = c.length;
   const m = A.length;
-  const tot = n + m;
-  const variables = nombresVariables(n, m);
+  const tList = tipos || Array.from({ length: m }, () => 'LE' as const);
+  const variables = nombresVariables(n, m, tList);
+  const tot = variables.length;
 
-  const cFrac = [...c.map((v) => Frac.deDecimal(v)), ...new Array<Frac>(m).fill(Frac.CERO)];
-  const ACompleta: Frac[][] = Array.from({ length: m }, (_, i) => {
-    const fil = new Array<Frac>(tot).fill(Frac.CERO);
-    for (let j = 0; j < n; j++) fil[j] = Frac.deDecimal(A[i][j]);
-    fil[n + i] = Frac.UNO;
-    return fil;
+  // Misma forma estándar que el tabular: ≤ suma holgura S_i; ≥ resta exceso
+  // E_i y suma artificial R_i; = suma artificial R_i. Las artificiales llevan
+  // costo -M (MAX) o +M (MIN) y forman la base inicial junto a las holguras.
+  const M = Frac.deDecimal(1000000);
+  const costoArtificial = objetivo === 'min' ? M : M.neg();
+  const cFrac: Frac[] = variables.map((name, j) => {
+    if (j < n) return Frac.deDecimal(c[j]);
+    return name.startsWith('R_') ? costoArtificial : Frac.CERO;
   });
-  const bFrac = b.map((v) => Frac.deDecimal(v));
-
+  const ACompleta: Frac[][] = Array.from({ length: m }, () => new Array<Frac>(tot).fill(Frac.CERO));
   const indices: number[] = [];
-  for (let i = 0; i < m; i++) indices.push(n + i);
-  const basica = variables.slice(n);
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < n; j++) ACompleta[i][j] = Frac.deDecimal(A[i][j]);
+    const t = tList[i];
+    if (t === 'LE') {
+      const idx = variables.indexOf('S_{' + (i + 1) + '}');
+      ACompleta[i][idx] = Frac.UNO;
+      indices.push(idx);
+    } else {
+      if (t === 'GE') ACompleta[i][variables.indexOf('E_{' + (i + 1) + '}')] = Frac.UNO.neg();
+      const idxR = variables.indexOf('R_{' + (i + 1) + '}');
+      ACompleta[i][idxR] = Frac.UNO;
+      indices.push(idxR);
+    }
+  }
+  const bFrac = b.map((v) => Frac.deDecimal(v));
+  const basica = indices.map((j) => variables[j]);
 
   const revisado: IteracionRevisada[] = [];
 
@@ -459,6 +515,8 @@ function resolverRevisado(
     let mejorValor: Frac | null = null;
     for (let j = 0; j < tot; j++) {
       if (indices.includes(j)) continue;
+      // Una artificial que salió de la base no vuelve a entrar (igual que en el tabular).
+      if (variables[j].startsWith('R_')) continue;
       const cr = prev.costosReducidos[j].cr;
       if (cr.esCero) continue;
       if (objetivo === 'max' ? cr.esPositivo : cr.esNegativo) {
@@ -542,7 +600,7 @@ export function calcularSimplexCore(
   const variables = nombresVariables(n, m, tipos);
 
   const tabular = resolverTabular(c, A, b, objetivo, tipos);
-  const revisado = resolverRevisado(c, A, b, objetivo);
+  const revisado = resolverRevisado(c, A, b, objetivo, tipos);
 
   // Tabular y revisado deben coincidir (misma base final y mismo Z).
   const solucion = metodo === 'revisado' ? revisado.solucion : tabular.solucion;

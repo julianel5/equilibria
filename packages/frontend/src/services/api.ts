@@ -437,6 +437,11 @@ export interface RazonTabularDTO {
   descartada: boolean;
 }
 
+export interface TerminoMDTO {
+  a: FraccionJSON;
+  b: FraccionJSON;
+}
+
 export interface TablaTabularDTO {
   iteracion: number;
   variables: string[];
@@ -445,6 +450,9 @@ export interface TablaTabularDTO {
   rhs: FraccionJSON[];
   reducidos: FraccionJSON[];
   z: FraccionJSON;
+  /** Gran M: a + b·M exactos para Z_j - C_j y Z (null sin artificiales). */
+  reducidosM?: TerminoMDTO[] | null;
+  zM?: TerminoMDTO | null;
   columnaEntrante: number | null;
   filaSaliente: number | null;
   pivote: FraccionJSON | null;

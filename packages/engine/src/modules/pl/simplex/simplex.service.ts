@@ -69,6 +69,11 @@ export interface RazonDTO {
   descartada: boolean;
 }
 
+export interface TerminoMDTO {
+  a: FraccionJSON;
+  b: FraccionJSON;
+}
+
 export interface TablaTabularDTO {
   iteracion: number;
   variables: string[];
@@ -77,6 +82,9 @@ export interface TablaTabularDTO {
   rhs: FraccionJSON[];
   reducidos: FraccionJSON[];
   z: FraccionJSON;
+  /** Gran M: a + b·M exactos para Z_j - C_j y Z (null sin artificiales). */
+  reducidosM: TerminoMDTO[] | null;
+  zM: TerminoMDTO | null;
   columnaEntrante: number | null;
   filaSaliente: number | null;
   pivote: FraccionJSON | null;
@@ -172,6 +180,8 @@ function tablaDTO(t: IteracionTabular): TablaTabularDTO {
     rhs: t.rhs.map(ff),
     reducidos: t.reducidos.map(ff),
     z: ff(t.z),
+    reducidosM: t.reducidosM ? t.reducidosM.map((x) => ({ a: ff(x.a), b: ff(x.b) })) : null,
+    zM: t.zM ? { a: ff(t.zM.a), b: ff(t.zM.b) } : null,
     columnaEntrante: t.columnaEntrante,
     filaSaliente: t.filaSaliente,
     pivote: t.pivote ? ff(t.pivote) : null,
