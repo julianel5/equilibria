@@ -4,6 +4,7 @@ import {
   calcularSimplex,
   ApiError,
   type FraccionJSON,
+  type TerminoMDTO,
   type IteracionRevisadaDTO,
   type MetodoSimplex,
   type ObjetivoSimplex,
@@ -157,7 +158,7 @@ function TablaTabular({ t, entra, sale, algebraico = false }: { t: TablaTabularD
                         : 'text-slate-700 dark:text-gray-200'
                     }`}
                   >
-                    <Formula tex={formatearM(fracVal(f), algebraico, f.tex)} />
+                    <Formula tex={f.tex} />
                   </td>
                 );
               })}
@@ -165,7 +166,7 @@ function TablaTabular({ t, entra, sale, algebraico = false }: { t: TablaTabularD
                 title={`${t.rhs[i].num}/${t.rhs[i].den}`}
                 className="border border-slate-300 px-2 py-1.5 text-center font-medium tabular-nums text-slate-800  dark:border-gray-600 dark:text-gray-100"
               >
-                <Formula tex={formatearM(fracVal(t.rhs[i]), algebraico, t.rhs[i].tex)} />
+                <Formula tex={t.rhs[i].tex} />
               </td>
             </tr>
           ))}
@@ -181,14 +182,14 @@ function TablaTabular({ t, entra, sale, algebraico = false }: { t: TablaTabularD
                   j === entra ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-gray-200'
                 }`}
               >
-                <Formula tex={formatearM(fracVal(f), algebraico, f.tex)} />
+                <Formula tex={algebraico ? formatearM(f, t.reducidosM?.[j]) : f.tex} />
               </td>
             ))}
             <td
               title={`${t.z.num}/${t.z.den}`}
               className="border border-slate-300 px-2 py-1.5 text-center font-bold tabular-nums text-slate-800  dark:border-gray-600 dark:text-gray-100"
             >
-              <Formula tex={formatearM(fracVal(t.z), algebraico, t.z.tex)} />
+              <Formula tex={algebraico ? formatearM(t.z, t.zM) : t.z.tex} />
             </td>
           </tr>
         </tbody>
@@ -217,30 +218,26 @@ function ratioTexto(r: RazonTabularDTO): React.ReactNode {
 type TipoExplicacion = 'factible' | 'optima' | 'entra' | 'sale';
 
 const esArtificial = (v: string): boolean => v.startsWith('R_');
-const M_CONST = 1000000;
-function formatearM(valor: number, algebraico: boolean, originalTex: string): string {
-  if (!algebraico) return originalTex;
-  const k = Math.trunc(valor / M_CONST);
-  const r = valor - k * M_CONST;
-  const terms: string[] = [];
-  if (r !== 0) terms.push(String(r));
-  if (k !== 0) {
-    let mTerm: string;
-    if (k === 1) mTerm = 'M';
-    else if (k === -1) mTerm = '-M';
-    else mTerm = `${k}M`;
-    terms.push(mTerm);
+/**
+ * Muestra un valor de Gran M como a + bM con fracciones exactas, usando la
+ * descomposición simbólica que calcula el motor. Si no está disponible,
+ * muestra el valor exacto original.
+ */
+function formatearM(original: FraccionJSON, termino: TerminoMDTO | null | undefined): string {
+  if (!termino) return original.tex;
+  const { a, b } = termino;
+  const aCero = a.num === '0';
+  const bCero = b.num === '0';
+  if (aCero && bCero) return '0';
+  let mTex = '';
+  if (!bCero) {
+    if (b.num === '1' && b.den === '1') mTex = 'M';
+    else if (b.num === '-1' && b.den === '1') mTex = '-M';
+    else mTex = `${b.tex}M`;
   }
-  if (terms.length === 0) return '0';
-  let result = terms[0];
-  for (let i = 1; i < terms.length; i++) {
-    if (terms[i].startsWith('-')) {
-      result += ` ${terms[i]}`;
-    } else {
-      result += ` + ${terms[i]}`;
-    }
-  }
-  return result;
+  if (bCero) return a.tex;
+  if (aCero) return mTex;
+  return mTex.startsWith('-') ? `${a.tex} ${mTex}` : `${a.tex} + ${mTex}`;
 }
 const signoFrac = (f: FraccionJSON): number => Math.sign(fracVal(f));
 
@@ -572,7 +569,7 @@ function IteracionRevisada({ it, objetivo }: { it: IteracionRevisadaDTO; objetiv
           </span>
         ) : (
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500  dark:bg-gray-700 dark:text-gray-400">
-            Base inicial (holguras)
+            {it.basica.some(esArtificial) ? 'Base inicial (holguras y artificiales)' : 'Base inicial (holguras)'}
           </span>
         )}
       </div>
