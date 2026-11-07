@@ -245,16 +245,8 @@ function resolverTabular(
   const tList = tipos || Array.from({ length: m }, () => 'LE' as const);
   const tieneArtificial = tList.some((t) => t === 'GE' || t === 'EQ');
   const esMin = objetivo === 'min';
-  // Para problemas con variables artificiales, convertir a MAX para usar el método Big M correctamente
-  const usarMax = tieneArtificial ? true : objetivo === 'max';
-  const cConv = tieneArtificial && esMin ? c.map((x) => -x) : esMin && !tieneArtificial ? c.map((x) => -x) : c;
   const variables = nombresVariables(n, m, tList);
   const tot = variables.length;
-
-  let sOff = 0;
-  for (let i = 0; i < m; i++) if (tList[i] === 'LE') sOff++;
-  let geOff = 0;
-  for (let i = 0; i < m; i++) if (tList[i] === 'GE') geOff++;
 
   let filas: Frac[][] = Array.from({ length: m }, () => Array.from({ length: tot }, () => Frac.CERO));
   const basica: string[] = [];
@@ -264,25 +256,23 @@ function resolverTabular(
     const t = tList[i];
     for (let j = 0; j < n; j++) filas[i][j] = Frac.deDecimal(A[i][j]);
     if (t === 'LE') {
-      let k = 0;
-      for (let x = 0; x < i; x++) if (tList[x] === 'LE') k++;
-      const idx = n + k;
+      const name = "S_{" + (i + 1) + "}";
+      const idx = variables.indexOf(name);
       filas[i][idx] = Frac.UNO;
       basica.push(variables[idx]);
       indices.push(idx);
     } else if (t === 'GE') {
-      let k = 0;
-      for (let x = 0; x < i; x++) if (tList[x] === 'GE') k++;
-      const idxE = n + sOff + k * 2;
-      const idxR = n + sOff + k * 2 + 1;
+      const nameE = "E_{" + (i + 1) + "}";
+      const nameR = "R_{" + (i + 1) + "}";
+      const idxE = variables.indexOf(nameE);
+      const idxR = variables.indexOf(nameR);
       filas[i][idxE] = Frac.UNO.neg();
       filas[i][idxR] = Frac.UNO;
       basica.push(variables[idxR]);
       indices.push(idxR);
     } else if (t === 'EQ') {
-      let k = 0;
-      for (let x = 0; x < i; x++) if (tList[x] === 'EQ') k++;
-      const idxR = n + sOff + geOff * 2 + k;
+      const nameR = "R_{" + (i + 1) + "}";
+      const idxR = variables.indexOf(nameR);
       filas[i][idxR] = Frac.UNO;
       basica.push(variables[idxR]);
       indices.push(idxR);
@@ -291,67 +281,31 @@ function resolverTabular(
 
   let rhs = b.map((v) => Frac.deDecimal(v));
   const M = Frac.deDecimal(1000000);
+  // Costos de variables basicas: artificiales +/-M, slacks/exceso 0
+  const costoBasica = (name: string): Frac =>
+    name.startsWith("R_") ? (esMin ? M : M.neg()) : Frac.CERO;
+  // Costo en funcion objetivo original de cada variable (decisiones c_j; artificiales +/-M; holguras 0)
+  const costoVar = (j: number): Frac => {
+    if (j < n) return Frac.deDecimal(c[j]);
+    const name = variables[j];
+    if (name.startsWith("R_")) return esMin ? M : M.neg();
+    return Frac.CERO;
+  };
   let reducidos = new Array<Frac>(tot).fill(Frac.CERO);
-  // En forma canónica para MAX: Z - sum c_j x_j = 0 => reducidos[j] = -c_j para variables
-  if (tieneArtificial) {
-    for (let j = 0; j < n; j++) {
-      reducidos[j] = Frac.deDecimal(cConv[j]).neg();
+  for (let j = 0; j < tot; j++) {
+    let zj = Frac.CERO;
+    for (let i = 0; i < m; i++) {
+      zj = zj.add(costoBasica(basica[i]).mul(filas[i][j]));
     }
-  } else {
-    if (objetivo === 'max') {
-      for (let j = 0; j < n; j++) {
-        reducidos[j] = Frac.deDecimal(c[j]).neg();
-      }
-    } else {
-      for (let j = 0; j < n; j++) {
-        reducidos[j] = Frac.deDecimal(c[j]);
-      }
-    }
+    reducidos[j] = zj.sub(costoVar(j));
   }
-  // Penalizar artificiales (Método de la Gran M)
-  for (let i = 0; i < m; i++) {
-    const t = tList[i];
-    if (t === 'GE' || t === 'EQ') {
-      let rIdx = 0;
-      if (t === 'GE') {
-        let kg = 0;
-        for (let x = 0; x < i; x++) if (tList[x] === 'GE') kg++;
-        rIdx = n + sOff + kg * 2 + 1;
-      } else {
-        let keq = 0;
-        for (let x = 0; x < i; x++) if (tList[x] === 'EQ') keq++;
-        rIdx = n + sOff + geOff * 2 + keq;
-      }
-      reducidos[rIdx] = M;
-    }
-  }
-  // hacer ceros en fila Z para base
-  for (let i = 0; i < m; i++) {
-    const bi = indices[i];
-    const val = reducidos[bi];
-    if (!val.esCero) {
-      for (let j = 0; j < tot; j++) reducidos[j] = reducidos[j].sub(filas[i][j].mul(val));
-    }
-  }
+
+  // Z inicial
   let z = Frac.CERO;
   for (let i = 0; i < m; i++) {
-    const bi = indices[i];
-    let cbi = Frac.CERO;
-    if (bi < n) {
-      if (tieneArtificial) {
-        cbi = Frac.deDecimal(cConv[bi]);
-      } else {
-        cbi = Frac.deDecimal(c[bi]);
-      }
-    } else {
-      const v = variables[bi];
-      if (v.startsWith('R')) {
-        cbi = M.neg();
-      } else {
-        cbi = Frac.CERO;
-      }
-    }
-    z = z.add(cbi.mul(rhs[i]));
+    const ci = basica[i].startsWith("R_") ? (esMin ? M : M.neg()) : Frac.CERO;
+    // costos de variables basicas: artificiales +/-M, otras 0 (slacks/exceso) o c_j (decisiones no basicas no entran)
+    z = z.add(ci.mul(rhs[i]));
   }
 
   const tablas: IteracionTabular[] = [];
@@ -372,8 +326,8 @@ function resolverTabular(
 
   let estado: 'optimo' | 'no-acotado' = 'optimo';
   for (let iter = 1; iter <= LIMITE_ITERACIONES; iter++) {
-    const criterio = tieneArtificial ? 'max' : objetivo;
-    const e = columnaEntrante(reducidos, criterio);
+    // Criterio de entrada: MAX -> mas negativo; MIN -> mas positivo
+    const e = columnaEntranteDirigida(reducidos, esMin, variables);
     if (e === null) break;
 
     const { ratios, saliente } = pruebaRazon(filas, rhs, basica, e);
@@ -408,14 +362,30 @@ function resolverTabular(
   const solucion = new Array<Frac>(tot).fill(Frac.CERO);
   for (let i = 0; i < m; i++) solucion[indices[i]] = rhs[i];
 
-  if (tieneArtificial && esMin) {
-    z = z.neg();
-  } else if (!tieneArtificial && esMin) {
-    // Ya convertido a MAX, el z está en términos de -Z_min? No, si objetivo es min y sin artificiales
-    // usamos criterio min y reducidos = c_j, el z calculado es Z_min directamente
-  }
-
+  // Para MIN, z ya esta en terminos de Z_min (no conversion)
   return { estado, tablas, basicaFinal: [...basica], indices, solucion, z };
+}
+
+
+/** Selecciona columna entrante segun direccion: MAX -> mas negativo; MIN -> mas positivo. */
+function columnaEntranteDirigida(reducidos: Frac[], esMin: boolean, variables: string[]): number | null {
+  let mejor = -1;
+  let mejorValor: Frac | null = null;
+  for (let j = 0; j < reducidos.length; j++) {
+    if (variables[j] && variables[j].startsWith('R_')) continue;
+    const v = reducidos[j];
+    if (v.esCero) continue;
+    const entra = esMin ? v.esPositivo : v.esNegativo;
+    if (!entra) continue;
+    const mejorQueMejor =
+      mejor === -1 ||
+      (esMin ? v.cmp(mejorValor!) > 0 : v.cmp(mejorValor!) < 0);
+    if (mejorQueMejor) {
+      mejor = j;
+      mejorValor = v;
+    }
+  }
+  return mejor === -1 ? null : mejor;
 }
 
 function resolverRevisado(

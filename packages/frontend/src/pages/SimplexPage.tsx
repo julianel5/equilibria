@@ -117,7 +117,7 @@ function reconciliarFilas(filas: FilaRestriccion[], n: number): FilaRestriccion[
  * `entra`/`sale` marcan la decisión que se toma SOBRE esta tabla (columna
  * entrante y fila pivote), que el motor guarda en la tabla siguiente.
  */
-function TablaTabular({ t, entra, sale }: { t: TablaTabularDTO; entra: number | null; sale: number | null }) {
+function TablaTabular({ t, entra, sale, algebraico = false }: { t: TablaTabularDTO; entra: number | null; sale: number | null; algebraico?: boolean }) {
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full border-collapse text-sm">
@@ -157,7 +157,7 @@ function TablaTabular({ t, entra, sale }: { t: TablaTabularDTO; entra: number | 
                         : 'text-slate-700 dark:text-gray-200'
                     }`}
                   >
-                    <Formula tex={f.tex} />
+                    <Formula tex={formatearM(fracVal(f), algebraico, f.tex)} />
                   </td>
                 );
               })}
@@ -165,7 +165,7 @@ function TablaTabular({ t, entra, sale }: { t: TablaTabularDTO; entra: number | 
                 title={`${t.rhs[i].num}/${t.rhs[i].den}`}
                 className="border border-slate-300 px-2 py-1.5 text-center font-medium tabular-nums text-slate-800  dark:border-gray-600 dark:text-gray-100"
               >
-                <Formula tex={t.rhs[i].tex} />
+                <Formula tex={formatearM(fracVal(t.rhs[i]), algebraico, t.rhs[i].tex)} />
               </td>
             </tr>
           ))}
@@ -181,14 +181,14 @@ function TablaTabular({ t, entra, sale }: { t: TablaTabularDTO; entra: number | 
                   j === entra ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-gray-200'
                 }`}
               >
-                <Formula tex={f.tex} />
+                <Formula tex={formatearM(fracVal(f), algebraico, f.tex)} />
               </td>
             ))}
             <td
               title={`${t.z.num}/${t.z.den}`}
               className="border border-slate-300 px-2 py-1.5 text-center font-bold tabular-nums text-slate-800  dark:border-gray-600 dark:text-gray-100"
             >
-              <Formula tex={t.z.tex} />
+              <Formula tex={formatearM(fracVal(t.z), algebraico, t.z.tex)} />
             </td>
           </tr>
         </tbody>
@@ -217,6 +217,31 @@ function ratioTexto(r: RazonTabularDTO): React.ReactNode {
 type TipoExplicacion = 'factible' | 'optima' | 'entra' | 'sale';
 
 const esArtificial = (v: string): boolean => v.startsWith('R_');
+const M_CONST = 1000000;
+function formatearM(valor: number, algebraico: boolean, originalTex: string): string {
+  if (!algebraico) return originalTex;
+  const k = Math.trunc(valor / M_CONST);
+  const r = valor - k * M_CONST;
+  const terms: string[] = [];
+  if (r !== 0) terms.push(String(r));
+  if (k !== 0) {
+    let mTerm: string;
+    if (k === 1) mTerm = 'M';
+    else if (k === -1) mTerm = '-M';
+    else mTerm = `${k}M`;
+    terms.push(mTerm);
+  }
+  if (terms.length === 0) return '0';
+  let result = terms[0];
+  for (let i = 1; i < terms.length; i++) {
+    if (terms[i].startsWith('-')) {
+      result += ` ${terms[i]}`;
+    } else {
+      result += ` + ${terms[i]}`;
+    }
+  }
+  return result;
+}
 const signoFrac = (f: FraccionJSON): number => Math.sign(fracVal(f));
 
 interface AnalisisFactibilidad {
@@ -243,10 +268,7 @@ interface AnalisisOptimalidad {
 
 /** Mismo criterio que el motor: MAX → óptimo si todo Z_j − C_j ≥ 0; MIN → si todo Z_j − C_j ≤ 0. */
 function analizarOptimalidad(t: TablaTabularDTO, objetivo: ObjetivoSimplex): AnalisisOptimalidad {
-  // En Gran M el motor convierte el problema a MAX internamente (negando coeficientes
-  // para MIN), por lo que el criterio siempre es MAX (Z_j - C_j >= 0).
-  const esGranM = t.variables.some((v) => v.startsWith('R_') || v.startsWith('R{'));
-  const usarMax = esGranM ? true : objetivo === 'max';
+  const usarMax = objetivo === 'max';
   const violan = t.reducidos.flatMap((f, j) => {
     const s = signoFrac(f);
     return (usarMax ? s < 0 : s > 0) ? [j] : [];
@@ -350,16 +372,14 @@ function ExplicacionOptima({
   objetivo: ObjetivoSimplex;
   noAcotado: boolean;
 }) {
-  const esGranM = t.variables.some((v) => v.startsWith('R_') || v.startsWith('R{'));
-  const usarMax = esGranM ? true : objetivo === 'max';
   const { violan, mejor, optima } = analizarOptimalidad(t, objetivo);
-  const condicion = usarMax ? 'Z_j - C_j \\ge 0' : 'Z_j - C_j \\le 0';
+  const condicion = objetivo === 'max' ? 'Z_j - C_j \\ge 0' : 'Z_j - C_j \\le 0';
   return (
     <div className="space-y-3 text-sm text-slate-600 dark:text-gray-300">
       <p>
-        Criterio de optimalidad ({usarMax ? 'maximización' : 'minimización'}): la tabla es óptima si para
+        Criterio de optimalidad ({objetivo === 'max' ? 'maximización' : 'minimización'}): la tabla es óptima si para
         toda variable <Formula tex={condicion} />. Un valor{' '}
-        {usarMax ? 'negativo' : 'positivo'} indica que esa variable, al entrar, todavía mejora Z.
+        {objetivo === 'max' ? 'negativo' : 'positivo'} indica que esa variable, al entrar, todavía mejora Z.
       </p>
       <table className="w-full border-collapse text-sm">
         <thead>
@@ -700,6 +720,7 @@ export default function SimplexPage() {
   const [pestana, setPestana] = useState<Pestana>('calculadora');
   const [modalProblema, setModalProblema] = useState<ProblemaTipico | null>(null);
   const [explicacionModal, setExplicacionModal] = useState<{ tipo: TipoExplicacion; indice: number } | null>(null);
+  const [vistaAlgebraica, setVistaAlgebraica] = useState(false);
   const versionAuto = useRef(0);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -1269,6 +1290,24 @@ export default function SimplexPage() {
               </div>
 
               {/* Traza */}
+              {esGranM ? (
+                <div className="mb-3 mt-6 flex items-center gap-2">
+                  <label className="text-sm font-medium text-slate-600 dark:text-gray-300">
+                    Vista:
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setVistaAlgebraica((v) => !v)}
+                    className={`rounded-md border px-3 py-1 text-sm font-medium ${
+                      vistaAlgebraica
+                        ? 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300'
+                        : 'border-slate-300 bg-white text-slate-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200'
+                    }`}
+                  >
+                    {vistaAlgebraica ? 'Algebraica (M)' : 'Numerica (M=1.000.000)'}
+                  </button>
+                </div>
+              ) : null}
               <div className="mt-4 rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -1312,6 +1351,7 @@ export default function SimplexPage() {
                             t={t}
                             entra={decision?.columnaEntrante ?? null}
                             sale={decision && !noAcotado ? decision.filaSaliente : null}
+                            algebraico={esGranM && vistaAlgebraica}
                           />
                           {decision?.ratios ? (
                             <p className="text-xs text-slate-500 dark:text-gray-400">
