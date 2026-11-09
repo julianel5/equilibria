@@ -19,7 +19,7 @@ import { ajustarEtiquetas, codificarProblema, decodificarProblema } from '../dat
 import { EditorNombresVariables, InterpretacionSolucion, tieneNombres } from '../components/NombresVariables';
 import AvisoOptimosMultiples from '../components/AvisoOptimosMultiples';
 import Formula from '@shared/components/Formula';
-import { PROBLEMAS_TIPICOS, type ProblemaTipico } from '../data/problemasTipicos';
+import { PROBLEMAS_TIPICOS, requiereGranM, type ProblemaTipico } from '../data/problemasTipicos';
 import KpiCard from '@shared/components/KpiCard';
 import TabsPanel from '@shared/components/TabsPanel';
 import ProcesosView from '@shared/components/ProcesosView';
@@ -776,6 +776,19 @@ export default function SimplexPage() {
     ]);
 
   const eliminarFila = (id: string) => setFilas((prev) => prev.filter((r) => r.id !== id));
+
+  /** Lleva un problema típico con restricciones ≥ o = a la página de Gran M, ya cargado. */
+  const abrirEnGranM = (problema: ProblemaTipico) =>
+    navigate(
+      `/pl/penalizacion?data=${codificarProblema({
+        metodo: problema.metodo,
+        objetivo: problema.objetivo,
+        n: problema.variables.length,
+        coefsObj: problema.coeficientesObjetivo,
+        filas: problema.restricciones.map((r, idx) => ({ id: `r${idx + 1}`, operador: r.operador, b: r.b, coeficientes: r.coeficientes })),
+        etiquetas: problema.etiquetas,
+      })}`
+    );
 
   const aplicarProblemaTipico = (problema: ProblemaTipico) => {
     setMetodo(problema.metodo);
@@ -1606,6 +1619,15 @@ export default function SimplexPage() {
               <div>
                 <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-100">{modalProblema.nombre}</h3>
                 <p className="mt-1 text-sm text-slate-500 dark:text-gray-400">{modalProblema.descripcion}</p>
+                {requiereGranM(modalProblema) ? (
+                  <span className="mt-2 inline-block rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                    Requiere Gran M · tiene restricciones ≥ o =
+                  </span>
+                ) : (
+                  <span className="mt-2 inline-block rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
+                    Simplex o Gran M · solo restricciones ≤
+                  </span>
+                )}
               </div>
               <div className="flex shrink-0 items-center justify-end gap-2">
                 <button
@@ -1668,7 +1690,12 @@ export default function SimplexPage() {
                 </div>
               </div>
             </div>
-            <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+            <div className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+              {!esGranM && requiereGranM(modalProblema) ? (
+                <p className="mr-auto basis-full text-xs text-amber-700 sm:basis-auto dark:text-amber-300">
+                  El Simplex estándar solo resuelve restricciones ≤: este problema se abrirá en Gran M.
+                </p>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setModalProblema(null)}
@@ -1679,12 +1706,16 @@ export default function SimplexPage() {
               <button
                 type="button"
                 onClick={() => {
-                  aplicarProblemaTipico(modalProblema);
+                  if (!esGranM && requiereGranM(modalProblema)) {
+                    abrirEnGranM(modalProblema);
+                  } else {
+                    aplicarProblemaTipico(modalProblema);
+                  }
                   setModalProblema(null);
                 }}
                 className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
               >
-                Auto-rellenar en el formulario
+                {!esGranM && requiereGranM(modalProblema) ? 'Abrir en Gran M y auto-rellenar' : 'Auto-rellenar en el formulario'}
               </button>
             </div>
           </div>

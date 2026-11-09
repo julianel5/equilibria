@@ -18,6 +18,9 @@ export interface ProblemaTipico {
   restricciones: { coeficientes: string[]; operador: 'LE' | 'GE' | 'EQ'; b: string }[];
 }
 
+/** El problema tiene restricciones ≥ o =: necesita variables artificiales (Gran M). */
+export const requiereGranM = (p: ProblemaTipico): boolean => p.restricciones.some((r) => r.operador !== 'LE');
+
 export const PROBLEMAS_TIPICOS: ProblemaTipico[] = [
   {
     id: 'agro-tech',
