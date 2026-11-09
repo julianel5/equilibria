@@ -498,7 +498,7 @@ export interface SimplexResultado {
   objetivo: ObjetivoSimplex;
   n: number;
   m: number;
-  estado: 'optimo' | 'no-acotado';
+  estado: 'optimo' | 'no-acotado' | 'infactible';
   variables: string[];
   basicaFinal: string[];
   solucion: FraccionJSON[];

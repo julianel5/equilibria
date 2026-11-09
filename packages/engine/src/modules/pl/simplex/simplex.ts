@@ -74,7 +74,8 @@ export interface IteracionRevisada {
 }
 
 export interface ResultadoSimplexCore {
-  estado: 'optimo' | 'no-acotado';
+  /** 'infactible': el óptimo de Gran M conserva una artificial con valor > 0. */
+  estado: 'optimo' | 'no-acotado' | 'infactible';
   variables: string[];
   solucion: Frac[];
   holguras: Frac[];
@@ -604,7 +605,13 @@ export function calcularSimplexCore(
 
   // Tabular y revisado deben coincidir (misma base final y mismo Z).
   const solucion = metodo === 'revisado' ? revisado.solucion : tabular.solucion;
-  const estado = metodo === 'revisado' ? revisado.estado : tabular.estado;
+  let estado: ResultadoSimplexCore['estado'] = metodo === 'revisado' ? revisado.estado : tabular.estado;
+  // Gran M: si al terminar queda una artificial con valor positivo, ninguna
+  // solución cumple todas las restricciones (el "óptimo" solo minimiza la
+  // penalización M). Se reporta como infactible.
+  if (estado === 'optimo' && variables.some((v, j) => v.startsWith('R_') && solucion[j].esPositivo)) {
+    estado = 'infactible';
+  }
   const basicaFinal = metodo === 'revisado' ? revisado.basicaFinal : tabular.basicaFinal;
   const valorObjetivo = metodo === 'revisado' ? revisado.z : tabular.z;
 
