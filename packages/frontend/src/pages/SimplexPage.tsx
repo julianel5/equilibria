@@ -16,6 +16,7 @@ import {
 import SimplexTeoria from '../components/SimplexTeoria';
 import GranMTeoria from '../components/GranMTeoria';
 import Formula from '@shared/components/Formula';
+import { PROBLEMAS_TIPICOS, type ProblemaTipico } from '../data/problemasTipicos';
 import KpiCard from '@shared/components/KpiCard';
 import TabsPanel from '@shared/components/TabsPanel';
 import ProcesosView from '@shared/components/ProcesosView';
@@ -35,52 +36,21 @@ const PESTANAS: { clave: Pestana; etiqueta: string }[] = [
   { clave: 'teoria', etiqueta: 'Teoría y Supuestos' },
 ];
 
-interface ProblemaTipico {
-  id: string;
-  nombre: string;
-  descripcion: string;
-  contexto: string;
-  objetivo: ObjetivoSimplex;
-  metodo: MetodoSimplex;
-  variables: string[];
-  coeficientesObjetivo: string[];
-  restricciones: { coeficientes: string[]; operador: 'LE' | 'GE' | 'EQ'; b: string }[];
+const TEX_OPERADOR: Record<'LE' | 'GE' | 'EQ', string> = { LE: '\\le', GE: '\\ge', EQ: '=' };
+
+/** Combinación lineal en TeX: omite ceros y los 1, y escribe "- 2X_3" en vez de "+ -2X_3". */
+function texCombinacion(coeficientes: string[]): string {
+  const terminos = coeficientes
+    .map((c, j) => ({ v: Number(c), j }))
+    .filter(({ v }) => v !== 0)
+    .map(({ v, j }, k) => {
+      const abs = Math.abs(v);
+      const coef = abs === 1 ? '' : String(abs);
+      const signo = v < 0 ? (k === 0 ? '-' : '- ') : k === 0 ? '' : '+ ';
+      return `${signo}${coef}X_{${j + 1}}`;
+    });
+  return terminos.length ? terminos.join(' ') : '0';
 }
-
-const PROBLEMAS_TIPICOS: ProblemaTipico[] = [
-  {
-    id: 'agro-tech',
-    nombre: 'Agro-Tech (Fertilizantes)',
-    descripcion: 'Planificación de producción de fertilizantes 5-5-10 y 5-10-5',
-    contexto: `Tom Anderson, gerente de producción de la Agro-tech necesita planear la combinación de fertilizantes para el siguiente mes y no tiene claro cómo va a proceder para elaborar el plan. La Agro-Tech es una compañía pequeña de productos químicos que fabrica entre otros artículos dos tipos de fertilizante que se elaboran combinando ingredientes que se compran con proveedores externos. Cada mes, Tom tiene que planear la cantidad de cada fertilizante que debe producirse. Su plan debe tomar en consideración el costo de los ingredientes, el precio de venta de los fertilizantes, cualesquier pedido que deba surtirse y las restricciones impuestas al uso de los recursos de la compañía, mano de obra, materias primas o tiempo de máquina. El proceso de planeación para este mes es más difícil que lo normal. Por lo general la Agro-Tech fabrica fertilizantes de acuerdo con los pedidos de los clientes pero este mes los fertilizantes van a venderse a través de un mayorista. Esto complica las cosas porque Tom tiene que elaborar un programa de producción que conduzca a las mayores utilidades posibles para la Agro-Tech, al mismo tiempo que se utiliza sólo la cantidad de ingredientes que están disponibles para el mes.
-
-Los dos fertilizantes que la Agro-Tech fabrica son las mezclas denominadas 5-5-10 y 5-10-5. En cada caso, el primer valor se refiere al porcentaje que el producto final tiene de nitrato químico, el segundo valor se refiere al porcentaje de fosfato que aparece en el producto final y el tercer valor da el porcentaje de potasio. El fertilizante se estabiliza con un material de relleno como podría ser barro. Por ejemplo, el 5-5-10 está elaborado con 5% de nitrato, 5% de fosfato y 10% de potasio y el 80% restante es barro. El mayorista comprará cualquier cantidad de ambos fertilizantes que la Agro-Tech pueda fabricar. Esta dispuesto a pagar $71.50 por tonelada del 5-5-10 y $69 por tonelada del 5-10-5. Este mes, la disponibilidad y costos de materias primas son 1100 toneladas de nitrato a $200 por tonelada, 1800 toneladas de fosfato a $80 cada una y 2000 toneladas de potasio a $160 cada una. El relleno esta disponible en cantidades ilimitadas al precio de $10 por tonelada, pero para los otros tres ingredientes sólo se dispone de las cantidades mencionadas antes. No hay restricciones para el uso de la mano de obra ni tampoco para el empleo de la maquinaria durante el mes, pero se tiene un costo de $15 por tonelada por concepto de mezclado de los fertilizantes. La pregunta que Tom debe resolver es ¿cómo utilizar los recursos escasos (nitrato, fosfato y potasio) de que dispone Agro-Tech, de manera que se obtengan las mayores utilidades para la compañía?`,
-    objetivo: 'max',
-    metodo: 'tabular',
-    variables: ['X1', 'X2'],
-    coeficientesObjetivo: ['18.5', '20'],
-    restricciones: [
-      { coeficientes: ['0.05', '0.05'], operador: 'LE', b: '1100' },
-      { coeficientes: ['0.05', '0.1'], operador: 'LE', b: '1800' },
-      { coeficientes: ['0.1', '0.05'], operador: 'LE', b: '2000' },
-    ],
-  },
-  {
-    id: 'mc-camisetas',
-    nombre: 'MC (Camisetas)',
-    descripcion: 'Producción de camisetas colegiales y empresariales con restricciones de tiempo, pedido especial y producción mínima.',
-    contexto: `MC confecciona dos tipos de camisetas en cada período de producción: Colegiales y Empresariales. El costo de producción de cada camiseta colegial es de $2 y de cada camiseta empresarial es de $3. Para confeccionar las camisetas hay disponibles 600 horas durante el período de producción, advirtiendo que el procesamiento de cada camiseta colegial es 2 horas y cada camiseta empresarial una hora. Se debe cumplir con un pedido especial para un cliente durante el período de producción de al menos 125 camisetas colegiales y la producción total de ambos tipos de camisetas debe ser como mínimo de 350 unidades.`,
-    objetivo: 'min',
-    metodo: 'tabular',
-    variables: ['X1', 'X2'],
-    coeficientesObjetivo: ['2', '3'],
-    restricciones: [
-      { coeficientes: ['2', '1'], operador: 'LE', b: '600' },
-      { coeficientes: ['1', '0'], operador: 'GE', b: '125' },
-      { coeficientes: ['1', '1'], operador: 'GE', b: '350' },
-    ],
-  },
-];
 
 const inputBase =
   'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-inner focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30';
@@ -1631,7 +1601,7 @@ export default function SimplexPage() {
                   aria-label="Cerrar"
                 >
                   <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
-                    <path d="M6.28 5.22a.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75 0 001.06 1.06L10 11.06l3.72 3.72a.75 0 001.06-1.06L11.06 10l3.72-3.72a.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                    <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
                   </svg>
                 </button>
               </div>
@@ -1640,11 +1610,11 @@ export default function SimplexPage() {
               <div>
                 <h4 className="mb-2 text-sm font-semibold text-slate-700 dark:text-gray-200">Modelo</h4>
                 <div className="rounded-md bg-slate-50 p-3 dark:bg-gray-800">
-                  <Formula tex={`\\max Z = ${modalProblema.coeficientesObjetivo.map((c, i) => `${c}X_${i + 1}`).join(' + ')}`} />
+                  <Formula tex={`\\${modalProblema.objetivo} Z = ${texCombinacion(modalProblema.coeficientesObjetivo)}`} />
                   <div className="mt-2 space-y-1">
                     {modalProblema.restricciones.map((r, i) => (
                       <div key={i}>
-                        <Formula tex={`${r.coeficientes.map((c, j) => `${c}X_${j + 1}`).join(' + ')} \\le ${r.b}`} />
+                        <Formula tex={`${texCombinacion(r.coeficientes)} ${TEX_OPERADOR[r.operador]} ${r.b}`} />
                       </div>
                     ))}
                   </div>
