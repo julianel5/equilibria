@@ -130,7 +130,7 @@ export interface SimplexResultado {
   objetivo: ObjetivoSimplex;
   n: number;
   m: number;
-  estado: 'optimo' | 'no-acotado';
+  estado: 'optimo' | 'no-acotado' | 'infactible';
   variables: string[];
   basicaFinal: string[];
   solucion: FraccionJSON[];
@@ -368,6 +368,20 @@ export function calcularSimplex(input: SimplexInput): SimplexResultado {
         formula: `\\text{Sin razones válidas: todos los } a_{ie} \\le 0 \\Rightarrow Z \\to \\infty.`,
         sustitucion: '\\text{La columna entrante no tiene denominadores positivos.}',
         resultado: '\\text{El problema no está acotado.}',
+        tipoResultado: 'texto',
+      })
+    );
+  }
+
+  if (core.estado === 'infactible') {
+    procesos.push(
+      proceso({
+        id: 'simplex-infactible',
+        titulo: 'Problema infactible',
+        simbolo: '\emptyset',
+        formula: `\text{Óptimo con una artificial } R_i > 0 \text{ en la base.}`,
+        sustitucion: `\text{Base final: } ${core.basicaFinal.join(', ')}.`,
+        resultado: '\text{Ninguna solución cumple todas las restricciones: el problema es infactible.}',
         tipoResultado: 'texto',
       })
     );

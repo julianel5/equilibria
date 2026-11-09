@@ -1240,19 +1240,32 @@ export default function SimplexPage() {
                 </div>
               ) : null}
 
+              {resultado.estado === 'infactible' ? (
+                <div
+                  role="alert"
+                  className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm  dark:border-red-800 dark:bg-red-500/10"
+                >
+                  <p className="font-bold text-red-700  dark:text-red-400">Problema infactible</p>
+                  <p className="mt-1 text-red-700  dark:text-red-300">
+                    Al terminar el método queda una variable artificial con valor positivo en la base:
+                    no existe ninguna solución que cumpla todas las restricciones a la vez.
+                  </p>
+                </div>
+              ) : null}
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <KpiCard
                   highlight
                   large
                   title="Valor óptimo Z*"
-                  value={fmtFrac(resultado.valorObjetivo)}
+                  value={resultado.estado === 'infactible' ? 'Sin solución' : fmtFrac(resultado.valorObjetivo)}
                   formula={'Z^{*} = c_B x_B^{*}'}
                   tone="amber"
                   description="Mejor valor finito de la función objetivo, calculado con fracciones exactas."
                 />
                 <KpiCard
                   title="Solución óptima x*"
-                  value={resultado.solucion.map(fmtFrac).join('  ·  ')}
+                  value={resultado.estado === 'infactible' ? '—' : resultado.solucion.map(fmtFrac).join('  ·  ')}
                   formula={'x^{*} = (x_1, \\dots, x_n)'}
                   tone="emerald"
                   description="Valor de cada variable de decisión; las ausentes de la base valen 0."
