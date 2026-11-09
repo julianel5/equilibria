@@ -73,7 +73,12 @@ export type {
   FraccionJSON,
   TablaTabularDTO,
   IteracionRevisadaDTO,
+  SensibilidadDTO,
+  RangoDTO,
+  OptimosMultiplesDTO,
 } from './modules/pl/simplex/simplex.service';
+export { analizarSensibilidad } from './modules/pl/simplex/sensibilidad';
+export { analizarOptimosMultiples } from './modules/pl/simplex/optimosMultiples';
 export { SimplexInputSchema } from './modules/pl/simplex/simplex.service';
 export { calcularSimplexCore } from './modules/pl/simplex/simplex';
 export { Frac } from './modules/pl/simplex/fraction';

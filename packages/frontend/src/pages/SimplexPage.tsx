@@ -15,6 +15,9 @@ import {
 } from '../services/api';
 import SimplexTeoria from '../components/SimplexTeoria';
 import GranMTeoria from '../components/GranMTeoria';
+import { ajustarEtiquetas, codificarProblema, decodificarProblema } from '../data/transferenciaProblema';
+import { EditorNombresVariables, InterpretacionSolucion, tieneNombres } from '../components/NombresVariables';
+import AvisoOptimosMultiples from '../components/AvisoOptimosMultiples';
 import Formula from '@shared/components/Formula';
 import { PROBLEMAS_TIPICOS, type ProblemaTipico } from '../data/problemasTipicos';
 import KpiCard from '@shared/components/KpiCard';
@@ -681,6 +684,8 @@ export default function SimplexPage() {
   const [n, setN] = useState('2');
   const [coefsObj, setCoefsObj] = useState<string[]>(['10', '8']);
   const [filas, setFilas] = useState<FilaRestriccion[]>(() => filasIniciales(2));
+  /** Nombre de cada variable de decisión ('' = sin nombre). */
+  const [etiquetas, setEtiquetas] = useState<string[]>(['', '']);
   const [resultado, setResultado] = useState<SimplexResultado | null>(null);
   const [cargando, setCargando] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -710,12 +715,13 @@ export default function SimplexPage() {
     const data = searchParams.get('data');
     if (data) {
       try {
-        const parsed = JSON.parse(atob(data));
+        const parsed = decodificarProblema(data);
         if (parsed.metodo) setMetodo(parsed.metodo);
         if (parsed.objetivo) setObjetivo(parsed.objetivo);
         if (parsed.n) setN(String(parsed.n));
         if (parsed.coefsObj) setCoefsObj(parsed.coefsObj);
         if (parsed.filas) setFilas(parsed.filas);
+        setEtiquetas(ajustarEtiquetas(parsed.etiquetas, Number(parsed.n) || parsed.coefsObj?.length || 1));
         transferredRef.current = true;
         // Limpia el query param de la URL para no mostrar datos en la barra.
         navigate(location.pathname, { replace: true });
@@ -736,6 +742,7 @@ export default function SimplexPage() {
       Array.from({ length: numVariables }, (_, j) => prev[j] ?? '0')
     );
     setFilas((prev) => reconciliarFilas(prev, numVariables));
+    setEtiquetas((prev) => ajustarEtiquetas(prev, numVariables));
   }, [numVariables]);
 
   const actualizarCoefObj = (j: number, valor: string) =>
@@ -775,6 +782,7 @@ export default function SimplexPage() {
     setObjetivo(problema.objetivo);
     setN(problema.variables.length.toString());
     setCoefsObj(problema.coeficientesObjetivo);
+    setEtiquetas(ajustarEtiquetas(problema.etiquetas, problema.variables.length));
     setFilas(
       problema.restricciones.map((r, idx) => ({
         id: `r${idx + 1}`,
@@ -1006,6 +1014,9 @@ export default function SimplexPage() {
                     .join(' + ')}`}
                 />
               </div>
+              <div className="mt-2">
+                <EditorNombresVariables etiquetas={etiquetas} onCambio={setEtiquetas} />
+              </div>
             </fieldset>
 
             {/* Restricciones */}
@@ -1124,16 +1135,9 @@ export default function SimplexPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    const data = btoa(
-                      JSON.stringify({
-                        metodo,
-                        objetivo,
-                        n,
-                        coefsObj,
-                        filas,
-                      })
+                    navigate(
+                      `/pl/penalizacion?data=${codificarProblema({ metodo, objetivo, n, coefsObj, filas, etiquetas })}`
                     );
-                    navigate(`/pl/penalizacion?data=${encodeURIComponent(data)}`);
                   }}
                   className="font-semibold underline hover:text-amber-900 dark:hover:text-amber-100"
                 >
@@ -1269,6 +1273,44 @@ export default function SimplexPage() {
                 />
               </div>
 
+              {resultado.estado === 'optimo' && resultado.optimosMultiples ? (
+                <AvisoOptimosMultiples
+                  om={resultado.optimosMultiples}
+                  solucion={resultado.solucion}
+                  valorObjetivo={resultado.valorObjetivo}
+                  etiquetas={etiquetas}
+                />
+              ) : null}
+
+              {resultado.estado === 'optimo' && tieneNombres(etiquetas) ? (
+                <InterpretacionSolucion
+                  solucion={resultado.solucion}
+                  valorObjetivo={resultado.valorObjetivo}
+                  etiquetas={etiquetas}
+                  objetivo={resultado.objetivo}
+                />
+              ) : null}
+
+              {resultado.estado === 'optimo' ? (
+                <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-500/10">
+                  <p className="text-sm text-emerald-800 dark:text-emerald-300">
+                    ¿Qué pasa si cambian los recursos o los coeficientes? Lleva este problema al análisis de
+                    sensibilidad para ver precios sombra, holguras y rangos.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        `/pl/sensibilidad?data=${codificarProblema({ objetivo, n, coefsObj, filas, etiquetas })}`
+                      )
+                    }
+                    className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                  >
+                    Análisis de sensibilidad →
+                  </button>
+                </div>
+              ) : null}
+
               {/* Traza */}
               {esGranM ? (
                 <div className="mb-3 mt-6 flex items-center gap-2">
@@ -1394,9 +1436,8 @@ export default function SimplexPage() {
               </div>
 
               <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500  dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-                Todos los cálculos del tableau se realizan con aritmética entera (fracciones
-                irreducibles); los decimales son solo una vista aproximada. Pasa el cursor sobre una
-                celda para ver la fracción exacta.
+                Todos los cálculos del tableau se realizan con aritmética entera: cada celda muestra la fracción
+                irreducible exacta, sin redondeos.
               </p>
             </>
           ) : null}
@@ -1561,12 +1602,12 @@ export default function SimplexPage() {
       {modalProblema ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
           <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
-            <div className="flex items-start justify-between border-b border-slate-200 p-5 dark:border-gray-700">
+            <div className="flex flex-col-reverse gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5 dark:border-gray-700">
               <div>
                 <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-100">{modalProblema.nombre}</h3>
                 <p className="mt-1 text-sm text-slate-500 dark:text-gray-400">{modalProblema.descripcion}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -1622,12 +1663,12 @@ export default function SimplexPage() {
               </div>
               <div>
                 <h4 className="mb-2 text-sm font-semibold text-slate-700 dark:text-gray-200">Contexto del problema</h4>
-                <div className="max-h-80 overflow-y-auto rounded-md border border-slate-200 bg-white p-4 text-sm leading-relaxed text-slate-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                <div className="rounded-md sm:max-h-80 sm:overflow-y-auto border border-slate-200 bg-white p-4 text-sm leading-relaxed text-slate-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
                   <p className="whitespace-pre-line">{modalProblema.contexto}</p>
                 </div>
               </div>
             </div>
-            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 p-4 dark:border-gray-700">
+            <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
               <button
                 type="button"
                 onClick={() => setModalProblema(null)}

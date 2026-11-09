@@ -159,6 +159,20 @@ export default function PlanoCartesianoChart({
   const dark = useDarkMode();
   const contRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<HoverInfo | null>(null);
+  // Ancho real en pantalla: en celulares el lienzo de 640 se reduce a ~300 px,
+  // así que textos y puntos se agrandan (en unidades del lienzo) para que sigan
+  // siendo legibles y fáciles de tocar.
+  const [anchoPx, setAnchoPx] = useState(ANCHO);
+  useEffect(() => {
+    const el = contRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entrada]) => setAnchoPx(entrada.contentRect.width || ANCHO));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const k = Math.min(2.2, Math.max(1, (ANCHO / anchoPx) * (10 / 11)));
+  const fs = (base: number) => Math.round(base * k * 10) / 10;
+  const radio = (base: number) => base * Math.min(k, 1.6);
   const [lineasActivas, setLineasActivas] = useState<ReadonlySet<string>>(
     () => new Set(restricciones.map((r) => r.id))
   );
@@ -287,14 +301,14 @@ export default function PlanoCartesianoChart({
             <button
               type="button"
               onClick={mostrarTodas}
-              className="rounded border border-slate-300 bg-white px-2 py-0.5 text-slate-600  hover:bg-slate-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-slate-600 sm:px-2 sm:py-0.5  hover:bg-slate-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               Todas
             </button>
             <button
               type="button"
               onClick={ocultarTodas}
-              className="rounded border border-slate-300 bg-white px-2 py-0.5 text-slate-600  hover:bg-slate-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-slate-600 sm:px-2 sm:py-0.5  hover:bg-slate-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               Ninguna
             </button>
@@ -344,7 +358,7 @@ export default function PlanoCartesianoChart({
           <g key={`gx${t}`}>
             <line x1={scaleX(t)} y1={MRG.top} x2={scaleX(t)} y2={MRG.top + PLOT_H} stroke={gridColor} strokeWidth={1} />
             {t !== 0 ? (
-              <text x={scaleX(t)} y={MRG.top + PLOT_H + 20} textAnchor="middle" fill={tickColor} fontSize={11}>
+              <text x={scaleX(t)} y={MRG.top + PLOT_H + 8 + 12 * k} textAnchor="middle" fill={tickColor} fontSize={fs(11)}>
                 {fmtCoordenada(t)}
               </text>
             ) : null}
@@ -354,7 +368,7 @@ export default function PlanoCartesianoChart({
           <g key={`gy${t}`}>
             <line x1={MRG.left} y1={scaleY(t)} x2={MRG.left + PLOT_W} y2={scaleY(t)} stroke={gridColor} strokeWidth={1} />
             {t !== 0 ? (
-              <text x={MRG.left - 8} y={scaleY(t) + 4} textAnchor="end" fill={tickColor} fontSize={11}>
+              <text x={MRG.left - 8} y={scaleY(t) + 4 * k} textAnchor="end" fill={tickColor} fontSize={fs(11)}>
                 {fmtCoordenada(t)}
               </text>
             ) : null}
@@ -369,7 +383,7 @@ export default function PlanoCartesianoChart({
           y={MRG.top - 14}
           textAnchor="middle"
           fill={axisLabelFill}
-          fontSize={16}
+          fontSize={fs(16) > 24 ? 24 : fs(16)}
           fontWeight={700}
         >
           x₂
@@ -379,7 +393,7 @@ export default function PlanoCartesianoChart({
           y={scaleY(0) + 42}
           textAnchor="middle"
           fill={axisLabelFill}
-          fontSize={16}
+          fontSize={fs(16) > 24 ? 24 : fs(16)}
           fontWeight={700}
         >
           x₁
@@ -461,13 +475,14 @@ export default function PlanoCartesianoChart({
             key={`d${i}`}
             cx={scaleX(punto.x1)}
             cy={scaleY(punto.x2)}
-            r={4}
+            r={radio(4)}
             fill={discardFill}
             fillOpacity={0.5}
             stroke={discardFill}
             strokeWidth={1}
             strokeDasharray="3 2"
             onMouseEnter={hoverDescarte(desc)}
+            onClick={hoverDescarte(desc)}
             onMouseLeave={() => setHover(null)}
           />
         ))}
@@ -481,18 +496,19 @@ export default function PlanoCartesianoChart({
                   <circle
                     cx={scaleX(v.x1)}
                     cy={scaleY(v.x2)}
-                    r={opt ? 6.5 : 4.5}
+                    r={radio(opt ? 6.5 : 4.5)}
                     fill={opt ? optimumFill : vertexFill}
                     stroke={dark ? '#1e293b' : '#f8fafc'}
                     strokeWidth={2}
                     onMouseEnter={hoverVertice(v)}
+                    onClick={hoverVertice(v)}
                     onMouseLeave={() => setHover(null)}
                   />
                   <text
-                    x={scaleX(v.x1) + (opt ? 9 : 7)}
-                    y={scaleY(v.x2) - (opt ? 7 : 5)}
+                    x={scaleX(v.x1) + (opt ? 9 : 7) * k}
+                    y={scaleY(v.x2) - (opt ? 7 : 5) * k}
                     fill={tickColor}
-                    fontSize={11}
+                    fontSize={fs(11)}
                     fontWeight={opt ? 700 : 400}
                   >
                     ({fmtCoordenada(v.x1)}, {fmtCoordenada(v.x2)})

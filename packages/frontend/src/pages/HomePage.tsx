@@ -123,6 +123,21 @@ export default function HomePage() {
             </div>
           </NavLink>
 
+          <NavLink
+            to="/pl/sensibilidad"
+            className="rounded-lg border border-emerald-200 bg-white p-5 shadow-md  hover:scale-[1.02] dark:border-emerald-900 dark:bg-gray-800"
+          >
+            <p className="text-base font-bold text-emerald-600  dark:text-emerald-400">
+              Análisis de Sensibilidad
+            </p>
+            <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
+              Precios sombra, holguras y rangos de optimalidad de b y c, con simulador de cambios.
+            </p>
+            <div className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-slate-600  dark:bg-emerald-500/20 dark:text-emerald-300">
+              <Formula tex="y^T = c_B B^{-1}" />
+            </div>
+          </NavLink>
+
           <div
             aria-disabled="true"
             className="relative rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5  dark:border-gray-700 dark:bg-gray-900"
