@@ -329,7 +329,7 @@ export default function CostChart({
         {!mostrado ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <p className="text-sm italic text-slate-400  dark:text-gray-500">
-              Pasa el cursor sobre la gráfica para inspeccionar los costos detallados.
+              Toca o pasa el cursor sobre la gráfica para inspeccionar los costos detallados.
             </p>
           </div>
         ) : null}

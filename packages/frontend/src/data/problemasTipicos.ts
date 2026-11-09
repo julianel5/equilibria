@@ -12,6 +12,8 @@ export interface ProblemaTipico {
   objetivo: 'max' | 'min';
   metodo: 'tabular' | 'revisado';
   variables: string[];
+  /** Qué representa cada variable, en el mismo orden (se muestra en los resultados). */
+  etiquetas: string[];
   coeficientesObjetivo: string[];
   restricciones: { coeficientes: string[]; operador: 'LE' | 'GE' | 'EQ'; b: string }[];
 }
@@ -27,6 +29,7 @@ Los dos fertilizantes que la Agro-Tech fabrica son las mezclas denominadas 5-5-1
     objetivo: 'max',
     metodo: 'tabular',
     variables: ['X1', 'X2'],
+    etiquetas: ['Fertilizante 5-5-10 (ton)', 'Fertilizante 5-10-5 (ton)'],
     coeficientesObjetivo: ['18.5', '20'],
     restricciones: [
       { coeficientes: ['0.05', '0.05'], operador: 'LE', b: '1100' },
@@ -42,6 +45,7 @@ Los dos fertilizantes que la Agro-Tech fabrica son las mezclas denominadas 5-5-1
     objetivo: 'min',
     metodo: 'tabular',
     variables: ['X1', 'X2'],
+    etiquetas: ['Camisetas colegiales', 'Camisetas empresariales'],
     coeficientesObjetivo: ['2', '3'],
     restricciones: [
       { coeficientes: ['2', '1'], operador: 'LE', b: '600' },
@@ -80,6 +84,7 @@ X1 + X2 + X3 + X4 <= 100000`,
     objetivo: 'max',
     metodo: 'tabular',
     variables: ['X1', 'X2', 'X3', 'X4'],
+    etiquetas: ['Acciones preferenciales ($)', 'Acciones comunes ($)', 'Acciones estatales ($)', 'Bonos municipales ($)'],
     coeficientesObjetivo: ['0.09', '0.08', '0.07', '0.06'],
     restricciones: [
       { coeficientes: ['0', '0', '0', '1'], operador: 'GE', b: '20000' },
@@ -122,6 +127,7 @@ Ensamble: X1/2000 + X2/2000 + X3/4000 + X4/4000 <= 1  ->  2X1 + 2X2 + X3 + X4 <=
     objetivo: 'max',
     metodo: 'tabular',
     variables: ['X1', 'X2', 'X3', 'X4'],
+    etiquetas: ['R hecho con material L', 'R hecho con material K', 'T con colado comprado', 'T colado en planta'],
     coeficientesObjetivo: ['7', '6', '4.8', '9.4'],
     restricciones: [
       { coeficientes: ['4', '0', '0', '0'], operador: 'LE', b: '2000' },
@@ -167,6 +173,7 @@ Ancho 40 cm: X3 + X5 + X8 + 2X11 = 70
     objetivo: 'min',
     metodo: 'tabular',
     variables: ['X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'X8', 'X9', 'X10', 'X11'],
+    etiquetas: ['Patrón 1 · 75 cm: 3×25 (m)', 'Patrón 2 · 75 cm: 25+35 (m)', 'Patrón 3 · 75 cm: 25+40 (m)', 'Patrón 4 · 75 cm: 2×35 (m)', 'Patrón 5 · 75 cm: 35+40 (m)', 'Patrón 6 · 90 cm: 3×25 (m)', 'Patrón 7 · 90 cm: 2×25+35 (m)', 'Patrón 8 · 90 cm: 2×25+40 (m)', 'Patrón 9 · 90 cm: 2×35 (m)', 'Patrón 10 · 90 cm: 35+40 (m)', 'Patrón 11 · 90 cm: 2×40 (m)'],
     coeficientesObjetivo: ['0', '15', '10', '5', '0', '15', '5', '0', '20', '15', '10'],
     restricciones: [
       { coeficientes: ['3', '1', '1', '0', '0', '3', '2', '2', '0', '0', '0'], operador: 'EQ', b: '50' },
@@ -192,6 +199,7 @@ Personales <= 60% de automotrices: X2 <= 0.6X3  ->  X2 - 0.6X3 <= 0`,
     objetivo: 'max',
     metodo: 'tabular',
     variables: ['X1', 'X2', 'X3'],
+    etiquetas: ['Préstamos hipotecarios (US$)', 'Préstamos personales (US$)', 'Préstamos automotrices (US$)'],
     coeficientesObjetivo: ['0.07', '0.12', '0.09'],
     restricciones: [
       { coeficientes: ['1', '1', '1'], operador: 'LE', b: '1000000' },
@@ -237,6 +245,7 @@ Café XX:
     objetivo: 'max',
     metodo: 'tabular',
     variables: ['X1', 'X2', 'X3', 'X4', 'X5', 'X6'],
+    etiquetas: ['Colombiano en café X (lb)', 'Brasilero en café X (lb)', 'Mexicano en café X (lb)', 'Colombiano en café XX (lb)', 'Brasilero en café XX (lb)', 'Mexicano en café XX (lb)'],
     coeficientesObjetivo: ['20000', '22000', '24000', '23000', '25000', '27000'],
     restricciones: [
       { coeficientes: ['1', '0', '0', '1', '0', '0'], operador: 'LE', b: '20000' },
@@ -277,6 +286,7 @@ Inspección y empaque: 0.1X1 + 0.25X2 <= 135
     objetivo: 'max',
     metodo: 'tabular',
     variables: ['X1', 'X2'],
+    etiquetas: ['Bolsas estándar', 'Bolsas de lujo'],
     coeficientesObjetivo: ['10', '9'],
     restricciones: [
       { coeficientes: ['0.7', '1'], operador: 'LE', b: '630' },
@@ -307,6 +317,7 @@ Año 3: X5 = 1.12X3 + 1.6X2  ->  -1.6X2 - 1.12X3 + X5 = 0`,
     objetivo: 'max',
     metodo: 'tabular',
     variables: ['X1', 'X2', 'X3', 'X4', 'X5'],
+    etiquetas: ['Plan A en el año 1 ($)', 'Plan B en el año 1 ($)', 'Plan A en el año 2 ($)', 'Plan B en el año 2 ($)', 'Plan A en el año 3 ($)'],
     coeficientesObjetivo: ['0.12', '0.6', '0.12', '0.6', '0.12'],
     restricciones: [
       { coeficientes: ['1', '1', '0', '0', '0'], operador: 'EQ', b: '100000' },
@@ -349,6 +360,7 @@ Extra:
     objetivo: 'max',
     metodo: 'tabular',
     variables: ['X1', 'X2', 'X3', 'X4', 'X5', 'X6'],
+    etiquetas: ['Componente 1 en Regular (gal)', 'Componente 2 en Regular (gal)', 'Componente 3 en Regular (gal)', 'Componente 1 en Extra (gal)', 'Componente 2 en Extra (gal)', 'Componente 3 en Extra (gal)'],
     coeficientesObjetivo: ['0.25', '0.2', '0.08', '0.29', '0.24', '0.12'],
     restricciones: [
       { coeficientes: ['1', '0', '0', '1', '0', '0'], operador: 'LE', b: '5000' },
@@ -380,6 +392,7 @@ Carbohidratos: X1 + 4X2 >= 80`,
     objetivo: 'min',
     metodo: 'tabular',
     variables: ['X1', 'X2'],
+    etiquetas: ['Suplemento marca A (kg)', 'Suplemento marca B (kg)'],
     coeficientesObjetivo: ['9', '15'],
     restricciones: [
       { coeficientes: ['1', '2'], operador: 'GE', b: '30' },

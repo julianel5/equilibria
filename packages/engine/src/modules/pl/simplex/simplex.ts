@@ -87,7 +87,7 @@ export interface ResultadoSimplexCore {
 
 const LIMITE_ITERACIONES = 200;
 
-function nombresVariables(
+export function nombresVariables(
   n: number,
   m: number,
   tipos?: Array<'LE' | 'GE' | 'EQ'>
@@ -117,7 +117,7 @@ function clonarMatriz(M: Frac[][]): Frac[][] {
 }
 
 /** Inversa exacta por Gauss-Jordan (solo lectura, no modifica M). */
-function inversa(M: Frac[][]): Frac[][] {
+export function inversa(M: Frac[][]): Frac[][] {
   const n = M.length;
   if (n === 0) return [];
   const A = M.map((fil) => [...fil]);

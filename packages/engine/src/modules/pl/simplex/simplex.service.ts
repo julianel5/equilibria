@@ -9,6 +9,81 @@ import {
   type RazonSimplex,
   type RazonRevisado,
 } from './simplex';
+import { analizarSensibilidad, type ResultadoSensibilidad, type Rango } from './sensibilidad';
+import { analizarOptimosMultiples } from './optimosMultiples';
+
+export interface OptimosMultiplesDTO {
+  hay: boolean;
+  /** Variables no básicas con costo reducido 0 que llevan a otra solución óptima. */
+  variables: string[];
+  /** Variables de decisión de otro vértice óptimo. */
+  alternativa: FraccionJSON[] | null;
+  /** Dirección de un rayo de soluciones óptimas (conjunto óptimo no acotado). */
+  rayo: FraccionJSON[] | null;
+}
+
+export interface RangoDTO {
+  /** null = −∞ */
+  min: FraccionJSON | null;
+  /** null = +∞ */
+  max: FraccionJSON | null;
+}
+
+export interface RestriccionSensibilidadDTO {
+  indice: number;
+  tipo: 'LE' | 'GE' | 'EQ';
+  b: FraccionJSON;
+  lhs: FraccionJSON;
+  holgura: FraccionJSON;
+  activa: boolean;
+  precioSombra: FraccionJSON;
+  rangoB: RangoDTO;
+}
+
+export interface VariableSensibilidadDTO {
+  indice: number;
+  variable: string;
+  c: FraccionJSON;
+  valor: FraccionJSON;
+  basica: boolean;
+  costoReducido: FraccionJSON;
+  rangoC: RangoDTO;
+}
+
+export interface SensibilidadDTO {
+  restricciones: RestriccionSensibilidadDTO[];
+  variables: VariableSensibilidadDTO[];
+  degenerada: boolean;
+}
+
+function rangoDTO(r: Rango): RangoDTO {
+  return { min: r.min ? ff(r.min) : null, max: r.max ? ff(r.max) : null };
+}
+
+function sensibilidadDTO(s: ResultadoSensibilidad): SensibilidadDTO {
+  return {
+    restricciones: s.restricciones.map((r) => ({
+      indice: r.indice,
+      tipo: r.tipo,
+      b: ff(r.b),
+      lhs: ff(r.lhs),
+      holgura: ff(r.holgura),
+      activa: r.activa,
+      precioSombra: ff(r.precioSombra),
+      rangoB: rangoDTO(r.rangoB),
+    })),
+    variables: s.variables.map((v) => ({
+      indice: v.indice,
+      variable: v.variable,
+      c: ff(v.c),
+      valor: ff(v.valor),
+      basica: v.basica,
+      costoReducido: ff(v.costoReducido),
+      rangoC: rangoDTO(v.rangoC),
+    })),
+    degenerada: s.degenerada,
+  };
+}
 
 export const SimplexInputSchema = z
   .object({
@@ -131,6 +206,10 @@ export interface SimplexResultado {
   n: number;
   m: number;
   estado: 'optimo' | 'no-acotado' | 'infactible';
+  /** Precios sombra y rangos; null si el problema no tiene óptimo finito. */
+  sensibilidad: SensibilidadDTO | null;
+  /** Soluciones óptimas alternativas; null si el problema no tiene óptimo finito. */
+  optimosMultiples: OptimosMultiplesDTO | null;
   variables: string[];
   basicaFinal: string[];
   solucion: FraccionJSON[];
@@ -378,13 +457,64 @@ export function calcularSimplex(input: SimplexInput): SimplexResultado {
       proceso({
         id: 'simplex-infactible',
         titulo: 'Problema infactible',
-        simbolo: '\emptyset',
-        formula: `\text{Óptimo con una artificial } R_i > 0 \text{ en la base.}`,
-        sustitucion: `\text{Base final: } ${core.basicaFinal.join(', ')}.`,
-        resultado: '\text{Ninguna solución cumple todas las restricciones: el problema es infactible.}',
+        simbolo: '\\emptyset',
+        formula: `\\text{Óptimo con una artificial } R_i > 0 \\text{ en la base.}`,
+        sustitucion: `\\text{Base final: } ${core.basicaFinal.join(', ')}.`,
+        resultado: '\\text{Ninguna solución cumple todas las restricciones: el problema es infactible.}',
         tipoResultado: 'texto',
       })
     );
+  }
+
+  // Análisis de sensibilidad: solo tiene sentido con un óptimo finito y factible.
+  let sensibilidad: SensibilidadDTO | null = null;
+  if (core.estado === 'optimo') {
+    const tipos = validado.restricciones.map((r) => r.tipo);
+    const sens = analizarSensibilidad(validado.funcionObjetivo, A, b, validado.objetivo as ObjetivoSimplex, tipos, core.basicaFinal);
+    sensibilidad = sensibilidadDTO(sens);
+    const ys = sens.restricciones.map((r) => r.precioSombra.toTex()).join(',\\; ');
+    procesos.push(
+      proceso({
+        id: 'simplex-precios-sombra',
+        titulo: 'Precios sombra (análisis de sensibilidad)',
+        simbolo: 'y^{T}',
+        formula: 'y^{T} = c_B\\, B^{-1}, \\qquad y_i = \\frac{\\Delta Z^{*}}{\\Delta b_i}',
+        sustitucion: `\\text{Con la base óptima } \\{${core.basicaFinal.join(', ')}\\}:\\; y^{T} = (${ys}).`,
+        resultado:
+          '\\text{Cada } y_i \\text{ indica cuánto cambia } Z^{*} \\text{ por unidad adicional de } b_i, ' +
+          '\\text{ mientras } b_i \\text{ permanezca en su rango de factibilidad.}',
+        tipoResultado: 'texto',
+      })
+    );
+  }
+
+  // Óptimos múltiples: variable no básica con costo reducido 0 en el óptimo.
+  let optimosMultiples: OptimosMultiplesDTO | null = null;
+  if (core.estado === 'optimo') {
+    const tipos = validado.restricciones.map((r) => r.tipo);
+    const om = analizarOptimosMultiples(validado.funcionObjetivo, A, b, validado.objetivo as ObjetivoSimplex, tipos, core.basicaFinal);
+    optimosMultiples = {
+      hay: om.hay,
+      variables: om.variables,
+      alternativa: om.alternativa ? om.alternativa.map(ff) : null,
+      rayo: om.rayo ? om.rayo.map(ff) : null,
+    };
+    if (om.hay) {
+      const otra = om.alternativa
+        ? `\\text{Otra solución óptima: } x = (${om.alternativa.map((f) => f.toTex()).join(',\\; ')}) \\text{ con el mismo } Z^{*} = ${core.valorObjetivo.toTex()}.`
+        : `\\text{El conjunto óptimo no está acotado: } x^{*} + t\\,d \\text{ es óptima para todo } t \\ge 0,\\; d = (${om.rayo!.map((f) => f.toTex()).join(',\\; ')}).`;
+      procesos.push(
+        proceso({
+          id: 'simplex-optimos-multiples',
+          titulo: 'Óptimos múltiples',
+          simbolo: '\\bar c_j = 0',
+          formula: `\\text{Variable(s) no básica(s) con costo reducido 0: } ${om.variables.join(', ')}.`,
+          sustitucion: otra,
+          resultado: '\\text{El problema tiene infinitas soluciones óptimas con el mismo valor de } Z^{*}.',
+          tipoResultado: 'texto',
+        })
+      );
+    }
   }
 
   return {
@@ -393,6 +523,8 @@ export function calcularSimplex(input: SimplexInput): SimplexResultado {
     n,
     m,
     estado: core.estado,
+    sensibilidad,
+    optimosMultiples,
     variables: core.variables.slice(0, n),
     basicaFinal: core.basicaFinal,
     solucion: core.solucion.map(ff),

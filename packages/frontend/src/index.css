@@ -16,3 +16,12 @@
 .dark {
   color-scheme: dark;
 }
+/* Celulares: los campos con letra menor a 16 px hacen que Safari en iPhone
+   amplíe la página al tocarlos. Con 16 px no hay zoom automático. */
+@media (max-width: 639px) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

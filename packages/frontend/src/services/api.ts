@@ -493,12 +493,61 @@ export interface IteracionRevisadaDTO {
   z: FraccionJSON;
 }
 
+export interface RangoDTO {
+  /** null = −∞ */
+  min: FraccionJSON | null;
+  /** null = +∞ */
+  max: FraccionJSON | null;
+}
+
+export interface RestriccionSensibilidadDTO {
+  indice: number;
+  tipo: 'LE' | 'GE' | 'EQ';
+  b: FraccionJSON;
+  lhs: FraccionJSON;
+  holgura: FraccionJSON;
+  activa: boolean;
+  precioSombra: FraccionJSON;
+  rangoB: RangoDTO;
+}
+
+export interface VariableSensibilidadDTO {
+  indice: number;
+  variable: string;
+  c: FraccionJSON;
+  valor: FraccionJSON;
+  basica: boolean;
+  costoReducido: FraccionJSON;
+  rangoC: RangoDTO;
+}
+
+export interface SensibilidadDTO {
+  restricciones: RestriccionSensibilidadDTO[];
+  variables: VariableSensibilidadDTO[];
+  /** Alguna variable básica vale 0: los precios sombra pueden no ser únicos. */
+  degenerada: boolean;
+}
+
+export interface OptimosMultiplesDTO {
+  hay: boolean;
+  /** Variables no básicas con costo reducido 0 que llevan a otra solución óptima. */
+  variables: string[];
+  /** Variables de decisión de otro vértice óptimo. */
+  alternativa: FraccionJSON[] | null;
+  /** Dirección de un rayo de soluciones óptimas (conjunto óptimo no acotado). */
+  rayo: FraccionJSON[] | null;
+}
+
 export interface SimplexResultado {
   metodo: MetodoSimplex;
   objetivo: ObjetivoSimplex;
   n: number;
   m: number;
   estado: 'optimo' | 'no-acotado' | 'infactible';
+  /** Precios sombra y rangos; null si el problema no tiene óptimo finito. */
+  sensibilidad?: SensibilidadDTO | null;
+  /** Soluciones óptimas alternativas; null si el problema no tiene óptimo finito. */
+  optimosMultiples?: OptimosMultiplesDTO | null;
   variables: string[];
   basicaFinal: string[];
   solucion: FraccionJSON[];
