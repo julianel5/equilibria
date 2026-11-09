@@ -74,7 +74,7 @@ function ChevronAbierto({ abierto }: { abierto: boolean }) {
 function Fase({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
-      <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">{titulo}</h4>
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-gray-400">{titulo}</h4>
       {children}
     </div>
   );
@@ -145,7 +145,7 @@ export default function AnalisisAlgebraicoMetodoGrafico({ resultado }: PropsAnal
                 </span>
               </button>
               {abierto ? (
-                <div className="space-y-4 border-t border-slate-700 bg-slate-800 p-4 text-gray-100  sm:p-5 dark:bg-slate-800">
+                <div className="space-y-4 border-t border-slate-200 bg-slate-50 p-4 text-slate-800 sm:p-5 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100">
                   <Fase titulo="Fase 1 · Sistema de ecuaciones (igualadas)">
                     {l1 && l2 ? (
                       <Formula tex={texSistema(l1, l2)} display />
@@ -197,7 +197,7 @@ export default function AnalisisAlgebraicoMetodoGrafico({ resultado }: PropsAnal
                 </span>
               </button>
               {abierto ? (
-                <div className="space-y-4 border-t border-slate-700 bg-slate-800 p-4 text-gray-100  sm:p-5 dark:bg-slate-800">
+                <div className="space-y-4 border-t border-slate-200 bg-slate-50 p-4 text-slate-800 sm:p-5 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100">
                   <Fase titulo="Fase 1 · Sistema de ecuaciones (igualadas)">
                     {l1 && l2 ? (
                       <Formula tex={texSistema(l1, l2)} display />
@@ -217,11 +217,11 @@ export default function AnalisisAlgebraicoMetodoGrafico({ resultado }: PropsAnal
                   {d.violada && violada && d.punto ? (
                     <Fase titulo="Fase 3 · Filtro de factibilidad (restricción violada)">
                       <Formula tex={texFiltroDescarte(d, violada)} display />
-                      <p className="text-sm text-gray-300">{traducirNombres(d.motivo)}</p>
+                      <p className="text-sm text-slate-600 dark:text-gray-300">{traducirNombres(d.motivo)}</p>
                     </Fase>
                   ) : (
                     <Fase titulo="Fase 3 · Filtro de factibilidad">
-                      <p className="text-sm text-gray-300">{traducirNombres(d.motivo)}</p>
+                      <p className="text-sm text-slate-600 dark:text-gray-300">{traducirNombres(d.motivo)}</p>
                     </Fase>
                   )}
                 </div>
