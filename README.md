@@ -34,13 +34,16 @@ La **Teoría de Colas** incluye:
 | ------------- | ------------------------ | -------------------------------------------------- |
 | Matriz de Pagos | `/decisiones/matriz-pagos` | Criterios de decisión bajo incertidumbre (maximizar/minimizar) |
 
-### Programación Lineal y Optimización _(próximamente)_
+### Programación Lineal y Optimización
 
-- Método Gráfico y Enumerativo
-- Método Simplex y Simplex Revisado
-- Penalización y Dos Fases (Charnes)
-- Simplex Dual y Algoritmo de Lemke
-- Análisis de Sensibilidad
+| Módulo | Ruta | Descripción |
+| ------ | ---- | ----------- |
+| Método Gráfico y Enumerativo | `/pl/metodo-grafico` | Región factible, vértices y óptimo geométrico |
+| Método Simplex y Simplex Revisado | `/pl/simplex` | Algoritmo tabular y matricial, con Gran M y sensibilidad |
+| Penalización y Dos Fases | `/pl/penalizacion` | Variables artificiales para restricciones ≥ e = |
+| Simplex Dual | `/pl/dual` | Arranque super-óptimo y pivoteo dual con fracciones exactas |
+| Algoritmo de Lemke | `/pl/lemke` | Pivoteo complementario para LCP y QP vía KKT |
+| Análisis de Sensibilidad | `/pl/sensibilidad` | Precios sombra, holguras y rangos de b y c |
 
 ### Modelos de Distribución y Redes _(próximamente)_
 
@@ -82,6 +85,9 @@ Base: `/api`
 | `/api/stochastic/punto-reorden`  | POST   | Punto de Reorden y Stock de Seguridad |
 | `/api/colas/evaluar`             | POST   | Teoría de Colas (M/M/1 y M/M/c)      |
 | `/api/decisiones/evaluar`        | POST   | Matriz de Pagos (criterios de decisión) |
+| `/api/pl/simplex`                | POST   | Simplex tabular/revisado, Gran M y sensibilidad |
+| `/api/pl/dual`                   | POST   | Simplex Dual                          |
+| `/api/pl/lemke`                  | POST   | Algoritmo de Lemke (LCP y QP)         |
 
 En producción (`NODE_ENV=production`) el mismo servicio sirve el frontend compilado desde
 `packages/frontend/dist` con fallback SPA para rutas de React; el endpoint `/health` reporta

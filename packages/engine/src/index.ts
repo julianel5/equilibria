@@ -82,3 +82,55 @@ export { analizarOptimosMultiples } from './modules/pl/simplex/optimosMultiples'
 export { SimplexInputSchema } from './modules/pl/simplex/simplex.service';
 export { calcularSimplexCore } from './modules/pl/simplex/simplex';
 export { Frac } from './modules/pl/simplex/fraction';
+export { calcularSimplexDual } from './modules/pl/simplex/simplexDual.service';
+export type {
+  SimplexDualInput,
+  SimplexDualResultado,
+  IteracionDualDTO,
+  RazonDualDTO,
+} from './modules/pl/simplex/simplexDual.service';
+export { SimplexDualInputSchema } from './modules/pl/simplex/simplexDual.service';
+export { calcularSimplexDualCore } from './modules/pl/simplex/simplexDual';
+export type {
+  ResultadoSimplexDualCore,
+  IteracionDual,
+  RazonDual,
+} from './modules/pl/simplex/simplexDual';
+export { calcularLemke } from './modules/pl/lemke/lemke.service';
+export type {
+  LemkeInput,
+  LemkeResultado,
+  IteracionLemkeDTO,
+  RazonLemkeDTO,
+  QPResumenDTO,
+  ComplementariedadDTO,
+} from './modules/pl/lemke/lemke.service';
+export { LemkeInputSchema } from './modules/pl/lemke/lemke.service';
+export { resolverLemke } from './modules/pl/lemke/lemke';
+export type {
+  ResultadoLemkeCore,
+  IteracionLemke,
+  RazonLemke,
+  EstadoLemke,
+} from './modules/pl/lemke/lemke';
+export { calcularTransporte } from './modules/pl/transporte/transporte.service';
+export type {
+  TransporteInput,
+  TransporteResultado,
+  IteracionTransporteDTO,
+  AsignacionTransporteDTO,
+  ComparacionInicialDTO,
+  CeldaCicloDTO,
+  FraccionTransporteJSON,
+} from './modules/pl/transporte/transporte.service';
+export { TransporteInputSchema } from './modules/pl/transporte/transporte.service';
+export { resolverTransporte, etiquetaMetodo } from './modules/pl/transporte/transporte';
+export type {
+  ResultadoTransporteCore,
+  IteracionTransporteCore,
+  ComparacionInicialCore,
+  MetodoInicialTransporte,
+  AjusteTransporte,
+  CeldaTransporte,
+  CeldaCicloTransporte,
+} from './modules/pl/transporte/transporte';

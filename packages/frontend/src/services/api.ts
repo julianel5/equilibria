@@ -2,6 +2,88 @@ import type { NormalizacionUnidades } from '@shared/components/Fase0Unidades';
 import type { UnidadTiempo } from '@shared/components/SelectorUnidadTiempo';
 import type { PasoProceso } from '@shared/types/procesos';
 
+export interface FraccionTransporteJSON {
+  num: string;
+  den: string;
+  tex: string;
+  dec: string;
+}
+
+export interface CeldaCicloTransporteDTO {
+  i: number;
+  j: number;
+  signo: 1 | -1;
+  cantidad: FraccionTransporteJSON;
+}
+
+export interface IteracionTransporteDTO {
+  iteracion: number;
+  asignacion: FraccionTransporteJSON[][];
+  basicas: boolean[][];
+  u: FraccionTransporteJSON[];
+  v: FraccionTransporteJSON[];
+  reducidos: (FraccionTransporteJSON | null)[][];
+  entra: { i: number; j: number } | null;
+  ciclo: CeldaCicloTransporteDTO[];
+  theta: FraccionTransporteJSON | null;
+  sale: { i: number; j: number } | null;
+  costo: FraccionTransporteJSON;
+  optimo: boolean;
+}
+
+export interface AsignacionTransporteDTO {
+  i: number;
+  j: number;
+  origen: string;
+  destino: string;
+  cantidad: FraccionTransporteJSON;
+  costoUnitario: FraccionTransporteJSON;
+  costo: FraccionTransporteJSON;
+  ficticia: boolean;
+}
+
+export interface ComparacionInicialTransporteDTO {
+  metodo: "noroeste" | "costo-minimo" | "vogel";
+  etiqueta: string;
+  factible: boolean;
+  costo: FraccionTransporteJSON | null;
+}
+
+export interface TransporteInput {
+  costos: number[][];
+  oferta: number[];
+  demanda: number[];
+  metodoInicial?: "noroeste" | "costo-minimo" | "vogel";
+  objetivo?: "min" | "max";
+  prohibidas?: { origen: number; destino: number }[];
+}
+
+export interface TransporteResultado {
+  estado: "optimo" | "infactible";
+  mensaje: string;
+  objetivo: "min" | "max";
+  m: number;
+  n: number;
+  balanceado: boolean;
+  ajuste: "ninguno" | "oferta-ficticia" | "demanda-ficticia";
+  metodoSolicitado: "noroeste" | "costo-minimo" | "vogel";
+  metodoUsado: "noroeste" | "costo-minimo" | "vogel";
+  costos: FraccionTransporteJSON[][];
+  oferta: FraccionTransporteJSON[];
+  demanda: FraccionTransporteJSON[];
+  prohibidas: boolean[][];
+  origenFicticio: boolean[];
+  destinoFicticio: boolean[];
+  etiquetasOrigen: string[];
+  etiquetasDestino: string[];
+  asignacion: FraccionTransporteJSON[][];
+  asignaciones: AsignacionTransporteDTO[];
+  valorObjetivo: FraccionTransporteJSON;
+  comparacionInicial: ComparacionInicialTransporteDTO[];
+  iteraciones: IteracionTransporteDTO[];
+  procesos: PasoProceso[];
+}
+
 export interface EOQInput {
   demandaAnual: number;
   costoOrdenar: number;
@@ -558,6 +640,128 @@ export interface SimplexResultado {
   procesos: PasoProceso[];
 }
 
+// ---------------------------------------------------------------------------
+// Simplex Dual
+// ---------------------------------------------------------------------------
+
+export interface SimplexDualInput {
+  objetivo?: ObjetivoSimplex;
+  funcionObjetivo: number[];
+  restricciones: RestriccionSimplexInput[];
+}
+
+export interface RazonDualDTO {
+  columna: number;
+  variable: string;
+  reducido: FraccionJSON;
+  coeficiente: FraccionJSON;
+  razon: FraccionJSON | null;
+  descartada: boolean;
+}
+
+export interface IteracionDualDTO {
+  iteracion: number;
+  variables: string[];
+  basica: string[];
+  filas: FraccionJSON[][];
+  rhs: FraccionJSON[];
+  reducidos: FraccionJSON[];
+  z: FraccionJSON;
+  zOriginal: FraccionJSON;
+  filaSaliente: number | null;
+  variableSaliente: string | null;
+  columnaEntrante: number | null;
+  variableEntrante: string | null;
+  pivote: FraccionJSON | null;
+  ratios: RazonDualDTO[] | null;
+  factible: boolean;
+}
+
+export interface SimplexDualResultado {
+  objetivo: ObjetivoSimplex;
+  n: number;
+  m: number;
+  estado: 'optimo' | 'infactible' | 'no-dual-factible';
+  mensaje: string;
+  variables: string[];
+  basicaFinal: string[];
+  solucion: FraccionJSON[];
+  holguras: FraccionJSON[];
+  valorObjetivo: FraccionJSON;
+  iteraciones: IteracionDualDTO[];
+  procesos: PasoProceso[];
+}
+
+// ---------------------------------------------------------------------------
+// Algoritmo de Lemke (LCP / QP)
+// ---------------------------------------------------------------------------
+
+export interface LemkeInput {
+  tipo?: 'lcp' | 'qp';
+  M?: number[][];
+  q?: number[];
+  Q?: number[][];
+  c?: number[];
+  A?: number[][];
+  b?: number[];
+}
+
+export interface RazonLemkeDTO {
+  fila: number;
+  variable: string;
+  valorBase: FraccionJSON;
+  coeficiente: FraccionJSON;
+  razon: FraccionJSON | null;
+  descartada: boolean;
+}
+
+export interface IteracionLemkeDTO {
+  iteracion: number;
+  variables: string[];
+  basica: string[];
+  filas: FraccionJSON[][];
+  rhs: FraccionJSON[];
+  entra: number | null;
+  sale: number | null;
+  pivote: FraccionJSON | null;
+  ratios: RazonLemkeDTO[] | null;
+  paso: 'inicio' | 'artificial' | 'pivote' | 'fin';
+  nota: string;
+}
+
+export interface ComplementariedadDTO {
+  indice: number;
+  z: FraccionJSON;
+  w: FraccionJSON;
+  producto: FraccionJSON;
+}
+
+export interface QPResumenDTO {
+  n: number;
+  m: number;
+  x: FraccionJSON[];
+  lambda: FraccionJSON[];
+  holguras: FraccionJSON[];
+  valorObjetivo: FraccionJSON;
+}
+
+export interface LemkeResultado {
+  tipo: 'lcp' | 'qp';
+  estado: 'solucion' | 'sin-solucion';
+  mensaje: string;
+  tamanoLCP: number;
+  variables: string[];
+  z: FraccionJSON[];
+  w: FraccionJSON[];
+  residuo: FraccionJSON[];
+  complementariedad: ComplementariedadDTO[];
+  verifica: boolean;
+  iteraciones: IteracionLemkeDTO[];
+  procesos: PasoProceso[];
+  lcp: { M: FraccionJSON[][]; q: FraccionJSON[] };
+  qp: QPResumenDTO | null;
+}
+
 const API_BASE = '/api';
 
 export interface ApiIssue {
@@ -699,4 +903,37 @@ export async function calcularSimplex(input: SimplexInput): Promise<SimplexResul
 
   const { data } = await parseResponse(res);
   return data as SimplexResultado;
+}
+
+export async function calcularSimplexDual(input: SimplexDualInput): Promise<SimplexDualResultado> {
+  const res = await fetch(`${API_BASE}/pl/dual`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const { data } = await parseResponse(res);
+  return data as SimplexDualResultado;
+}
+
+export async function calcularLemke(input: LemkeInput): Promise<LemkeResultado> {
+  const res = await fetch(`${API_BASE}/pl/lemke`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const { data } = await parseResponse(res);
+  return data as LemkeResultado;
+}
+
+export async function calcularTransporte(input: TransporteInput): Promise<TransporteResultado> {
+  const res = await fetch(`${API_BASE}/pl/transporte`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const { data } = await parseResponse(res);
+  return data as TransporteResultado;
 }

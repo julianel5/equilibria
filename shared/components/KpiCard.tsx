@@ -39,7 +39,7 @@ export default function KpiCard({
     isHighlight ? 'text-orange-600 dark:text-gray-400' : 'text-slate-500 dark:text-gray-400'
   }`;
 
-  const valueClass = `mt-2 tabular-nums  ${
+  const valueClass = `mt-2 tabular-nums line-clamp-2 overflow-hidden  ${
     isHighlight ? 'text-orange-600 dark:text-amber-400' : values[tone as Exclude<Tone, 'amber'>]
   } ${large ? 'text-4xl font-extrabold tracking-tight' : 'text-2xl font-bold'}`;
 
@@ -47,9 +47,11 @@ export default function KpiCard({
     <div className={shell}>
       <p className={titleClass}>{conSubindices(title)}</p>
       <p className={valueClass}>{value}</p>
-      <div className="mt-3 rounded-md border border-transparent bg-gray-100 px-3 py-2 text-gray-800  dark:border dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
-        <Formula tex={formula} />
-      </div>
+      {formula && (
+        <div className="mt-3 rounded-md border border-transparent bg-gray-100 px-3 py-2 text-gray-800  dark:border dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+          <Formula tex={formula} />
+        </div>
+      )}
       {description ? (
         <p className="mt-2 text-xs leading-relaxed text-slate-400  dark:text-gray-500">{conSubindices(description)}</p>
       ) : null}

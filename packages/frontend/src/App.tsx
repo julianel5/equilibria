@@ -13,6 +13,9 @@ import MetodoGraficoPage from './pages/MetodoGraficoPage';
 import SimplexPage from './pages/SimplexPage';
 import PenalizacionPage from './pages/PenalizacionPage';
 import SensibilidadPage from './pages/SensibilidadPage';
+import SimplexDualPage from './pages/SimplexDualPage';
+import LemkePage from './pages/LemkePage';
+import TransportePage from './pages/TransportePage';
 import ThemeToggle from './components/ThemeToggle';
 import { ThemeProvider } from './hooks/useTheme';
 
@@ -30,6 +33,9 @@ const TITULOS: Record<string, string> = {
   '/pl/simplex': 'Método Simplex - Equilibria',
   '/pl/penalizacion': 'Penalización / Gran M - Equilibria',
   '/pl/sensibilidad': 'Análisis de Sensibilidad - Equilibria',
+  '/pl/dual': 'Simplex Dual - Equilibria',
+  '/pl/lemke': 'Algoritmo de Lemke - Equilibria',
+  '/pl/transporte': 'Modelo de Transporte - Equilibria',
 };
 
 type LinkNav = { nombre: string; ruta: string };
@@ -53,6 +59,9 @@ const NAV_GRUPOS: GrupoNav[] = [
       { nombre: 'Simplex', ruta: '/pl/simplex' },
       { nombre: 'Penalización / Gran M', ruta: '/pl/penalizacion' },
       { nombre: 'Análisis de Sensibilidad', ruta: '/pl/sensibilidad' },
+      { nombre: 'Simplex Dual', ruta: '/pl/dual' },
+      { nombre: 'Algoritmo de Lemke', ruta: '/pl/lemke' },
+      { nombre: 'Modelo de Transporte', ruta: '/pl/transporte' },
     ],
   },
   {
@@ -298,6 +307,9 @@ export default function App() {
             <Route path="/pl/simplex" element={<SimplexPage />} />
             <Route path="/pl/penalizacion" element={<PenalizacionPage />} />
             <Route path="/pl/sensibilidad" element={<SensibilidadPage />} />
+            <Route path="/pl/dual" element={<SimplexDualPage />} />
+            <Route path="/pl/lemke" element={<LemkePage />} />
+            <Route path="/pl/transporte" element={<TransportePage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

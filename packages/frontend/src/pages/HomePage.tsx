@@ -138,41 +138,35 @@ export default function HomePage() {
             </div>
           </NavLink>
 
-          <div
-            aria-disabled="true"
-            className="relative rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5  dark:border-gray-700 dark:bg-gray-900"
+          <NavLink
+            to="/pl/dual"
+            className="rounded-lg border border-violet-200 bg-white p-5 shadow-md  hover:scale-[1.02] dark:border-violet-900 dark:bg-gray-800"
           >
-            <span className="absolute right-3 top-3 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500  dark:bg-gray-700 dark:text-gray-400">
-              Próximamente
-            </span>
-            <p className="text-base font-bold text-slate-400  dark:text-gray-500">
-              Simplex Dual y Algoritmo de Lemke
+            <p className="text-base font-bold text-violet-600  dark:text-violet-400">
+              Simplex Dual
             </p>
-            <p className="mt-1 text-sm text-slate-400  dark:text-gray-500">
-              Optimización desde la super-optimalidad y complementariedad.
+            <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
+              Optimización desde la super-optimalidad: base dual-factible y pivoteo dual.
             </p>
-            <div className="mt-3 rounded-md bg-slate-100 px-3 py-2 text-slate-400  dark:bg-gray-800 dark:text-gray-400">
+            <div className="mt-3 rounded-md bg-violet-50 px-3 py-2 text-slate-600  dark:bg-violet-500/20 dark:text-violet-300">
               <Formula tex="y^T A \ge c^T" />
             </div>
-          </div>
+          </NavLink>
 
-          <div
-            aria-disabled="true"
-            className="relative rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5  dark:border-gray-700 dark:bg-gray-900"
+          <NavLink
+            to="/pl/lemke"
+            className="rounded-lg border border-sky-200 bg-white p-5 shadow-md  hover:scale-[1.02] dark:border-sky-900 dark:bg-gray-800"
           >
-            <span className="absolute right-3 top-3 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500  dark:bg-gray-700 dark:text-gray-400">
-              Próximamente
-            </span>
-            <p className="text-base font-bold text-slate-400  dark:text-gray-500">
-              Análisis de Sensibilidad
+            <p className="text-base font-bold text-sky-600  dark:text-sky-400">
+              Algoritmo de Lemke
             </p>
-            <p className="mt-1 text-sm text-slate-400  dark:text-gray-500">
-              Rangos de optimalidad y holguras.
+            <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
+              Pivoteo complementario para LCP y programación cuadrática vía KKT.
             </p>
-            <div className="mt-3 rounded-md bg-slate-100 px-3 py-2 text-slate-400  dark:bg-gray-800 dark:text-gray-400">
-              <Formula tex="c_B B^{-1} b" />
+            <div className="mt-3 rounded-md bg-sky-50 px-3 py-2 text-slate-600  dark:bg-sky-500/20 dark:text-sky-300">
+              <Formula tex="w = Mz + q,\quad w^T z = 0" />
             </div>
-          </div>
+          </NavLink>
         </div>
       </section>
 
@@ -181,21 +175,18 @@ export default function HomePage() {
           Modelos de Distribución y Redes
         </h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div
-            aria-disabled="true"
-            className="relative rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5  dark:border-gray-700 dark:bg-gray-900"
+          <NavLink
+            to="/pl/transporte"
+            className="rounded-lg border border-orange-200 bg-white p-5 shadow-md  hover:scale-[1.02] dark:border-orange-900 dark:bg-gray-800"
           >
-            <span className="absolute right-3 top-3 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500  dark:bg-gray-700 dark:text-gray-400">
-              Próximamente
-            </span>
-            <p className="text-base font-bold text-slate-400  dark:text-gray-500">Modelos de Transporte</p>
-            <p className="mt-1 text-sm text-slate-400  dark:text-gray-500">
-              Esquina Noroeste, Costo Mínimo y Aproximación de Vogel.
+            <p className="text-base font-bold text-orange-600  dark:text-orange-400">Modelos de Transporte</p>
+            <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
+              Esquina Noroeste, Costo Mínimo y Aproximación de Vogel con MODI/UV.
             </p>
-            <div className="mt-3 rounded-md bg-slate-100 px-3 py-2 text-slate-400  dark:bg-gray-800 dark:text-gray-400">
+            <div className="mt-3 rounded-md bg-orange-50 px-3 py-2 text-slate-600  dark:bg-orange-500/20 dark:text-orange-300">
               <Formula tex="\sum_{i} \sum_{j} c_{ij}x_{ij}" />
             </div>
-          </div>
+          </NavLink>
 
           <div
             aria-disabled="true"
