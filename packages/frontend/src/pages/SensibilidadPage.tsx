@@ -8,6 +8,8 @@ import {
   type SimplexResultado,
 } from '../services/api';
 import SensibilidadSimplex from '../components/SensibilidadSimplex';
+import CabeceraConGlosario from '../components/CabeceraConGlosario';
+import { VARIABLES_SENSIBILIDAD } from '../data/glosarioPL';
 import AvisoOptimosMultiples from '../components/AvisoOptimosMultiples';
 import { EditorNombresVariables, InterpretacionSolucion, nombreConEtiqueta, tieneNombres } from '../components/NombresVariables';
 import {
@@ -349,13 +351,13 @@ export default function SensibilidadPage() {
 
   return (
     <div className="space-y-6">
-      <header>
+      <CabeceraConGlosario variables={VARIABLES_SENSIBILIDAD}>
         <h1 className="text-2xl font-bold text-slate-800 dark:text-gray-100">Análisis de Sensibilidad</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-gray-400">
           Precios sombra, holguras y rangos de optimalidad a partir de la solución óptima de un modelo de Programación
           Lineal, con fracciones exactas.
         </p>
-      </header>
+      </CabeceraConGlosario>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
         {/* Formulario */}

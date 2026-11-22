@@ -10,6 +10,8 @@ import Formula from '@shared/components/Formula';
 import KpiCard from '@shared/components/KpiCard';
 import TabsPanel from '@shared/components/TabsPanel';
 import ProcesosView from '@shared/components/ProcesosView';
+import CabeceraConGlosario from '../components/CabeceraConGlosario';
+import { VARIABLES_TRANSPORTE } from '../data/glosarioPL';
 
 type MetodoInicial = 'noroeste' | 'costo-minimo' | 'vogel';
 type ObjetivoTransporte = 'min' | 'max';
@@ -177,12 +179,12 @@ export default function TransportePage() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <header className="mb-6">
+        <CabeceraConGlosario className="mb-6" variables={VARIABLES_TRANSPORTE}>
           <h1 className="text-3xl font-bold tracking-tight">Modelo de Transporte</h1>
           <p className="mt-1 text-slate-600 dark:text-slate-400">
             Resuelve problemas de transporte con métodos iniciales (Noroeste, Costo Mínimo, Vogel) y optimización MODI/UV.
           </p>
-        </header>
+        </CabeceraConGlosario>
 
         <TabsPanel pestanas={PESTANAS} activa={pestanaActiva} onCambio={setPestanaActiva} />
 

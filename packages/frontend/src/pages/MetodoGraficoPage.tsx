@@ -12,6 +12,8 @@ import PlanoCartesianoChart, {
 } from '../components/PlanoCartesianoChart';
 import AnalisisAlgebraicoMetodoGrafico from '../components/AnalisisAlgebraicoMetodoGrafico';
 import MetodoGraficoTeoria from '../components/MetodoGraficoTeoria';
+import CabeceraConGlosario from '../components/CabeceraConGlosario';
+import { VARIABLES_METODO_GRAFICO } from '../data/glosarioPL';
 import Formula from '@shared/components/Formula';
 import KpiCard from '@shared/components/KpiCard';
 import TabsPanel from '@shared/components/TabsPanel';
@@ -178,13 +180,13 @@ export default function MetodoGraficoPage() {
   );
 
   const cabecera = (
-    <header>
+    <CabeceraConGlosario variables={VARIABLES_METODO_GRAFICO}>
       <h1 className="text-2xl font-bold text-slate-800  dark:text-gray-100">Método Gráfico</h1>
       <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
         Programación Lineal en dos variables: región factible, vértices y evaluación enumerativa
         de la función objetivo.
       </p>
-    </header>
+    </CabeceraConGlosario>
   );
 
   if (pestana === 'teoria') {

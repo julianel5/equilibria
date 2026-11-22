@@ -14,6 +14,8 @@ import KpiCard from '@shared/components/KpiCard';
 import ProcesosView from '@shared/components/ProcesosView';
 import TabsPanel from '@shared/components/TabsPanel';
 import LemkeTeoria from '../components/LemkeTeoria';
+import CabeceraConGlosario from '../components/CabeceraConGlosario';
+import { VARIABLES_LEMKE } from '../data/glosarioPL';
 
 type Tipo = 'lcp' | 'qp';
 type Pestana = 'calculadora' | 'teoria';
@@ -810,13 +812,13 @@ export default function LemkePage() {
 
   return (
     <div className="space-y-6">
-      <header>
+      <CabeceraConGlosario variables={VARIABLES_LEMKE}>
         <h1 className="text-2xl font-bold text-slate-800 dark:text-gray-100">Algoritmo de Lemke</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-gray-400">
           Pivoteo complementario para resolver un LCP y, vía las condiciones KKT, un problema de programación
           cuadrática. Todas las operaciones usan fracciones exactas.
         </p>
-      </header>
+      </CabeceraConGlosario>
 
       <TabsPanel
         pestanas={PESTANAS}

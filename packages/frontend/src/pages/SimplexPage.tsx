@@ -15,6 +15,8 @@ import {
 } from '../services/api';
 import SimplexTeoria from '../components/SimplexTeoria';
 import GranMTeoria from '../components/GranMTeoria';
+import CabeceraConGlosario from '../components/CabeceraConGlosario';
+import { VARIABLES_GRAN_M, VARIABLES_SIMPLEX } from '../data/glosarioPL';
 import { ajustarEtiquetas, codificarProblema, decodificarProblema } from '../data/transferenciaProblema';
 import { EditorNombresVariables, InterpretacionSolucion, tieneNombres } from '../components/NombresVariables';
 import AvisoOptimosMultiples from '../components/AvisoOptimosMultiples';
@@ -874,12 +876,12 @@ export default function SimplexPage() {
   };
 
   const cabecera = (
-    <header>
-      <h1 className="text-2xl font-bold text-slate-800 dark:text-gray-100">{location.pathname === '/pl/penalizacion' ? 'Método de Penalización (Gran M)' : 'Método Simplex'}</h1>
+    <CabeceraConGlosario variables={esGranM ? VARIABLES_GRAN_M : VARIABLES_SIMPLEX}>
+      <h1 className="text-2xl font-bold text-slate-800 dark:text-gray-100">{esGranM ? 'Método de Penalización (Gran M)' : 'Método Simplex'}</h1>
       <p className="mt-1 text-sm text-slate-500  dark:text-gray-400">
         Programación Lineal en forma estándar: Simplex Tabular y Revisado con fracciones exactas.
       </p>
-    </header>
+    </CabeceraConGlosario>
   );
 
   if (pestana === 'teoria') {

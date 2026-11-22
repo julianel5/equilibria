@@ -13,6 +13,8 @@ import KpiCard from '@shared/components/KpiCard';
 import ProcesosView from '@shared/components/ProcesosView';
 import TabsPanel from '@shared/components/TabsPanel';
 import SimplexDualTeoria from '../components/SimplexDualTeoria';
+import CabeceraConGlosario from '../components/CabeceraConGlosario';
+import { VARIABLES_SIMPLEX_DUAL } from '../data/glosarioPL';
 
 type Operador = 'LE' | 'GE' | 'EQ';
 type Pestana = 'calculadora' | 'teoria';
@@ -553,13 +555,13 @@ export default function SimplexDualPage() {
 
   return (
     <div className="space-y-6">
-      <header>
+      <CabeceraConGlosario variables={VARIABLES_SIMPLEX_DUAL}>
         <h1 className="text-2xl font-bold text-slate-800 dark:text-gray-100">Simplex Dual</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-gray-400">
           Optimización desde una base dual-factible (super-óptima) pero primal-infeasible, con pivoteo dual y
           fracciones exactas.
         </p>
-      </header>
+      </CabeceraConGlosario>
 
       <TabsPanel
         pestanas={PESTANAS}
