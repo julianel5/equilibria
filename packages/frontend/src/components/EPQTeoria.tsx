@@ -122,7 +122,7 @@ export default function EPQTeoria() {
           El factor (1 − D/P) modula el efecto del reabastecimiento gradual sobre el inventario y,
           por tanto, sobre los costos de mantener.
         </p>
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           {FORMULAS.map((f) => (
             <div
               key={f.nombre}
@@ -138,11 +138,11 @@ export default function EPQTeoria() {
         </div>
       </section>
 
-      <aside className="max-w-4xl text-sm text-slate-400  dark:text-gray-500">
+      <aside className="max-w-4xl text-sm text-slate-600 dark:text-gray-300">
         <p>
-          Esta sección es un resumen introductorio de carácter académico y se ofrece como contenido
-          de relleno. Puede ampliarse o sustituirse por la investigación propia en fuentes
-          especializadas de gestión de operaciones e inventarios.
+          La producción y el consumo son simultáneos. Si <Formula tex="P>D" /> en una misma unidad
+          de tiempo, el inventario máximo es <Formula tex="Q(1-D/P)" /> y el promedio es la mitad.
+          El costo de mantener se calcula sobre ese promedio, no sobre la mitad del lote.
         </p>
       </aside>
     </article>

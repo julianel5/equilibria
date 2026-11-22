@@ -20,7 +20,7 @@ import { Frac } from '../simplex/fraction';
  * comparación lexicográfica para evitar ciclos.
  */
 
-export type EstadoLemke = 'solucion' | 'sin-solucion';
+export type EstadoLemke = 'solucion' | 'rayo-inconcluso' | 'limite-iteraciones';
 
 export interface RazonLemke {
   fila: number;
@@ -276,9 +276,9 @@ export function resolverLemke(M: Frac[][], q: Frac[]): ResultadoLemkeCore {
           nota: `La columna de ${variables[entra]} no tiene coeficientes positivos: rayo terminal, no se encuentra solución complementaria.`,
         })
       );
-      estado = 'sin-solucion';
+       estado = 'rayo-inconcluso';
       mensaje =
-        'Rayo terminal: la columna entrante no tiene coeficientes positivos. El LCP no tiene solución complementaria por este camino.';
+         'Terminación por rayo (inconcluso): Lemke no encontró una solución complementaria por esta trayectoria. No demuestra que no exista una solución.';
       break;
     }
 
@@ -323,7 +323,7 @@ export function resolverLemke(M: Frac[][], q: Frac[]): ResultadoLemkeCore {
   }
 
   if (iter > LIMITE_ITERACIONES) {
-    estado = 'sin-solucion';
+    estado = 'limite-iteraciones';
     mensaje = 'Se alcanzó el límite de iteraciones sin encontrar una solución complementaria.';
     iteraciones.push(
       snapshot(iter, {

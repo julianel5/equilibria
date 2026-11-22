@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { ErrorValidacion } from '@math-platform/engine';
 
 export function sendError(res: Response, error: unknown) {
   // ZodError: extraer solo los mensajes descriptivos (nada de estructuras JSON crudas)
@@ -18,10 +19,11 @@ export function sendError(res: Response, error: unknown) {
     return;
   }
 
-  if (error instanceof Error) {
+  if (error instanceof ErrorValidacion) {
     res.status(400).json({ success: false, error: error.message, issues: [] });
     return;
   }
 
+  console.error('Error inesperado en la API:', error);
   res.status(500).json({ success: false, error: 'Error interno del servidor', issues: [] });
 }

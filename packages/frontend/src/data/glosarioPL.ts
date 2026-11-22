@@ -131,7 +131,7 @@ export const VARIABLES_GRAN_M: VariableDef[] = [
   {
     simbolo: 'M',
     nombre: 'Penalización de las artificiales',
-    descripcion: 'Magnitud positiva muy grande: se resta M por unidad artificial al maximizar y se suma al minimizar. La vista algebraica conserva M como símbolo.',
+    descripcion: 'Penalización simbólica que domina a cualquier valor real. Se resta por unidad artificial al maximizar y se suma al minimizar; no se sustituye por un número fijo.',
   },
   ...notacionTableau,
   ...notacionPivoteoPrimal,
@@ -259,4 +259,14 @@ export const VARIABLES_TRANSPORTE: VariableDef[] = [
     nombre: 'Cantidad que se reasigna',
     descripcion: 'Es la menor asignación en las celdas marcadas con menos del ciclo MODI. Indica cuánto se puede reasignar sin dejar envíos negativos.',
   },
+];
+
+export const VARIABLES_ASIGNACION: VariableDef[] = [
+  { simbolo: 'm,\\ n,\\ N', nombre: 'Dimensiones', descripcion: 'm orígenes y n destinos reales; N es el orden de la matriz cuadrada tras balancearla.' },
+  { simbolo: 'x_{ij}', nombre: 'Decisión de asignación', descripcion: 'Vale 1 si se asigna el origen i al destino j y 0 en caso contrario.' },
+  { simbolo: 'c_{ij}', nombre: 'Valor de una asignación', descripcion: 'Costo o beneficio original de la pareja i, j.' },
+  { simbolo: 'C_{\\max}', nombre: 'Beneficio máximo válido', descripcion: 'Mayor valor entre las celdas reales permitidas. Se usa para convertir cada beneficio real en un costo equivalente.' },
+  { simbolo: 'k', nombre: 'Mínimo no cubierto', descripcion: 'Menor valor permitido que no cubre ninguna línea; se usa para ajustar la matriz y crear nuevos ceros.' },
+  { simbolo: '\\infty', nombre: 'Asignación prohibida', descripcion: 'Valor simbólico: la celda no participa en mínimos, ajustes ni emparejamientos.' },
+  objetivo,
 ];

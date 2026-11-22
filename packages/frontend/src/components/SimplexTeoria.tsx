@@ -143,7 +143,7 @@ export default function SimplexTeoria() {
           El módulo resuelve programas en forma estándar: restricciones{' '}
           <strong>únicamente ≤</strong> con <strong>b<sub>i</sub> ≥ 0</strong>. Las restricciones con ≥ o =
           requieren una base artificial y pertenecen al módulo{' '}
-          <strong>Dos Fases / Penalización</strong> (fuera de alcance). Si el pivoteo no encuentra
+          <strong>Método de Penalización (Gran M)</strong>. Si el pivoteo no encuentra
           ninguna razón válida, el motor reporta el problema como <strong>no acotado</strong>.
         </p>
       </section>

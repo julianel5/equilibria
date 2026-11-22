@@ -51,11 +51,11 @@ describe('EOQ con Descuentos por Cantidad', () => {
     expect(resultado.rangos[1].costoTotal).toBe(9225);
   });
 
-  // ============ Regla de descarte: Q* > q_max ============
+  // ============ Ajuste superior: Q* > q_max ============
   // D=1000, S=5, H=1 (fijo)
-  // Nivel 1: [0,99] C=10 → Q*=√(2·1000·5/1)=100 > 99 → DESCARTADO
+  // Nivel 1: [0,99] C=10 → Q*=√(2·1000·5/1)=100 > 99 → candidato 99
   // Nivel 2: [100,∞] C=9 → Q*=100 válido
-  const inputDescartado = {
+  const inputAjusteSuperior = {
     demandaAnual: 1000,
     costoOrdenar: 5,
     tipoCostoMantener: 'fijo' as const,
@@ -66,12 +66,12 @@ describe('EOQ con Descuentos por Cantidad', () => {
     ],
   };
 
-  test('debe descartar el nivel cuando Q* > q_max', () => {
-    const resultado = calcularEOQDescuentos(inputDescartado);
+  test('debe evaluar el límite superior cuando Q* > q_max', () => {
+    const resultado = calcularEOQDescuentos(inputAjusteSuperior);
 
-    expect(resultado.rangos[0].descartado).toBe(true);
-    expect(resultado.rangos[0].qAjustado).toBeNull();
-    expect(resultado.rangos[0].costoTotal).toBeNull();
+    expect(resultado.rangos[0].descartado).toBe(false);
+    expect(resultado.rangos[0].qAjustado).toBe(99);
+    expect(resultado.rangos[0].costoTotal).toBe(10100.01);
     expect(resultado.rangos[1].descartado).toBe(false);
     expect(resultado.loteOptimo).toBe(100);
     expect(resultado.costoTotalOptimo).toBe(9100);
@@ -246,7 +246,7 @@ describe('EOQ con Descuentos - Pestaña Procesos (procesos paso a paso)', () => 
       { cantidadMinima: 200, costoUnitario: 9 },
     ],
   };
-  const inputDescartado = {
+  const inputAjusteSuperior = {
     demandaAnual: 1000,
     costoOrdenar: 5,
     tipoCostoMantener: 'fijo' as const,
@@ -303,14 +303,14 @@ describe('EOQ con Descuentos - Pestaña Procesos (procesos paso a paso)', () => 
     expect(sel.resultado).toContain('nivel } 2 \\text{ con } Q = 200');
   });
 
-  test('los niveles descartados generan su proceso sin candidato', () => {
-    const resultado = calcularEOQDescuentos(inputDescartado);
+  test('el ajuste al máximo aparece en la traza y se evalúa su costo', () => {
+    const resultado = calcularEOQDescuentos(inputAjusteSuperior);
 
-    const desc = resultado.procesos.find((p) => p.id === 'descuentos-n1-descartado');
-    expect(desc).toBeDefined();
-    expect(desc!.formula).toContain('Regla 3');
-    expect(desc!.sustitucion).toBe('Q^*_j = 100 > q_{max} = 99');
-    expect(desc!.resultado).toBe('\\text{sin candidato}');
+    const ajuste = resultado.procesos.find((p) => p.id === 'descuentos-n1-ajuste');
+    expect(ajuste?.formula).toContain('Regla 3');
+    expect(ajuste?.sustitucion).toContain('Q^*_j = 100 > q_{max} = 99');
+    expect(ajuste?.resultado).toBe('Q = 99');
+    expect(resultado.rangos[0].costoTotal).toBe(10100.01);
   });
 
   test('modo porcentaje: H_j = (I/100)×C_j aparece en la Sustitución', () => {

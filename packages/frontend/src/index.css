@@ -11,6 +11,15 @@
   font-size: 1em;
 }
 
+.math-display > .katex-display {
+  min-width: max-content;
+}
+
+.math-entrante { color: #1d4ed8; }
+.math-pivote { color: #b91c1c; }
+.dark .math-entrante { color: #7dd3fc; }
+.dark .math-pivote { color: #fca5a5; }
+
 /* KaTeX hereda el color del contenedor (p. ej. chips de fórmulas con
    text-gray-800 dark:text-gray-200) para mantener legibilidad en ambos temas */
 .dark {

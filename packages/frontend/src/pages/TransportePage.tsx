@@ -35,11 +35,18 @@ const ETIQUETA_METODO: Record<MetodoInicial, string> = {
   'vogel': 'Aproximación de Vogel',
 };
 
-function createEmptyMatrix(m: number, n: number): number[][] {
-  return Array.from({ length: m }, () => new Array(n).fill(0));
+const MAX_DIMENSION = 15;
+
+function normalizarDimension(texto: string): number {
+  const valor = Math.floor(Number(texto));
+  return Number.isFinite(valor) ? Math.min(MAX_DIMENSION, Math.max(1, valor)) : 1;
 }
 
-function ensureMatrixSize(matrix: number[][], m: number, n: number): number[][] {
+function createEmptyMatrix(m: number, n: number): string[][] {
+  return Array.from({ length: m }, () => Array<string>(n).fill('0'));
+}
+
+function ensureMatrixSize(matrix: string[][], m: number, n: number): string[][] {
   const newMatrix = createEmptyMatrix(m, n);
   for (let i = 0; i < Math.min(m, matrix.length); i++) {
     for (let j = 0; j < Math.min(n, matrix[i]?.length ?? 0); j++) {
@@ -49,28 +56,23 @@ function ensureMatrixSize(matrix: number[][], m: number, n: number): number[][] 
   return newMatrix;
 }
 
-function parseMatrixInput(text: string, rows: number, cols: number): number[][] {
-  const matrix = createEmptyMatrix(rows, cols);
-  const lines = text.trim().split('\n');
-  for (let i = 0; i < Math.min(rows, lines.length); i++) {
-    const vals = lines[i].trim().split(/\s+/).map(v => parseFloat(v));
-    for (let j = 0; j < Math.min(cols, vals.length); j++) {
-      if (!isNaN(vals[j])) matrix[i][j] = vals[j];
-    }
-  }
-  return matrix;
+function parseMatrixInput(text: string): string[][] {
+  // La API valida dimensiones y tokens. Nunca rellenar con ceros ni truncar 1/3.
+  return text.trim().split(/\r?\n/).map(fila => fila.trim().split(/\s+/));
 }
 
-function matrixToText(matrix: number[][]): string {
+function matrixToText(matrix: string[][]): string {
   return matrix.map(row => row.join(' ')).join('\n');
 }
 
 export default function TransportePage() {
-  const [m, setM] = useState(3);
-  const [n, setN] = useState(3);
-  const [costos, setCostos] = useState<number[][]>([[8, 6, 10], [9, 12, 13], [14, 9, 16]]);
-  const [oferta, setOferta] = useState<number[]>([20, 30, 25]);
-  const [demanda, setDemanda] = useState<number[]>([15, 25, 35]);
+  const [filas, setFilas] = useState('3');
+  const [columnas, setColumnas] = useState('3');
+  const m = normalizarDimension(filas);
+  const n = normalizarDimension(columnas);
+  const [costos, setCostos] = useState([['8', '6', '10'], ['9', '12', '13'], ['14', '9', '16']]);
+  const [oferta, setOferta] = useState(['20', '30', '25']);
+  const [demanda, setDemanda] = useState(['15', '25', '35']);
   const [metodoInicial, setMetodoInicial] = useState<MetodoInicial>('vogel');
   const [objetivo, setObjetivo] = useState<ObjetivoTransporte>('min');
   const [prohibidas, setProhibidas] = useState<Prohibida[]>([]);
@@ -87,39 +89,27 @@ export default function TransportePage() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setCostos(ensureMatrixSize(costos, m, n));
-    setTextoCostos(matrixToText(costos));
+    setCostos(prev => ensureMatrixSize(prev, m, n));
+    setProhibidas(prev => prev.filter(p => p.origen <= m && p.destino <= n));
   }, [m, n]);
 
   useEffect(() => {
-    setOferta(Array.from({ length: m }, (_, i) => oferta[i] ?? 0));
+    setOferta(prev => Array.from({ length: m }, (_, i) => prev[i] ?? '0'));
   }, [m]);
 
   useEffect(() => {
-    setDemanda(Array.from({ length: n }, (_, i) => demanda[i] ?? 0));
+    setDemanda(prev => Array.from({ length: n }, (_, i) => prev[i] ?? '0'));
   }, [n]);
 
-  useEffect(() => {
-    if (modoTexto) {
-      setCostos(parseMatrixInput(textoCostos, m, n));
-    } else {
-      setTextoCostos(matrixToText(costos));
-    }
-  }, [modoTexto, textoCostos, m, n]);
+  const handleCostosChange = useCallback((i: number, j: number, value: string) => {
+    setCostos(prev => prev.map((row, ri) => ri === i ? row.map((v, rj) => rj === j ? value : v) : row));
+  }, []);
 
-  const handleCostosChange = useCallback((i: number, j: number, value: number) => {
-    setCostos(prev => {
-      const next = prev.map((row, ri) => ri === i ? row.map((v, rj) => rj === j ? value : v) : row);
-      if (!modoTexto) setTextoCostos(matrixToText(next));
-      return next;
-    });
-  }, [modoTexto]);
-
-  const handleOfertaChange = useCallback((i: number, value: number) => {
+  const handleOfertaChange = useCallback((i: number, value: string) => {
     setOferta(prev => prev.map((v, idx) => idx === i ? value : v));
   }, []);
 
-  const handleDemandaChange = useCallback((j: number, value: number) => {
+  const handleDemandaChange = useCallback((j: number, value: string) => {
     setDemanda(prev => prev.map((v, idx) => idx === j ? value : v));
   }, []);
 
@@ -138,18 +128,19 @@ export default function TransportePage() {
   }, []);
 
   const construirPayload = useCallback((): TransporteInput => ({
-    costos,
+    costos: modoTexto ? parseMatrixInput(textoCostos) : costos,
     oferta,
     demanda,
     metodoInicial,
     objetivo,
     prohibidas,
-  }), [costos, oferta, demanda, metodoInicial, objetivo, prohibidas]);
+  }), [costos, oferta, demanda, metodoInicial, objetivo, prohibidas, modoTexto, textoCostos]);
 
   const resolver = useCallback(async (e?: FormEvent) => {
     e?.preventDefault();
     setCargando(true);
     setError(null);
+    setResultado(null);
     try {
       const res = await calcularTransporte(construirPayload());
       setResultado(res);
@@ -165,20 +156,17 @@ export default function TransportePage() {
 
   const limpiar = useCallback(() => {
     setCostos(createEmptyMatrix(m, n));
-    setOferta(Array.from({ length: m }, () => 0));
-    setDemanda(Array.from({ length: n }, () => 0));
+    setTextoCostos(matrixToText(createEmptyMatrix(m, n)));
+    setOferta(Array<string>(m).fill('0'));
+    setDemanda(Array<string>(n).fill('0'));
     setProhibidas([]);
     setResultado(null);
     setError(null);
   }, [m, n]);
 
-  const totalOferta = oferta.reduce((a, b) => a + b, 0);
-  const totalDemanda = demanda.reduce((a, b) => a + b, 0);
-  const balanceado = totalOferta === totalDemanda && totalOferta > 0;
-
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="mx-auto max-w-7xl py-8 sm:px-4">
         <CabeceraConGlosario className="mb-6" variables={VARIABLES_TRANSPORTE}>
           <h1 className="text-3xl font-bold tracking-tight">Modelo de Transporte</h1>
           <p className="mt-1 text-slate-600 dark:text-slate-400">
@@ -189,8 +177,8 @@ export default function TransportePage() {
         <TabsPanel pestanas={PESTANAS} activa={pestanaActiva} onCambio={setPestanaActiva} />
 
         {pestanaActiva === 'calculadora' && (
-          <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_380px]">
-            <section className="space-y-6" aria-labelledby="form-title">
+          <div className="mt-6 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+            <section className="min-w-0 space-y-6" aria-labelledby="form-title">
               <h2 id="form-title" className="text-xl font-semibold text-slate-700 dark:text-gray-100">Datos del Problema</h2>
 
               <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-600 dark:bg-gray-800">
@@ -200,9 +188,11 @@ export default function TransportePage() {
                     <input
                       type="number"
                       min="1"
-                      max="10"
-                      value={m}
-                      onChange={e => setM(+e.target.value)}
+                      max={MAX_DIMENSION}
+                      value={filas}
+                      disabled={modoTexto}
+                      onChange={e => setFilas(e.target.value)}
+                      onBlur={() => setFilas(String(m))}
                       className="w-16 rounded border border-slate-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
                     />
                   </label>
@@ -211,22 +201,37 @@ export default function TransportePage() {
                     <input
                       type="number"
                       min="1"
-                      max="10"
-                      value={n}
-                      onChange={e => setN(+e.target.value)}
+                      max={MAX_DIMENSION}
+                      value={columnas}
+                      disabled={modoTexto}
+                      onChange={e => setColumnas(e.target.value)}
+                      onBlur={() => setColumnas(String(n))}
                       className="w-16 rounded border border-slate-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
                     />
                   </label>
                   <label className="flex items-center gap-2 text-sm ml-auto">
-                    <input type="checkbox" checked={modoTexto} onChange={e => setModoTexto(e.target.checked)} />
+                    <input type="checkbox" checked={modoTexto} onChange={e => {
+                      if (e.target.checked) setTextoCostos(matrixToText(costos));
+                      else {
+                        const matriz = parseMatrixInput(textoCostos);
+                        if (matriz.length !== m || matriz.some(fila => fila.length !== n)) {
+                          setError(`La matriz debe tener ${m} filas de ${n} valores.`);
+                          return;
+                        }
+                        setCostos(matriz);
+                      }
+                      setError(null);
+                      setModoTexto(e.target.checked);
+                    }} />
                     Editar matriz como texto
                   </label>
                 </div>
 
                 {modoTexto ? (
                   <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Matriz de costos (filas separadas por salto de línea, columnas por espacio):</label>
+                    <label htmlFor="transporte-matriz-texto" className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Matriz de costos (una fila por línea; separa con espacios, por ejemplo 1/3 0 2):</label>
                     <textarea
+                      id="transporte-matriz-texto"
                       value={textoCostos}
                       onChange={e => setTextoCostos(e.target.value)}
                       rows={Math.max(4, m)}
@@ -235,7 +240,7 @@ export default function TransportePage() {
                     />
                   </div>
                 ) : (
-                  <div className="overflow-x-auto mb-4">
+                   <div className="mb-4 max-w-full overflow-x-auto">
                     <table className="min-w-full border-collapse text-sm">
                       <thead>
                         <tr>
@@ -257,21 +262,20 @@ export default function TransportePage() {
                             {fila.map((v, j) => (
                               <td key={j} className="border border-slate-300 px-1 py-1 dark:border-gray-600">
                                 <input
-                                  type="number"
-                                  step="any"
+                                   type="text"
+                                   aria-label={`Costo de origen ${i + 1} a destino ${j + 1}`}
                                   value={v}
-                                  onChange={e => handleCostosChange(i, j, parseFloat(e.target.value) || 0)}
+                                   onChange={e => handleCostosChange(i, j, e.target.value)}
                                   className="w-20 rounded border border-slate-300 px-1 py-0.5 text-center text-sm dark:border-gray-600 dark:bg-gray-900"
                                 />
                               </td>
                             ))}
                             <td className="border border-slate-300 px-2 py-1.5 text-center dark:border-gray-600">
                               <input
-                                type="number"
-                                step="any"
-                                min="0"
-                                value={oferta[i] ?? 0}
-                                onChange={e => handleOfertaChange(i, parseFloat(e.target.value) || 0)}
+                                 type="text"
+                                 aria-label={`Oferta de origen ${i + 1}`}
+                                 value={oferta[i] ?? '0'}
+                                 onChange={e => handleOfertaChange(i, e.target.value)}
                                 className="w-20 rounded border border-slate-300 px-1 py-0.5 text-center text-sm font-medium dark:border-gray-600 dark:bg-gray-900"
                               />
                             </td>
@@ -282,42 +286,39 @@ export default function TransportePage() {
                           {demanda.map((v, j) => (
                             <td key={j} className="border border-slate-300 px-2 py-1.5 text-center dark:border-gray-600">
                               <input
-                                type="number"
-                                step="any"
-                                min="0"
-                                value={v}
-                                onChange={e => handleDemandaChange(j, parseFloat(e.target.value) || 0)}
+                                 type="text"
+                                 aria-label={`Demanda de destino ${j + 1}`}
+                                 value={v}
+                                 onChange={e => handleDemandaChange(j, e.target.value)}
                                 className="w-20 rounded border border-slate-300 px-1 py-0.5 text-center text-sm font-medium dark:border-gray-600 dark:bg-gray-900"
                               />
                             </td>
                           ))}
-                          <td className="border border-slate-300 px-2 py-1.5 text-center font-bold dark:border-gray-600">
-                            ΣO={totalOferta} / ΣD={totalDemanda}
-                          </td>
+                           <td className="border border-slate-300 px-2 py-1.5 text-center dark:border-gray-600" />
                         </tr>
                       </tbody>
                     </table>
                   </div>
                 )}
 
-                <div className="flex flex-wrap gap-4 mb-4">
-                  <label className="flex items-center gap-2 text-sm">
+                <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <label className="grid min-w-0 gap-1 text-sm">
                     Objetivo:
                     <select
                       value={objetivo}
                       onChange={e => setObjetivo(e.target.value as ObjetivoTransporte)}
-                      className="rounded border border-slate-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
+                      className="w-full min-w-0 rounded border border-slate-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
                     >
                       <option value="min">Minimizar costo</option>
                       <option value="max">Maximizar beneficio</option>
                     </select>
                   </label>
-                  <label className="flex items-center gap-2 text-sm">
+                  <label className="grid min-w-0 gap-1 text-sm">
                     Método inicial:
                     <select
                       value={metodoInicial}
                       onChange={e => setMetodoInicial(e.target.value as MetodoInicial)}
-                      className="rounded border border-slate-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
+                      className="w-full min-w-0 rounded border border-slate-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
                     >
                       <option value="vogel">Aproximación de Vogel (recomendado)</option>
                       <option value="costo-minimo">Costo Mínimo</option>
@@ -380,7 +381,7 @@ export default function TransportePage() {
                   <button
                     type="button"
                     onClick={resolver}
-                    disabled={cargando || !balanceado}
+                    disabled={cargando}
                     className="rounded-md bg-emerald-600 px-6 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {cargando ? 'Resolviendo…' : 'Resolver'}
@@ -388,15 +389,13 @@ export default function TransportePage() {
                   <button
                     type="button"
                     onClick={limpiar}
-                    className="rounded-md bg-slate-200 px-6 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-300 dark:bg-gray-800 dark:hover:bg-gray-700"
+                     className="rounded-md bg-slate-200 px-6 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 dark:bg-slate-700 dark:text-white dark:hover:bg-slate-600 dark:focus-visible:outline-sky-300"
                   >
                     Limpiar
                   </button>
-                  {!balanceado && totalOferta > 0 && totalDemanda > 0 && (
-                    <span className="flex items-center text-sm text-amber-600 dark:text-amber-400">
-                      ⚠ Modelo desbalanceado (ΣO≠ΣD). Se equilibrará automáticamente.
-                    </span>
-                  )}
+                  <p className="self-center text-sm text-slate-600 dark:text-slate-300">
+                    Si el modelo está desbalanceado, el motor lo equilibrará automáticamente.
+                  </p>
                 </div>
 
                 {error && (
@@ -408,15 +407,26 @@ export default function TransportePage() {
               </div>
             </section>
 
-            <aside className="space-y-4" ref={scrollRef}>
+            <aside className="min-w-0 space-y-4" ref={scrollRef}>
               {resultado && (
                 <>
+                  {resultado.estado === 'infactible' && (
+                    <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
+                      <p className="font-bold">Transporte infactible</p>
+                      <p>{resultado.mensaje}</p>
+                    </div>
+                  )}
                   <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-600 dark:bg-gray-800">
                     <h3 className="text-lg font-semibold text-slate-700 dark:text-gray-100 mb-3">Resumen</h3>
+                    {resultado.estado !== 'infactible' && <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">{resultado.mensaje}</p>}
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-600 dark:bg-gray-800">
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-gray-400">Estado</p>
-                        <p className="mt-1 text-lg font-bold tabular-nums {resultado.estado === 'optimo' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}">{resultado.estado === 'optimo' ? 'Óptimo' : 'Infactible'}</p>
+                         <p className={`mt-1 text-lg font-bold ${resultado.estado === 'optimo'
+                           ? 'text-emerald-700 dark:text-emerald-300'
+                           : resultado.estado === 'infactible' ? 'text-red-800 dark:text-red-200' : 'text-amber-800 dark:text-amber-200'}`}>
+                          {resultado.estado === 'optimo' ? 'Óptimo' : resultado.estado === 'infactible' ? 'Infactible' : 'Inconcluso'}
+                        </p>
                       </div>
                       <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-600 dark:bg-gray-800">
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-gray-400">Objetivo</p>
@@ -424,26 +434,28 @@ export default function TransportePage() {
                       </div>
                       <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-600 dark:bg-gray-800">
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-gray-400">Método usado</p>
-                        <p className="mt-1 text-lg font-bold tabular-nums text-blue-600 dark:text-blue-400">{ETIQUETA_METODO[resultado.metodoUsado]}</p>
+                        <p className="mt-1 text-lg font-bold tabular-nums text-blue-600 dark:text-blue-400">
+                          {resultado.fasePenalizada ? 'Base penalizada (Gran M)' : ETIQUETA_METODO[resultado.metodoUsado]}
+                        </p>
                       </div>
                       <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-600 dark:bg-gray-800">
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-gray-400">Balanceado</p>
                         <p className="mt-1 text-lg font-bold tabular-nums text-slate-700 dark:text-slate-200">{resultado.balanceado ? 'Sí' : 'No'}</p>
                       </div>
 
-                      <KpiCard
+                       {resultado.estado === 'optimo' && resultado.valorObjetivo && <KpiCard
                         title="Valor óptimo Z*"
-                        value={resultado.valorObjetivo.tex}
-                        formula={"Z^* = c^T x"}
+                         value={{ tex: resultado.valorObjetivo.tex }}
+                        formula={`Z^* = ${resultado.valorObjetivo.tex}`}
                         tone="amber"
                         large
-                      />
+                      />}
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-600 dark:bg-gray-800">
+                  {resultado.estado === 'optimo' && <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-600 dark:bg-gray-800">
                     <h3 className="text-lg font-semibold text-slate-700 dark:text-gray-100 mb-3">Asignación Óptima</h3>
-                    <div className="overflow-x-auto">
+                     <div className="max-w-full overflow-x-auto">
                       <table className="min-w-full border-collapse text-sm">
                         <thead>
                           <tr>
@@ -456,7 +468,7 @@ export default function TransportePage() {
                             <th className="border border-slate-300 px-2 py-1.5 text-center text-xs font-semibold dark:border-gray-600">Oferta</th>
                           </tr>
                         </thead>
-                        <tbody>
+                      <tbody>
                           {resultado.asignacion.map((fila, i) => (
                             <tr key={i}>
                               <td className="border border-slate-300 px-2 py-1.5 text-center font-medium dark:border-gray-600">
@@ -489,11 +501,11 @@ export default function TransportePage() {
                         </tbody>
                       </table>
                     </div>
-                  </div>
+                  </div>}
 
                   <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-600 dark:bg-gray-800">
                     <h3 className="text-lg font-semibold text-slate-700 dark:text-gray-100 mb-3">Comparación de Métodos Iniciales</h3>
-                    <div className="overflow-x-auto">
+                     <div className="max-w-full overflow-x-auto">
                       <table className="min-w-full border-collapse text-sm">
                         <thead>
                           <tr>
@@ -524,10 +536,14 @@ export default function TransportePage() {
           </div>
         )}
 
-        {pestanaActiva === 'procesos' && resultado && (
+        {pestanaActiva === 'procesos' && (
           <section className="mt-6" aria-labelledby="procesos-title">
             <h2 id="procesos-title" className="text-xl font-semibold text-slate-700 dark:text-gray-100 mb-4">Procesos de Cálculo</h2>
-            <ProcesosView procesos={resultado.procesos} />
+            {resultado ? <ProcesosView procesos={resultado.procesos} /> : (
+              <p className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                Resuelve un problema en la Calculadora. Aquí verás el balanceo de oferta y demanda, la comparación de las bases iniciales, los pivotes MODI y el estado final.
+              </p>
+            )}
           </section>
         )}
 
@@ -551,9 +567,9 @@ export default function TransportePage() {
                   </ul>
                 </li>
                 <li>
-                  <strong>Optimización MODI/UV:</strong> Calcula potenciales u_i, v_j para celdas básicas; costos reducidos d_ij=c_ij-u_i-v_j.
+                   <strong>Optimización MODI/UV:</strong> Calcula los potenciales <Formula tex="u_i" /> y <Formula tex="v_j" /> para las celdas básicas, y los costos reducidos <Formula tex="d_{ij}=c_{ij}-u_i-v_j" />.
                   <br /> Si todos{' '}<Formula tex="d_{ij}\ge 0" />{' '}→ <strong>óptimo</strong>. Si hay{' '}<Formula tex="d_{ij}<0" />,{' '}
-                  entra la más negativa, se forma ciclo, pivotea con{' '}<Formula tex="\theta=\text{mínimo}" /> en celdas (-).
+                   entra la primera que mejora (regla de Bland), se forma el ciclo y se pivotea con{' '}<Formula tex="\theta=\text{mínimo}" /> en celdas (-).
                 </li>
               </ol>
 
@@ -561,10 +577,10 @@ export default function TransportePage() {
               <p>Si la solución inicial tiene menos de m+n-1 celdas básicas, se completan con celdas de flujo 0 que no forman ciclos (Union-Find).</p>
 
               <h3 className="text-lg font-semibold">Maximización</h3>
-              <p>Se transforma a minimización con c′_ij = -c_ij. El valor óptimo reportado es el original.</p>
+               <p>Se transforma a minimización con <Formula tex="c'_{ij} = -c_{ij}" />. El valor óptimo reportado es el original.</p>
 
               <h3 className="text-lg font-semibold">Rutas Prohibidas</h3>
-              <p>Se marcan celdas que nunca pueden recibir flujo. Si el método inicial elegido no encuentra solución factible, se prueba otro automáticamente.</p>
+              <p>Si ningún método inicial encuentra una base con rutas permitidas, se habilitan provisionalmente las prohibidas con costo adicional <Formula tex="M" />. Solo se certifica infactibilidad si el flujo prohibido mínimo sigue siendo positivo.</p>
             </div>
           </section>
         )}

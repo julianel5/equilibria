@@ -32,7 +32,7 @@ describe('Modelos de Transporte — casos clásicos', () => {
     expect(res.estado).toBe('optimo');
     expect(res.balanceado).toBe(true);
     expect(res.metodoUsado).toBe('vogel');
-    expect(num(res.valorObjetivo)).toBe(70);
+    expect(num(res.valorObjetivo!)).toBe(70);
     expect(res.asignacion.map((f) => f.map(num))).toEqual([
       [10, 0],
       [5, 15],
@@ -53,7 +53,7 @@ describe('Modelos de Transporte — casos clásicos', () => {
     for (const metodoInicial of ['noroeste', 'costo-minimo', 'vogel'] as const) {
       const res = calcularTransporte({ ...base, metodoInicial });
       expect(res.estado).toBe('optimo');
-      expect(num(res.valorObjetivo)).toBe(70);
+      expect(num(res.valorObjetivo!)).toBe(70);
       expect(res.metodoUsado).toBe(metodoInicial);
     }
   });
@@ -70,7 +70,7 @@ describe('Modelos de Transporte — casos clásicos', () => {
     });
 
     expect(res.estado).toBe('optimo');
-    expect(num(res.valorObjetivo)).toBe(360);
+    expect(num(res.valorObjetivo!)).toBe(360);
     const inicial = res.iteraciones[0];
     const basicas = inicial.basicas.flat().filter(Boolean).length;
     expect(basicas).toBe(res.m + res.n - 1);
@@ -128,7 +128,7 @@ describe('Modelos de Transporte — desbalance, máximos y fracciones', () => {
     expect(res.balanceado).toBe(false);
     expect(res.ajuste).toBe('demanda-ficticia');
     expect(res.destinoFicticio).toEqual([false, false, true]);
-    expect(num(res.valorObjetivo)).toBe(25);
+    expect(num(res.valorObjetivo!)).toBe(25);
     // El excedente de 5 unidades viaja al destino ficticio con costo 0.
     const ficticias = res.asignaciones.filter((a) => a.ficticia);
     expect(ficticias).toHaveLength(1);
@@ -149,7 +149,7 @@ describe('Modelos de Transporte — desbalance, máximos y fracciones', () => {
     expect(res.estado).toBe('optimo');
     expect(res.ajuste).toBe('oferta-ficticia');
     expect(res.origenFicticio).toEqual([false, false, true]);
-    expect(num(res.valorObjetivo)).toBe(20);
+    expect(num(res.valorObjetivo!)).toBe(20);
     expect(res.asignaciones.filter((a) => a.ficticia)).toHaveLength(1);
   });
 
@@ -166,7 +166,7 @@ describe('Modelos de Transporte — desbalance, máximos y fracciones', () => {
 
     expect(res.estado).toBe('optimo');
     expect(res.objetivo).toBe('max');
-    expect(num(res.valorObjetivo)).toBe(160);
+    expect(num(res.valorObjetivo!)).toBe(160);
     expect(res.asignacion.map((f) => f.map(num))).toEqual([
       [10, 0],
       [5, 15],
@@ -184,8 +184,8 @@ describe('Modelos de Transporte — desbalance, máximos y fracciones', () => {
     });
 
     expect(res.estado).toBe('optimo');
-    expect(res.valorObjetivo.tex).toBe('\\frac{7}{2}');
-    expect(res.valorObjetivo.dec).toBe('3.5');
+    expect(res.valorObjetivo?.tex).toBe('\\frac{7}{2}');
+    expect(res.valorObjetivo?.dec).toBe('3.5');
     expect(JSON.stringify(res)).not.toContain('bigint');
     expect(() => JSON.parse(JSON.stringify(res))).not.toThrow();
   });
@@ -215,7 +215,7 @@ describe('Modelos de Transporte — rutas prohibidas e infactibilidad', () => {
       [0, 10],
       [10, 0],
     ]);
-    expect(num(res.valorObjetivo)).toBe(20);
+    expect(num(res.valorObjetivo!)).toBe(20);
   });
 
   it('recurre a otro método inicial si el elegido no logra una asignación factible', () => {
@@ -256,7 +256,14 @@ describe('Modelos de Transporte — rutas prohibidas e infactibilidad', () => {
     });
 
     expect(res.estado).toBe('infactible');
-    expect(res.iteraciones).toHaveLength(0);
+    expect(res.procesos.find(p => p.id === 'transporte-final')).toMatchObject({
+      titulo: 'Transporte infactible',
+      simbolo: '',
+      formula: '\\text{No hay asignación óptima certificada.}',
+    });
+    expect(res.fasePenalizada).toBe(true);
+    expect(res.iteraciones[res.iteraciones.length - 1]?.flujoProhibido.tex).toBe('10');
+    expect(res.valorObjetivo).toBeNull();
     expect(res.mensaje.toLowerCase()).toContain('no existe una asignación factible');
   });
 });
@@ -351,7 +358,7 @@ describe('Modelos de Transporte — validación y determinismo', () => {
     });
 
     const total = sum(res.asignaciones.map((a) => num(a.costo)));
-    expect(total).toBeCloseTo(num(res.valorObjetivo), 10);
+    expect(total).toBeCloseTo(num(res.valorObjetivo!), 10);
     expect(totalPorFilas(res)).toEqual(res.oferta.map(num));
     expect(totalPorColumnas(res)).toEqual(res.demanda.map(num));
   });

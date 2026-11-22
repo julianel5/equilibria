@@ -68,7 +68,7 @@ function Stat({ label, value, formula, dot, resaltado, badge }: StatProps) {
           : 'bg-white dark:bg-gray-800'
       }`}
     >
-      <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500  dark:text-gray-400">
+      <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-600 dark:text-gray-300">
         {dot ? (
           <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dot }} />
         ) : null}
@@ -87,7 +87,7 @@ function Stat({ label, value, formula, dot, resaltado, badge }: StatProps) {
         {conSubindices(badge ?? '')}
       </p>
       {formula ? (
-        <p className="mt-0.5 text-xs text-slate-400  dark:text-gray-500">
+        <p className="mt-0.5 text-xs text-slate-600 dark:text-gray-300">
           <Formula tex={formula} />
         </p>
       ) : null}
@@ -122,6 +122,7 @@ export default function CostChart({
   formulaFaltante,
 }: CostChartProps) {
   const dark = useDarkMode();
+  const colorTotal = dark ? '#7dd3fc' : '#1d4ed8';
   const [hover, setHover] = useState<PuntoCosto | null>(null);
 
   const handleMouseMove = (state: RechartState) => {
@@ -266,7 +267,7 @@ export default function CostChart({
               type="monotone"
               dataKey="total"
               name="Costo Relevante Total"
-              stroke="#2563eb"
+              stroke={colorTotal}
               strokeWidth={2.5}
               dot={false}
               activeDot={{ r: 6, strokeWidth: 2, stroke: '#ffffff' }}
@@ -321,7 +322,7 @@ export default function CostChart({
               label="Costo Relevante Total"
               value={fmt(mostrado?.total ?? 0, moneda)}
               formula={formulaTotal ?? SERIES_FORMULAS['Costo Relevante Total']}
-              dot="#2563eb"
+              dot={colorTotal}
             />
           </div>
         </div>

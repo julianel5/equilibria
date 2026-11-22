@@ -40,15 +40,15 @@ La **Teoría de Colas** incluye:
 | ------ | ---- | ----------- |
 | Método Gráfico y Enumerativo | `/pl/metodo-grafico` | Región factible, vértices y óptimo geométrico |
 | Método Simplex y Simplex Revisado | `/pl/simplex` | Algoritmo tabular y matricial, con Gran M y sensibilidad |
-| Penalización y Dos Fases | `/pl/penalizacion` | Variables artificiales para restricciones ≥ e = |
+| Penalización (Gran M) | `/pl/penalizacion` | Variables artificiales y penalización simbólica para restricciones ≥ e = |
 | Simplex Dual | `/pl/dual` | Arranque super-óptimo y pivoteo dual con fracciones exactas |
 | Algoritmo de Lemke | `/pl/lemke` | Pivoteo complementario para LCP y QP vía KKT |
 | Análisis de Sensibilidad | `/pl/sensibilidad` | Precios sombra, holguras y rangos de b y c |
 
-### Modelos de Distribución y Redes _(próximamente)_
+### Modelos de Distribución y Redes
 
-- Modelos de Transporte (Esquina Noroeste, Costo Mínimo, Vogel)
-- Problema de Asignación (Algoritmo Húngaro)
+- Modelos de Transporte (`/pl/transporte`): Esquina Noroeste, Costo Mínimo y Vogel.
+- Problema de Asignación (`/pl/asignacion`): algoritmo húngaro con traza exacta, maximización o minimización, balanceo y celdas prohibidas. La matriz acepta enteros, decimales y fracciones como `1/3`.
 
 ## Funcionalidades transversales
 
@@ -88,6 +88,7 @@ Base: `/api`
 | `/api/pl/simplex`                | POST   | Simplex tabular/revisado, Gran M y sensibilidad |
 | `/api/pl/dual`                   | POST   | Simplex Dual                          |
 | `/api/pl/lemke`                  | POST   | Algoritmo de Lemke (LCP y QP)         |
+| `/api/pl/asignacion`             | POST   | Algoritmo húngaro: `costos` como matriz de cadenas, `objetivo` (`min` o `max`) y `prohibidas` opcionales (`origen` y `destino` desde 1) |
 
 En producción (`NODE_ENV=production`) el mismo servicio sirve el frontend compilado desde
 `packages/frontend/dist` con fallback SPA para rutas de React; el endpoint `/health` reporta

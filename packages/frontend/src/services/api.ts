@@ -23,6 +23,10 @@ export interface IteracionTransporteDTO {
   u: FraccionTransporteJSON[];
   v: FraccionTransporteJSON[];
   reducidos: (FraccionTransporteJSON | null)[][];
+  uM: FraccionTransporteJSON[] | null;
+  vM: FraccionTransporteJSON[] | null;
+  reducidosM: (FraccionTransporteJSON | null)[][] | null;
+  flujoProhibido: FraccionTransporteJSON;
   entra: { i: number; j: number } | null;
   ciclo: CeldaCicloTransporteDTO[];
   theta: FraccionTransporteJSON | null;
@@ -50,16 +54,16 @@ export interface ComparacionInicialTransporteDTO {
 }
 
 export interface TransporteInput {
-  costos: number[][];
-  oferta: number[];
-  demanda: number[];
+  costos: (string | number)[][];
+  oferta: (string | number)[];
+  demanda: (string | number)[];
   metodoInicial?: "noroeste" | "costo-minimo" | "vogel";
   objetivo?: "min" | "max";
   prohibidas?: { origen: number; destino: number }[];
 }
 
 export interface TransporteResultado {
-  estado: "optimo" | "infactible";
+  estado: "optimo" | "infactible" | "limite-iteraciones" | "inconcluso";
   mensaje: string;
   objetivo: "min" | "max";
   m: number;
@@ -78,7 +82,8 @@ export interface TransporteResultado {
   etiquetasDestino: string[];
   asignacion: FraccionTransporteJSON[][];
   asignaciones: AsignacionTransporteDTO[];
-  valorObjetivo: FraccionTransporteJSON;
+  valorObjetivo: FraccionTransporteJSON | null;
+  fasePenalizada: boolean;
   comparacionInicial: ComparacionInicialTransporteDTO[];
   iteraciones: IteracionTransporteDTO[];
   procesos: PasoProceso[];
@@ -477,10 +482,12 @@ export interface LineaEfectivaPL {
 }
 
 export interface MetodoGraficoResult {
+  estado: 'optimo';
   funcionObjetivo: FuncionObjetivoPL;
   verticeOptimo: VerticePL | VerticePL[];
   valorZ: number;
   multiplesOptimos: boolean;
+  rayoOptimo: boolean;
   verticesFactibles: VerticePL[];
   interseccionesDescartadas: InterseccionDescartadaPL[];
   lineasEfectivas: LineaEfectivaPL[];
@@ -491,15 +498,15 @@ export type MetodoSimplex = 'tabular' | 'revisado';
 export type TipoRestriccionSimplex = 'LE' | 'GE' | 'EQ';
 
 export interface RestriccionSimplexInput {
-  coeficientes: number[];
+  coeficientes: (number | string)[];
   tipo?: TipoRestriccionSimplex;
-  b: number;
+  b: number | string;
 }
 
 export interface SimplexInput {
   metodo?: MetodoSimplex;
   objetivo?: ObjetivoSimplex;
-  funcionObjetivo: number[];
+  funcionObjetivo: (number | string)[];
   restricciones: RestriccionSimplexInput[];
 }
 
@@ -545,6 +552,8 @@ export interface CostoReducidoDTO {
   variable: string;
   cj: FraccionJSON;
   cr: FraccionJSON;
+  cjM: TerminoMDTO;
+  crM: TerminoMDTO;
   aj: FraccionJSON[];
 }
 
@@ -564,6 +573,8 @@ export interface IteracionRevisadaDTO {
   BInv: FraccionJSON[][];
   cB: FraccionJSON[];
   y: FraccionJSON[];
+  cBM: TerminoMDTO[];
+  yM: TerminoMDTO[];
   bi: FraccionJSON[];
   costosReducidos: CostoReducidoDTO[];
   columnaEntrante: number | null;
@@ -573,6 +584,7 @@ export interface IteracionRevisadaDTO {
   filaSaliente: number | null;
   variableSaliente: string | null;
   z: FraccionJSON;
+  zM: TerminoMDTO;
 }
 
 export interface RangoDTO {
@@ -625,7 +637,7 @@ export interface SimplexResultado {
   objetivo: ObjetivoSimplex;
   n: number;
   m: number;
-  estado: 'optimo' | 'no-acotado' | 'infactible';
+  estado: 'optimo' | 'no-acotado' | 'infactible' | 'limite-iteraciones';
   /** Precios sombra y rangos; null si el problema no tiene óptimo finito. */
   sensibilidad?: SensibilidadDTO | null;
   /** Soluciones óptimas alternativas; null si el problema no tiene óptimo finito. */
@@ -747,7 +759,7 @@ export interface QPResumenDTO {
 
 export interface LemkeResultado {
   tipo: 'lcp' | 'qp';
-  estado: 'solucion' | 'sin-solucion';
+  estado: 'solucion' | 'rayo-inconcluso' | 'limite-iteraciones';
   mensaje: string;
   tamanoLCP: number;
   variables: string[];
@@ -936,4 +948,54 @@ export async function calcularTransporte(input: TransporteInput): Promise<Transp
 
   const { data } = await parseResponse(res);
   return data as TransporteResultado;
+}
+
+export interface AsignacionInput {
+  costos: string[][];
+  objetivo: 'min' | 'max';
+  prohibidas: { origen: number; destino: number }[];
+}
+
+export interface FraccionAsignacionDTO {
+  num: string;
+  den: string;
+  tex: string;
+}
+
+export interface CeldaAsignacionDTO {
+  i: number;
+  j: number;
+}
+
+export type MatrizAsignacionDTO = (FraccionAsignacionDTO | null)[][];
+
+export type PasoAsignacionDTO = { matriz: MatrizAsignacionDTO } & (
+  | { tipo: 'original' | 'balanceo' }
+  | { tipo: 'conversion'; maximo: FraccionAsignacionDTO | null }
+  | { tipo: 'filas' | 'columnas'; minimos: FraccionAsignacionDTO[] }
+  | { tipo: 'cobertura'; iteracion: number; filas: number[]; columnas: number[] }
+  | { tipo: 'ajuste'; iteracion: number; minimo: FraccionAsignacionDTO }
+  | { tipo: 'asignacion'; celdas: CeldaAsignacionDTO[] }
+  | { tipo: 'infactible'; cardinalidad: number }
+);
+
+export interface AsignacionResultado {
+  estado: 'optimo' | 'infactible';
+  objetivo: 'min' | 'max';
+  m: number;
+  n: number;
+  iteraciones: number;
+  valorObjetivo: FraccionAsignacionDTO | null;
+  asignaciones: (CeldaAsignacionDTO & { valor: FraccionAsignacionDTO; ficticia: boolean })[];
+  pasos: PasoAsignacionDTO[];
+}
+
+export async function calcularAsignacion(input: AsignacionInput): Promise<AsignacionResultado> {
+  const res = await fetch(`${API_BASE}/pl/asignacion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const { data } = await parseResponse(res);
+  return data as AsignacionResultado;
 }

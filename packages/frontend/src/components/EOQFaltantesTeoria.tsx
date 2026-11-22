@@ -153,11 +153,11 @@ export default function EOQFaltantesTeoria() {
         </div>
       </section>
 
-      <aside className="max-w-4xl text-sm text-slate-400  dark:text-gray-500">
+      <aside className="max-w-4xl text-sm text-slate-600 dark:text-gray-300">
         <p>
-          Esta sección es un resumen introductorio de carácter académico y se ofrece como contenido
-          de relleno. Puede ampliarse o sustituirse por la investigación propia en fuentes
-          especializadas de gestión de operaciones e inventarios.
+          Este modelo supone que todo faltante queda pendiente y se entrega con el próximo pedido.
+          El costo de mantener y el costo de los pedidos pendientes determinan cómo se reparte cada
+          lote entre inventario disponible y demanda atrasada. No describe ventas perdidas.
         </p>
       </aside>
     </article>

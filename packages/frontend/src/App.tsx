@@ -1,23 +1,25 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import HomePage from './pages/HomePage';
-import EOQPage from './pages/EOQPage';
-import EPQPage from './pages/EPQPage';
-import EOQFaltantesPage from './pages/EOQFaltantesPage';
-import EOQDescuentosPage from './pages/EOQDescuentosPage';
-import PuntoReordenPage from './pages/PuntoReordenPage';
-import PeriodoUnicoPage from './pages/PeriodoUnicoPage';
-import TeoriaDecisionesPage from './pages/TeoriaDecisionesPage';
-import TeoriaColasPage from './pages/TeoriaColasPage';
-import MetodoGraficoPage from './pages/MetodoGraficoPage';
-import SimplexPage from './pages/SimplexPage';
-import PenalizacionPage from './pages/PenalizacionPage';
-import SensibilidadPage from './pages/SensibilidadPage';
-import SimplexDualPage from './pages/SimplexDualPage';
-import LemkePage from './pages/LemkePage';
-import TransportePage from './pages/TransportePage';
 import ThemeToggle from './components/ThemeToggle';
 import { ThemeProvider } from './hooks/useTheme';
+
+const HomePage = lazy(() => import('./pages/HomePage'));
+const EOQPage = lazy(() => import('./pages/EOQPage'));
+const EPQPage = lazy(() => import('./pages/EPQPage'));
+const EOQFaltantesPage = lazy(() => import('./pages/EOQFaltantesPage'));
+const EOQDescuentosPage = lazy(() => import('./pages/EOQDescuentosPage'));
+const PuntoReordenPage = lazy(() => import('./pages/PuntoReordenPage'));
+const PeriodoUnicoPage = lazy(() => import('./pages/PeriodoUnicoPage'));
+const TeoriaDecisionesPage = lazy(() => import('./pages/TeoriaDecisionesPage'));
+const TeoriaColasPage = lazy(() => import('./pages/TeoriaColasPage'));
+const MetodoGraficoPage = lazy(() => import('./pages/MetodoGraficoPage'));
+const SimplexPage = lazy(() => import('./pages/SimplexPage'));
+const PenalizacionPage = lazy(() => import('./pages/PenalizacionPage'));
+const SensibilidadPage = lazy(() => import('./pages/SensibilidadPage'));
+const SimplexDualPage = lazy(() => import('./pages/SimplexDualPage'));
+const LemkePage = lazy(() => import('./pages/LemkePage'));
+const TransportePage = lazy(() => import('./pages/TransportePage'));
+const AsignacionPage = lazy(() => import('./pages/AsignacionPage'));
 
 const TITULOS: Record<string, string> = {
   '/': 'Equilibria | Teoría de Inventarios',
@@ -36,6 +38,7 @@ const TITULOS: Record<string, string> = {
   '/pl/dual': 'Simplex Dual - Equilibria',
   '/pl/lemke': 'Algoritmo de Lemke - Equilibria',
   '/pl/transporte': 'Modelo de Transporte - Equilibria',
+  '/pl/asignacion': 'Problema de Asignación - Equilibria',
 };
 
 type LinkNav = { nombre: string; ruta: string };
@@ -62,6 +65,7 @@ const NAV_GRUPOS: GrupoNav[] = [
       { nombre: 'Simplex Dual', ruta: '/pl/dual' },
       { nombre: 'Algoritmo de Lemke', ruta: '/pl/lemke' },
       { nombre: 'Modelo de Transporte', ruta: '/pl/transporte' },
+      { nombre: 'Problema de Asignación', ruta: '/pl/asignacion' },
     ],
   },
   {
@@ -292,7 +296,8 @@ export default function App() {
           </nav>
         </header>
 
-        <main className="mx-auto max-w-6xl px-4 py-8">
+        <main className="mx-auto min-w-0 max-w-6xl px-4 py-8">
+          <Suspense fallback={<p role="status" className="py-6 text-sm text-slate-600 dark:text-gray-300">Cargando página…</p>}>
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/inventory/eoq" element={<EOQPage />} />
@@ -310,8 +315,10 @@ export default function App() {
             <Route path="/pl/dual" element={<SimplexDualPage />} />
             <Route path="/pl/lemke" element={<LemkePage />} />
             <Route path="/pl/transporte" element={<TransportePage />} />
+            <Route path="/pl/asignacion" element={<AsignacionPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
         </main>
       </div>
     </ThemeProvider>

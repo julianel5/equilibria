@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { proceso, type ProcesoCalculo } from '../../procesos';
 import { Frac } from '../simplex/fraction';
+import { entradaExacta } from '../simplex/entradaExacta';
 import {
   etiquetaMetodo,
   resolverTransporte,
@@ -9,6 +10,7 @@ import {
   type ComparacionInicialCore,
   type IteracionTransporteCore,
   type MetodoInicialTransporte,
+  type ResultadoTransporteCore,
 } from './transporte';
 
 export interface FraccionTransporteJSON {
@@ -32,6 +34,10 @@ export interface IteracionTransporteDTO {
   u: FraccionTransporteJSON[];
   v: FraccionTransporteJSON[];
   reducidos: (FraccionTransporteJSON | null)[][];
+  uM: FraccionTransporteJSON[] | null;
+  vM: FraccionTransporteJSON[] | null;
+  reducidosM: (FraccionTransporteJSON | null)[][] | null;
+  flujoProhibido: FraccionTransporteJSON;
   entra: { i: number; j: number } | null;
   ciclo: CeldaCicloDTO[];
   theta: FraccionTransporteJSON | null;
@@ -59,7 +65,7 @@ export interface ComparacionInicialDTO {
 }
 
 export interface TransporteResultado {
-  estado: 'optimo' | 'infactible';
+  estado: ResultadoTransporteCore['estado'];
   mensaje: string;
   objetivo: 'min' | 'max';
   m: number;
@@ -78,7 +84,8 @@ export interface TransporteResultado {
   etiquetasDestino: string[];
   asignacion: FraccionTransporteJSON[][];
   asignaciones: AsignacionTransporteDTO[];
-  valorObjetivo: FraccionTransporteJSON;
+  valorObjetivo: FraccionTransporteJSON | null;
+  fasePenalizada: boolean;
   comparacionInicial: ComparacionInicialDTO[];
   iteraciones: IteracionTransporteDTO[];
   procesos: ProcesoCalculo[];
@@ -160,6 +167,10 @@ function iteracionDTO(it: IteracionTransporteCore): IteracionTransporteDTO {
     u: it.u.map(ff),
     v: it.v.map(ff),
     reducidos: it.reducidos.map((fila) => fila.map((r) => (r ? ff(r) : null))),
+    uM: it.uM?.map(ff) ?? null,
+    vM: it.vM?.map(ff) ?? null,
+    reducidosM: it.reducidosM?.map(fila => fila.map(r => r && ff(r))) ?? null,
+    flujoProhibido: ff(it.flujoProhibido),
     entra: it.entra ? { ...it.entra } : null,
     ciclo: cicloDTO(it.ciclo),
     theta: it.theta ? ff(it.theta) : null,
@@ -169,33 +180,26 @@ function iteracionDTO(it: IteracionTransporteCore): IteracionTransporteDTO {
   };
 }
 
+const MAX_DIMENSION = 15;
+
 export const TransporteInputSchema = z
   .object({
     costos: z
-      .array(
-        z.array(
-          z.number().finite({
-            message: 'Los costos unitarios deben ser números finitos.',
-          })
-        )
-      )
+      .array(z.array(entradaExacta).max(MAX_DIMENSION, { message: 'Se admiten hasta 15 destinos.' }))
+      .max(MAX_DIMENSION, { message: 'Se admiten hasta 15 orígenes.' })
       .min(1, { message: 'La matriz de costos requiere al menos un origen.' }),
     oferta: z
       .array(
-        z
-          .number()
-          .finite({ message: 'La oferta debe ser un número finito.' })
-          .min(0, { message: 'La oferta no puede ser negativa.' })
+        entradaExacta.refine(v => !v.esNegativo, { message: 'La oferta no puede ser negativa.' })
       )
-      .min(1, { message: 'Se requiere al menos un origen.' }),
+      .min(1, { message: 'Se requiere al menos un origen.' })
+      .max(MAX_DIMENSION, { message: 'Se admiten hasta 15 ofertas.' }),
     demanda: z
       .array(
-        z
-          .number()
-          .finite({ message: 'La demanda debe ser un número finito.' })
-          .min(0, { message: 'La demanda no puede ser negativa.' })
+        entradaExacta.refine(v => !v.esNegativo, { message: 'La demanda no puede ser negativa.' })
       )
-      .min(1, { message: 'Se requiere al menos un destino.' }),
+      .min(1, { message: 'Se requiere al menos un destino.' })
+      .max(MAX_DIMENSION, { message: 'Se admiten hasta 15 demandas.' }),
     metodoInicial: z.enum(['noroeste', 'costo-minimo', 'vogel']).default('vogel'),
     objetivo: z.enum(['min', 'max']).default('min'),
     prohibidas: z
@@ -262,9 +266,8 @@ export const TransporteInputSchema = z
       }
     });
 
-    const totalOferta = data.oferta.reduce((acc, v) => acc + v, 0);
-    const totalDemanda = data.demanda.reduce((acc, v) => acc + v, 0);
-    if (totalOferta <= 0 && totalDemanda <= 0) {
+    const cantidades = [...data.oferta, ...data.demanda];
+    if (cantidades.every(v => v instanceof Frac && !v.esPositivo)) {
       ctx.addIssue({
         code: 'custom',
         path: ['oferta'],
@@ -288,9 +291,9 @@ export function calcularTransporte(input: TransporteInput): TransporteResultado 
   });
 
   const core = resolverTransporte({
-    costos: validado.costos.map((fila) => fila.map(Frac.deDecimal)),
-    oferta: validado.oferta.map(Frac.deDecimal),
-    demanda: validado.demanda.map(Frac.deDecimal),
+    costos: validado.costos,
+    oferta: validado.oferta,
+    demanda: validado.demanda,
     prohibidas,
     metodoInicial: validado.metodoInicial,
     maximizar: validado.objetivo === 'max',
@@ -303,7 +306,7 @@ export function calcularTransporte(input: TransporteInput): TransporteResultado 
   for (let i = 0; i < core.m; i++) {
     for (let j = 0; j < core.n; j++) {
       const cantidad = core.asignacion[i][j];
-      if (cantidad.esCero) continue;
+      if (cantidad.esCero || core.estado !== 'optimo') continue;
       const unitario = core.costosOriginales[i][j];
       asignaciones.push({
         i,
@@ -344,14 +347,14 @@ export function calcularTransporte(input: TransporteInput): TransporteResultado 
     .map((c) =>
       c.factible
         ? `${c.etiqueta}: Z_0 = ${c.costo!.tex}`
-        : `${c.etiqueta}: \\text{no factible con las rutas permitidas}`
+        : `\\text{${c.etiqueta}: no encontró flujo factible}`
     )
     .join(';\\;\\; ');
 
   procesos.push(
     proceso({
       id: 'transporte-inicial',
-      titulo: `Solución inicial — ${etiquetaMetodo(core.metodoUsado)}`,
+      titulo: core.fasePenalizada ? 'Base inicial penalizada (Gran M)' : `Solución inicial — ${etiquetaMetodo(core.metodoUsado)}`,
       simbolo: 'Z_0',
       formula: tablaTex(
         core.iteraciones[0]?.asignacion ?? core.asignacion,
@@ -361,12 +364,18 @@ export function calcularTransporte(input: TransporteInput): TransporteResultado 
         etiquetasDestino
       ),
       sustitucion: comparacionTexto,
-      resultado: `Z_0 = ${core.iteraciones[0]?.costo.toTex() ?? core.costo.toTex()}`,
+      resultado: core.fasePenalizada
+        ? '\\text{Se habilitan provisionalmente las rutas prohibidas con penalización simbólica } M.'
+        : `Z_0 = ${core.iteraciones[0]?.costo.toTex() ?? core.costo.toTex()}`,
       tipoResultado: 'texto',
     })
   );
 
   core.iteraciones.forEach((it) => {
+    const texM = (real: Frac, m: Frac | null | undefined) => !m || m.esCero
+      ? real.toTex() : `${real.toTex()}${m.esPositivo ? '+' : ''}${m.toTex()}M`;
+    const potenciales = `u = (${it.u.map((v, i) => texM(v, it.uM?.[i])).join(',\\; ')}),\\;\\; ` +
+      `v = (${it.v.map((v, j) => texM(v, it.vM?.[j])).join(',\\; ')})`;
     const tabla = tablaTex(
       it.asignacion,
       core.oferta,
@@ -381,10 +390,10 @@ export function calcularTransporte(input: TransporteInput): TransporteResultado 
           titulo: 'Criterio de optimalidad (MODI)',
           simbolo: 'd_{ij}',
           formula: `${tabla}\\;\\; d_{ij} = c_{ij} - u_i - v_j \\ge 0`,
-          sustitucion:
-            `u = (${it.u.map((v) => v.toTex()).join(',\\; ')}),\\;\\; ` +
-            `v = (${it.v.map((v) => v.toTex()).join(',\\; ')})`,
-          resultado: `\\text{Todos los costos reducidos son } \\ge 0 \\Rightarrow Z^* = ${it.costo.toTex()}.`,
+           sustitucion: potenciales,
+           resultado: it.optimo
+             ? `\\text{Todos los costos reducidos son } \\ge 0 \\Rightarrow Z^* = ${it.costo.toTex()}.`
+             : `\\text{Flujo prohibido mínimo: } ${it.flujoProhibido.toTex()} > 0.`,
           tipoResultado: 'texto',
         })
       );
@@ -394,6 +403,7 @@ export function calcularTransporte(input: TransporteInput): TransporteResultado 
     const entra = `x_{${it.entra.i + 1}${it.entra.j + 1}}`;
     const sale = it.sale ? `x_{${it.sale.i + 1}${it.sale.j + 1}}` : '\\text{ninguna}';
     const reducido = it.reducidos[it.entra.i][it.entra.j];
+    const reducidoM = it.reducidosM?.[it.entra.i][it.entra.j];
     const cicloTexto = it.ciclo
       .map(
         (c) =>
@@ -408,12 +418,11 @@ export function calcularTransporte(input: TransporteInput): TransporteResultado 
         simbolo: 'd_{ij}',
         formula: tabla,
         sustitucion:
-          `u = (${it.u.map((v) => v.toTex()).join(',\\; ')}),\\;\\; ` +
-          `v = (${it.v.map((v) => v.toTex()).join(',\\; ')});\\;\\; ` +
-          `\\text{Entra } ${entra} \\text{ con } d_{ij} = ${reducido ? reducido.toTex() : '0'}.\\;\\; ` +
+          `${potenciales};\\;\\; ` +
+          `\\text{Entra } ${entra} \\text{ con } d_{ij} = ${texM(reducido ?? Frac.CERO, reducidoM)}.\\;\\; ` +
           `\\text{Ciclo: } ${cicloTexto}`,
         resultado:
-          `\\text{Varía } \\theta = ${it.theta?.toTex() ?? '0'};\\; \\text{sale } ${sale};\\; Z = ${it.costo.toTex()}.`,
+          `\\text{Varía } \\theta = ${it.theta?.toTex() ?? '0'};\\; \\text{sale } ${sale};\\; Z = ${texM(core.maximizar ? it.costo.neg() : it.costo, it.flujoProhibido)}.`,
         tipoResultado: 'texto',
       })
     );
@@ -432,14 +441,15 @@ export function calcularTransporte(input: TransporteInput): TransporteResultado 
   procesos.push(
     proceso({
       id: 'transporte-final',
-      titulo: 'Solución óptima del transporte',
-      simbolo: 'Z^*',
-      formula: asignacionTexto,
+      titulo: core.estado === 'optimo' ? 'Solución óptima del transporte'
+        : core.estado === 'infactible' ? 'Transporte infactible' : 'Resultado inconcluso',
+      simbolo: core.estado === 'optimo' ? 'Z^*' : '',
+      formula: core.estado === 'optimo' ? asignacionTexto : '\\text{No hay asignación óptima certificada.}',
       sustitucion:
         core.estado === 'optimo'
           ? `Z^* = ${terminosCosto(core.costosOriginales, core.asignacion)}`
           : '\\text{El modelo no alcanzó una solución óptima certificada.}',
-      resultado: `Z^* = ${core.costo.toTex()}`,
+      resultado: core.estado === 'optimo' ? `Z^* = ${core.costo.toTex()}` : `\\text{${core.mensaje}}`,
       tipoResultado: 'texto',
     })
   );
@@ -464,7 +474,8 @@ export function calcularTransporte(input: TransporteInput): TransporteResultado 
     etiquetasDestino,
     asignacion: core.asignacion.map((fila) => fila.map(ff)),
     asignaciones,
-    valorObjetivo: ff(core.costo),
+    valorObjetivo: core.estado === 'optimo' ? ff(core.costo) : null,
+    fasePenalizada: core.fasePenalizada,
     comparacionInicial: comparacion,
     iteraciones: core.iteraciones.map(iteracionDTO),
     procesos,

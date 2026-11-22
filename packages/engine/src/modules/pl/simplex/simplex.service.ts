@@ -4,6 +4,8 @@ import { Frac } from './fraction';
 import {
   calcularSimplexCore,
   type ObjetivoSimplex,
+  type EstadoSimplex,
+  type TerminoM,
   type IteracionTabular,
   type IteracionRevisada,
   type RazonSimplex,
@@ -11,6 +13,7 @@ import {
 } from './simplex';
 import { analizarSensibilidad, type ResultadoSensibilidad, type Rango } from './sensibilidad';
 import { analizarOptimosMultiples } from './optimosMultiples';
+import { entradaExacta } from './entradaExacta';
 
 export interface OptimosMultiplesDTO {
   hay: boolean;
@@ -90,16 +93,16 @@ export const SimplexInputSchema = z
     metodo: z.enum(['tabular', 'revisado']).default('tabular'),
     objetivo: z.enum(['max', 'min']).default('max'),
     funcionObjetivo: z
-      .array(z.number().finite({ message: 'Los coeficientes de la función objetivo deben ser números finitos.' }))
+      .array(entradaExacta)
       .min(1, { message: 'La función objetivo requiere al menos una variable.' }),
     restricciones: z
       .array(
         z.object({
           coeficientes: z.array(
-            z.number().finite({ message: 'Los coeficientes de la restricción deben ser números finitos.' })
+            entradaExacta
           ),
           tipo: z.enum(['LE', 'GE', 'EQ']).default('LE'),
-          b: z.number().finite({ message: 'El término independiente (b) debe ser un número finito.' }),
+          b: entradaExacta,
         })
       )
       .min(1, { message: 'Se requiere al menos una restricción.' }),
@@ -114,7 +117,7 @@ export const SimplexInputSchema = z
           message: `La restricción ${i + 1} debe tener ${n} coeficientes (uno por variable).`,
         });
       }
-      if (r.b < 0) {
+      if (r.b instanceof Frac && r.b.esNegativo) {
         ctx.addIssue({
           code: 'custom',
           path: ['restricciones', i, 'b'],
@@ -170,6 +173,8 @@ export interface CostoReducidoDTO {
   variable: string;
   cj: FraccionJSON;
   cr: FraccionJSON;
+  cjM: TerminoMDTO;
+  crM: TerminoMDTO;
   aj: FraccionJSON[];
 }
 
@@ -189,6 +194,8 @@ export interface IteracionRevisadaDTO {
   BInv: FraccionJSON[][];
   cB: FraccionJSON[];
   y: FraccionJSON[];
+  cBM: TerminoMDTO[];
+  yM: TerminoMDTO[];
   bi: FraccionJSON[];
   costosReducidos: CostoReducidoDTO[];
   columnaEntrante: number | null;
@@ -198,6 +205,7 @@ export interface IteracionRevisadaDTO {
   filaSaliente: number | null;
   variableSaliente: string | null;
   z: FraccionJSON;
+  zM: TerminoMDTO;
 }
 
 export interface SimplexResultado {
@@ -205,7 +213,7 @@ export interface SimplexResultado {
   objetivo: ObjetivoSimplex;
   n: number;
   m: number;
-  estado: 'optimo' | 'no-acotado' | 'infactible';
+  estado: EstadoSimplex;
   /** Precios sombra y rangos; null si el problema no tiene óptimo finito. */
   sensibilidad: SensibilidadDTO | null;
   /** Soluciones óptimas alternativas; null si el problema no tiene óptimo finito. */
@@ -222,6 +230,15 @@ export interface SimplexResultado {
 
 function ff(f: Frac): FraccionJSON {
   return { num: f.num.toString(), den: f.den.toString(), tex: f.toTex(), dec: f.toDec() };
+}
+
+const mm = (f: TerminoM): TerminoMDTO => ({ a: ff(f.a), b: ff(f.b) });
+
+function texM(f: TerminoMDTO): string {
+  if (f.b.num === '0') return f.a.tex;
+  const parteM = f.b.den === '1' && f.b.num === '1' ? 'M'
+    : f.b.den === '1' && f.b.num === '-1' ? '-M' : `${f.b.tex}M`;
+  return f.a.num === '0' ? parteM : `${f.a.tex}${parteM.startsWith('-') ? '' : '+'}${parteM}`;
 }
 
 function razonDTO(r: RazonSimplex): RazonDTO {
@@ -276,11 +293,15 @@ function revisadoDTO(it: IteracionRevisada): IteracionRevisadaDTO {
     BInv: matrizDTO(it.BInv),
     cB: it.cB.map(ff),
     y: it.y.map(ff),
+    cBM: it.cBM.map(mm),
+    yM: it.yM.map(mm),
     bi: it.bi.map(ff),
     costosReducidos: it.costosReducidos.map((cr) => ({
       variable: cr.variable,
       cj: ff(cr.cj),
       cr: ff(cr.cr),
+      cjM: mm(cr.cjM),
+      crM: mm(cr.crM),
       aj: cr.aj.map(ff),
     })),
     columnaEntrante: it.columnaEntrante,
@@ -290,11 +311,12 @@ function revisadoDTO(it: IteracionRevisada): IteracionRevisadaDTO {
     filaSaliente: it.filaSaliente,
     variableSaliente: it.variableSaliente,
     z: ff(it.z),
+    zM: mm(it.zM),
   };
 }
 
 function celda(f: FraccionJSON, destacar: boolean): string {
-  return destacar ? `{\\color{red} ${f.tex}}` : f.tex;
+  return destacar ? `\\htmlClass{math-pivote}{${f.tex}}` : f.tex;
 }
 
 function textoTableau(t: TablaTabularDTO): string {
@@ -302,7 +324,7 @@ function textoTableau(t: TablaTabularDTO): string {
   const encabezado = [
     '',
     ...t.variables.map((v, j) =>
-      t.columnaEntrante === j ? `{\\color{blue} ${v}}` : v
+      t.columnaEntrante === j ? `\\htmlClass{math-entrante}{${v}}` : v
     ),
     'b',
   ];
@@ -311,8 +333,8 @@ function textoTableau(t: TablaTabularDTO): string {
     const celdas = fila.map((f, j) => celda(f, i === t.filaSaliente && j === t.columnaEntrante));
     lineas.push(`${t.basica[i]} & ${celdas.join(' & ')} & ${t.rhs[i].tex}`);
   });
-  const reducida = t.reducidos.map((f) => f.tex).join(' & ');
-  lineas.push(`Z_j - C_j & ${reducida} & ${t.z.tex}`);
+  const reducida = (t.reducidosM?.map(texM) ?? t.reducidos.map(f => f.tex)).join(' & ');
+  lineas.push(`Z_j - C_j & ${reducida} & ${t.zM ? texM(t.zM) : t.z.tex}`);
   return `\\text{Tableau}_{${t.iteracion}} = \\begin{array}{c|${'c'.repeat(cols)}|c} ${lineas.join(
     ' \\\\ \\hline '
   )} \\end{array}`;
@@ -341,19 +363,24 @@ function vecTex(v: FraccionJSON[]): string {
   return `\\begin{bmatrix} ${v.map((f) => f.tex).join(' \\\\ ')} \\end{bmatrix}`;
 }
 
-function procsEstadizacion(n: number, m: number): ProcesoCalculo[] {
-  const lineas: string[] = [];
-  for (let i = 0; i < m; i++) {
-    lineas.push(`\\sum_{j=1}^{n} a_{${i + 1}j}\\,x_j + S_{${i + 1}} = b_{${i + 1}}`);
-  }
+function procsEstadizacion(n: number, tipos: ('LE' | 'GE' | 'EQ')[], objetivo: ObjetivoSimplex): ProcesoCalculo[] {
+  const m = tipos.length;
+  const artificiales = tipos.flatMap((t, i) => t === 'LE' ? [] : [`R_{${i + 1}}`]);
+  const lineas = tipos.map((t, i) => {
+    const k = i + 1;
+    const extra = t === 'LE' ? `+S_{${k}}` : t === 'GE' ? `-E_{${k}}+R_{${k}}` : `+R_{${k}}`;
+    return `\\sum_{j=1}^{n} a_{${k}j}\\,x_j ${extra} = b_{${k}}`;
+  });
   return [
     proceso({
       id: `simplex-estandarizacion-${n}-${m}`,
       titulo: 'Estandarización',
-      simbolo: 'S_i',
-      formula: lineas.join('\\\\ '),
-      sustitucion: `\\text{Como } b_i \\ge 0 \\text{ y todas las restricciones son } \\le, \\text{ se agregan } ${m} \\text{ variables de holgura } S_1,\\ldots,S_{${m}}.`,
-      resultado: `\\text{Base inicial: } ${Array.from({ length: m }, (_, i) => `S_{${i + 1}}`).join(', ')}.`,
+      simbolo: artificiales.length ? 'M' : 'S_i',
+      formula: `\\begin{gathered}${lineas.join('\\\\ ')}\\end{gathered}`,
+      sustitucion: artificiales.length
+        ? `\\text{Objetivo penalizado: } c^Tx ${objetivo === 'max' ? '-' : '+'} M(${artificiales.join('+')}).`
+        : '\\text{Se suma una holgura a cada restricción.}',
+      resultado: `\\text{Base inicial: } ${tipos.map((t, i) => `${t === 'LE' ? 'S' : 'R'}_{${i + 1}}`).join(', ')}.`,
       tipoResultado: 'texto',
     }),
   ];
@@ -378,10 +405,10 @@ export function calcularSimplex(input: SimplexInput): SimplexResultado {
   const tablas = core.tablas.map(tablaDTO);
   const revisado = core.revisado.map(revisadoDTO);
 
-  const procesos: ProcesoCalculo[] = [...procsEstadizacion(n, m)];
+  const procesos = procsEstadizacion(n, validado.restricciones.map(r => r.tipo), validado.objetivo);
 
   if (validado.metodo === 'tabular') {
-    tablas.forEach((t, idx) => {
+    tablas.forEach((t) => {
       const entrante = t.variables[t.columnaEntrante!] ? t.variables[t.columnaEntrante!] : null;
       procesos.push(
         proceso({
@@ -395,19 +422,19 @@ export function calcularSimplex(input: SimplexInput): SimplexResultado {
           resultado:
             t.iteracion === tablas.length - 1 && core.estado === 'optimo'
               ? `\\text{Óptimo encontrado: } Z^* = ${t.z.tex}.`
-              : `Z = ${t.z.tex}.`,
+              : `Z = ${t.zM ? texM(t.zM) : t.z.tex}.`,
           tipoResultado: 'texto',
         })
       );
     });
   } else {
     revisado.forEach((it) => {
-      const yTex = `\\begin{bmatrix} ${it.cB.map((f) => f.tex).join(' & ')} \\end{bmatrix} \\cdot ${matTex(
+      const yTex = `\\begin{bmatrix} ${it.cBM.map(texM).join(' & ')} \\end{bmatrix} \\cdot ${matTex(
       it.BInv
-    )} = ${vecTex(it.y)}`;
+    )} = \\begin{bmatrix} ${it.yM.map(texM).join(' & ')} \\end{bmatrix}`;
       const cr = it.costosReducidos
         .filter((c) => !it.basica.includes(c.variable))
-        .map((c) => `${c.variable}: ${c.cr.tex}`)
+        .map((c) => `${c.variable}: ${texM(c.crM)}`)
         .join(',\\;\\;');
       const ratios = it.ratios
         ? textoRatios(
@@ -429,9 +456,11 @@ export function calcularSimplex(input: SimplexInput): SimplexResultado {
           formula: `y^T = c_B B^{-1} = ${yTex}`,
           sustitucion: `\\bar{c}_j = c_j - y^T A_j:\\; ${cr}.`,
           resultado:
-            it.columnaEntrante === null
+            it.iteracion === revisado.length - 1 && core.estado === 'optimo'
               ? `\\text{Óptimo (sin costos reducidos que mejorar): } Z^* = ${it.z.tex}.`
-              : `\\text{Entra } ${it.variableEntrante};\\; d = B^{-1}A_e = ${vecTex(it.d)}.\\; ${ratios}.\\; \\text{Sale } ${it.variableSaliente};\\; Z = ${it.z.tex}.`,
+              : it.columnaEntrante === null
+                ? `\\text{Base inicial: } Z = ${texM(it.zM)}.`
+                : `\\text{Entra } ${it.variableEntrante};\\; d = B^{-1}A_e = ${vecTex(it.d)}.\\; ${ratios}.\\; \\text{Sale } ${it.variableSaliente ?? '\\text{ninguna}'};\\; Z = ${texM(it.zM)}.`,
           tipoResultado: 'texto',
         })
       );
@@ -464,6 +493,18 @@ export function calcularSimplex(input: SimplexInput): SimplexResultado {
         tipoResultado: 'texto',
       })
     );
+  }
+
+  if (core.estado === 'limite-iteraciones') {
+    procesos.push(proceso({
+      id: 'simplex-limite-iteraciones',
+      titulo: 'Límite de iteraciones',
+      simbolo: '',
+      formula: '\\text{Se alcanzó el límite de pivotes.}',
+      sustitucion: `\\text{Última base: } ${core.basicaFinal.join(', ')}.`,
+      resultado: '\\text{Resultado inconcluso: no se certificó un óptimo.}',
+      tipoResultado: 'texto',
+    }));
   }
 
   // Análisis de sensibilidad: solo tiene sentido con un óptimo finito y factible.

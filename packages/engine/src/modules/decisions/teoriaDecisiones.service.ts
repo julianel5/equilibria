@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { proceso, fmtProceso, type ProcesoCalculo } from '../procesos';
+import { escapeLatexText } from '../latex';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Teoría de Decisiones - Matriz de Pagos
@@ -165,7 +166,7 @@ function construirCriterio(
   const valores: CriterioValor[] = valoresCrudos.map((v, i) => ({
     indice: i,
     alternativa: nombres[i],
-    valor: redondear(v),
+    valor: clave === 'savage' ? v : redondear(v),
   }));
   return {
     clave,
@@ -194,7 +195,7 @@ export function construirProcesosDecisiones(d: {
   const nCols = pagos[0].length;
   const procesos: ProcesoCalculo[] = [];
 
-  const texAlt = (nombre: string): string => `\\text{${nombre}}`;
+  const texAlt = (nombre: string): string => `\\text{${escapeLatexText(nombre)}}`;
   const listar = (xs: number[]): string => xs.map(fmtProceso).join(', ');
   const opFila = (max: boolean): string => (max ? '\\max' : '\\min');
   const buscar = (clave: CriterioClave): CriterioResult => d.criterios.find((c) => c.clave === clave)!;
@@ -401,8 +402,8 @@ export function calcularTeoriaDecisiones(input: TeoriaDecisionesInput): TeoriaDe
   //   minimizar: r_ij = a_ij − min_k a_kj  (cuánto te pasas del costo óptimo del estado)
   // ═══════════════════════════════════════════════════════════════════════════
   const matrizArrepentimiento = esCostos
-    ? pagos.map((fila) => fila.map((costo, j) => redondear(costo - minimoPorColumna[j])))
-    : pagos.map((fila) => fila.map((pago, j) => redondear(maximoPorColumna[j] - pago)));
+    ? pagos.map((fila) => fila.map((costo, j) => costo - minimoPorColumna[j]))
+    : pagos.map((fila) => fila.map((pago, j) => maximoPorColumna[j] - pago));
 
   const criterios: CriterioResult[] = [];
 
@@ -493,8 +494,8 @@ export function calcularTeoriaDecisiones(input: TeoriaDecisionesInput): TeoriaDe
         ? '\\text{Min}_i \\left( \\max_j r_{ij} \\right) \\qquad r_{ij} = a_{ij} - \\min_k a_{kj}'
         : '\\text{Min}_i \\left( \\max_j r_{ij} \\right) \\qquad r_{ij} = \\max_k a_{kj} - a_{ij}',
       esCostos
-        ? 'Minimiza el mayor arrepentimiento: r_ij mide cuánto te pasas del costo óptimo (mínimo) de cada estado. Se elige la alternativa con el menor de esos arrepentimientos máximos.'
-        : 'Minimiza el mayor arrepentimiento posible, donde el arrepentimiento r_ij es cuánto perdiste por no haber elegido la mejor alternativa para cada estado.',
+        ? 'Minimiza el mayor arrepentimiento: compara el exceso de costo de cada alternativa respecto del mínimo de cada estado.'
+        : 'Minimiza el mayor arrepentimiento: compara la pérdida de beneficio de cada alternativa respecto del máximo de cada estado.',
       alternativas,
       savagValores,
       iSavag,

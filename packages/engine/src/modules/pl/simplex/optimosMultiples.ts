@@ -27,9 +27,9 @@ export interface ResultadoOptimosMultiples {
 }
 
 export function analizarOptimosMultiples(
-  c: number[],
-  A: number[][],
-  b: number[],
+  c: (number | Frac)[],
+  A: (number | Frac)[][],
+  b: (number | Frac)[],
   objetivo: ObjetivoSimplex,
   tipos: TipoRestriccion[],
   basicaFinal: string[]

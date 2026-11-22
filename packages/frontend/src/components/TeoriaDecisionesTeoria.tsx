@@ -113,7 +113,7 @@ export default function TeoriaDecisionesTeoria() {
           óptimo de cada estado. Las etiquetas y fórmulas de los resultados se adaptan
           automáticamente.
         </p>
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           {CRITERIOS.map((c) => (
             <div
               key={c.nombre}
@@ -129,11 +129,11 @@ export default function TeoriaDecisionesTeoria() {
         </div>
       </section>
 
-      <aside className="max-w-4xl text-sm text-slate-400  dark:text-gray-500">
+      <aside className="max-w-4xl text-sm text-slate-600 dark:text-gray-300">
         <p>
-          Esta sección es un resumen introductorio de carácter académico y se ofrece como contenido
-          de relleno. Puede ampliarse o sustituirse por la investigación propia en fuentes
-          especializadas de teoría de la decisión.
+          Laplace pondera los estados por igual; el valor esperado usa las probabilidades
+          declaradas. Savage compara cada pago con el mejor de su columna y elige la alternativa
+          con el menor arrepentimiento máximo.
         </p>
       </aside>
     </article>

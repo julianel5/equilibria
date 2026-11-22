@@ -996,12 +996,13 @@ export default function LemkePage() {
 
           {resultado ? (
             <>
-              {resultado.estado === 'sin-solucion' ? (
+              {resultado.estado !== 'solucion' ? (
                 <div
                   role="alert"
                   className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-500/10 dark:text-amber-300"
                 >
-                  <p className="font-bold">Sin solución complementaria</p>
+                  <p className="font-bold">{resultado.estado === 'rayo-inconcluso'
+                    ? 'Terminación por rayo (inconcluso)' : 'Límite de iteraciones (inconcluso)'}</p>
                   <p className="mt-1">{resultado.mensaje}</p>
                 </div>
               ) : (

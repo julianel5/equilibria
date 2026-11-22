@@ -108,7 +108,7 @@ export function hayUnidadesMixtas(unidades: (UnidadTiempo | undefined)[]): boole
 
 export interface PasoNormalizacion {
   /** Símbolo matemático de la variable convertida. */
-  variable: 'D' | 'H' | 'I';
+  variable: 'D' | 'P' | 'H' | 'I';
   /** Nombre legible (p. ej. "Demanda"). */
   concepto: string;
   /** Valor tal como lo ingresó el estudiante (en su unidad original). */

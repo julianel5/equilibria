@@ -490,8 +490,9 @@ export default function MetodoGraficoPage() {
                 >
                   <p className="font-bold text-amber-700  dark:text-amber-400">Múltiples óptimos</p>
                   <p className="mt-1 text-amber-700  dark:text-amber-300">
-                    El mismo valor óptimo de Z se alcanza en más de un vértice; en realidad existen
-                    infinitas soluciones a lo largo del segmento que los une.
+                     {resultado.rayoOptimo
+                       ? 'Existe un rayo factible que conserva el mismo valor óptimo. El valor de Z es finito aunque el conjunto de soluciones óptimas no esté acotado.'
+                       : 'El mismo valor óptimo de Z se alcanza en varios vértices y en los segmentos que los unen.'}
                   </p>
                 </div>
               ) : null}
@@ -516,7 +517,9 @@ export default function MetodoGraficoPage() {
                   formula={'X^{*} = (x_1, x_2)'}
                   tone="emerald"
                   description={
-                    resultado.multiplesOptimos
+                     resultado.rayoOptimo
+                       ? 'Vértices que alcanzan el óptimo; desde ellos hay una dirección factible de igual valor.'
+                       : resultado.multiplesOptimos
                       ? 'Vértices entre los que se reparte el óptimo (todos sobre el segmento ganador).'
                       : 'Coordenadas del punto extremo de la región factible que optimiza Z.'
                   }
@@ -538,11 +541,10 @@ export default function MetodoGraficoPage() {
                 {resultado.multiplesOptimos ? (
                   <div className="rounded-lg border border-dashed border-amber-400 bg-amber-50/60 p-5  dark:border-amber-600 dark:bg-amber-500/10">
                     <p className="text-xs font-semibold uppercase tracking-wide text-amber-700  dark:text-amber-400">
-                      Tolerancia del motor
+                       Comparación exacta
                     </p>
                     <p className="mt-2 text-xs leading-relaxed text-amber-800  dark:text-amber-300">
-                      Dos vértices se consideran empatados cuando sus Z difieren en menos de 1×10⁻⁶.
-                      La gráfica resalta en ámbar todos los vértices ganadores.
+                       Los valores de Z se comparan como fracciones exactas. La gráfica resalta en ámbar los vértices óptimos.
                     </p>
                   </div>
                 ) : null}
@@ -591,10 +593,8 @@ export default function MetodoGraficoPage() {
               </div>
 
               <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500  dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-                El motor inyecta el perímetro <strong>x₁ ≥ 0, x₂ ≥ 0</strong> con una caja límite de{' '}
-                <strong className="tabular-nums">10 000</strong>. Si el óptimo toca la caja, el
-                problema se reporta como no acotado; los cruces contra la caja pueden aparecer como
-                puntos descartados lejanos, que la gráfica omite para conservar la escala.
+                 El motor incorpora <strong>x₁ ≥ 0, x₂ ≥ 0</strong> y calcula las intersecciones con fracciones exactas.
+                 Solo reporta un objetivo no acotado si existe un rayo factible que lo mejora indefinidamente.
               </p>
 
               <div className="mt-4">

@@ -42,7 +42,7 @@ const COMPARACION: { clave: string; primal: string; dual: string }[] = [
   },
   {
     clave: 'Variable que entra',
-    primal: 'La columna con el costo reducido más favorable (el más negativo en MAX, el más positivo en MIN).',
+    primal: 'La primera columna que mejora el objetivo, según la regla de Bland.',
     dual: 'Prueba de la razón dual sobre coeficientes negativos de la fila saliente.',
   },
   {
@@ -120,7 +120,7 @@ export default function SimplexDualTeoria() {
             El lado derecho b<sub>i</sub> sí puede ser negativo: precisamente esos valores negativos
             son los que hacen que la base inicial sea primal-infeasible y dan sentido al método. Si la
             base inicial no es dual-factible, el motor lo reporta como{' '}
-            <strong>no-dual-factible</strong> y sugiere usar Simplex primal o Dos Fases para llegar
+            <strong>no-dual-factible</strong> y sugiere usar Simplex primal o Gran M para llegar
             primero a una base válida.
           </p>
           <p>
@@ -206,9 +206,8 @@ export default function SimplexDualTeoria() {
             objetivos de maximización o minimización.
           </li>
           <li>
-            La base inicial debe ser <strong>dual-factible</strong>. No se ejecuta una fase I: si no lo
-            es, el resultado es <strong>no-dual-factible</strong> y hay que recurrir a Simplex primal o
-            Dos Fases.
+            La base inicial debe ser <strong>dual-factible</strong>. Si no lo es, el resultado es{' '}
+            <strong>no-dual-factible</strong> y se puede recurrir a Simplex primal o Gran M.
           </li>
           <li>
             Si en la fila saliente no hay coeficientes negativos, el primal es{' '}

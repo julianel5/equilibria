@@ -48,7 +48,7 @@ export function procesosDeConversion(pasos: PasoNormalizacion[]): ProcesoCalculo
     return proceso({
       id: `fase0-${i}-${paso.variable}`,
       titulo: `Estandarización · ${paso.concepto.toLowerCase()}`,
-      simbolo: 'D',
+      simbolo: paso.variable,
       formula: `${base} = ${origen} \\times k`,
       sustitucion: `${base} = ${fmtProceso(paso.valorOrigen)} \\times ${fmtProceso(paso.factor)}`,
       resultado: `${base} = ${fmtProceso(paso.valorAnual)}`,

@@ -36,6 +36,10 @@ export interface IteracionTransporteCore {
   u: Frac[];
   v: Frac[];
   reducidos: (Frac | null)[][];
+  uM: Frac[] | null;
+  vM: Frac[] | null;
+  reducidosM: (Frac | null)[][] | null;
+  flujoProhibido: Frac;
   entra: CeldaTransporte | null;
   ciclo: CeldaCicloTransporte[];
   theta: Frac | null;
@@ -51,7 +55,7 @@ export interface ComparacionInicialCore {
 }
 
 export interface ResultadoTransporteCore {
-  estado: 'optimo' | 'infactible';
+  estado: 'optimo' | 'infactible' | 'limite-iteraciones' | 'inconcluso';
   mensaje: string;
   m: number;
   n: number;
@@ -68,6 +72,7 @@ export interface ResultadoTransporteCore {
   origenFicticio: boolean[];
   destinoFicticio: boolean[];
   comparacion: ComparacionInicialCore[];
+  fasePenalizada: boolean;
   iteraciones: IteracionTransporteCore[];
   asignacion: Frac[][];
   costo: Frac;
@@ -381,20 +386,15 @@ function calcularPotenciales(
   return { u: uu, v: vv, reducidos };
 }
 
-function buscarEntrada(reducidos: (Frac | null)[][], m: number, n: number): CeldaTransporte | null {
-  let mejor: CeldaTransporte | null = null;
-  let mejorValor: Frac | null = null;
+function buscarEntrada(reducidos: (Frac | null)[][], coefM: (Frac | null)[][] | null, m: number, n: number): CeldaTransporte | null {
+  // Bland en orden fila/columna; primero se compara el coeficiente de M.
   for (let i = 0; i < m; i++) {
     for (let j = 0; j < n; j++) {
       const r = reducidos[i][j];
-      if (r === null || r.signo >= 0) continue;
-      if (mejorValor === null || r.cmp(mejorValor) < 0) {
-        mejorValor = r;
-        mejor = { i, j };
-      }
+      if (r !== null && ((coefM?.[i][j]?.signo ?? 0) || r.signo) < 0) return { i, j };
     }
   }
-  return mejor;
+  return null;
 }
 
 /** Ciclo alternado que se forma al añadir la celda entrante a la base. */
@@ -540,7 +540,7 @@ export function resolverTransporte(entrada: EntradaTransporteCore): ResultadoTra
   });
 
   // 3) Solución inicial: el método pedido; si falla por las prohibiciones, se
-  //    recurre a otro método factible antes de declarar el modelo infactible.
+  //    recurre a otro y, si ninguno sirve, permite las rutas con Gran M.
   let x = resolverInicial(metodoSolicitado, costosTrabajo, oferta, demanda, prohibidas);
   let metodoUsado = metodoSolicitado;
   let notaMetodo = '';
@@ -557,46 +557,37 @@ export function resolverTransporte(entrada: EntradaTransporteCore): ResultadoTra
     }
   }
 
-  if (x === null) {
-    return {
-      estado: 'infactible',
-      mensaje:
-        'No existe una asignación factible con las rutas permitidas. Revisa las rutas prohibidas o las ofertas y demandas.',
-      m,
-      n,
-      balanceado,
-      ajuste,
-      metodoSolicitado,
-      metodoUsado,
-      maximizar,
-      costosOriginales,
-      costosTrabajo,
-      oferta,
-      demanda,
-      prohibidas,
-      origenFicticio,
-      destinoFicticio,
-      comparacion,
-      iteraciones: [],
-      asignacion: matrizCeros(m, n),
-      costo: Frac.CERO,
-    };
+  const fasePenalizada = x === null;
+  const habilitadas = fasePenalizada ? matrizBooleanos(m, n, true) : permitidas;
+  const coefM = fasePenalizada
+    ? prohibidas.map(fila => fila.map(p => p ? Frac.UNO : Frac.CERO))
+    : null;
+  if (fasePenalizada) {
+    // Sobre la red completa y balanceada Noroeste siempre da una base factible.
+    x = metodoNoroeste(costosTrabajo, oferta, demanda, matrizBooleanos(m, n));
+    metodoUsado = 'noroeste';
+    notaMetodo = ' Se inició con Esquina Noroeste y una penalización simbólica M en las rutas prohibidas.';
   }
+  if (x === null) throw new Error('No se pudo construir una base inicial para el transporte balanceado.');
 
   // 4) MODI/UV: se repite hasta que todos los costos reducidos sean ≥ 0.
   let actual: Frac[][] = x;
-  let base = completarBase(actual, permitidas, m, n);
+  let base = completarBase(actual, habilitadas, m, n);
   const iteraciones: IteracionTransporteCore[] = [];
   let iteracion = 0;
-  let salir = false;
-
-  while (!salir) {
+  let estado: ResultadoTransporteCore['estado'] = 'limite-iteraciones';
+  while (iteracion <= LIMITE_ITERACIONES) {
     const basicas = base;
-    const { u, v, reducidos } = calcularPotenciales(costosTrabajo, basicas, permitidas, m, n);
-    const entra = buscarEntrada(reducidos, m, n);
+    const { u, v, reducidos } = calcularPotenciales(costosTrabajo, basicas, habilitadas, m, n);
+    const penalizacion = coefM ? calcularPotenciales(coefM, basicas, habilitadas, m, n) : null;
+    const entra = buscarEntrada(reducidos, penalizacion?.reducidos ?? null, m, n);
     const costo = costTotal(costosOriginales, actual);
+    const flujoProhibido = coefM ? costTotal(coefM, actual) : Frac.CERO;
+    const simbolico = { uM: penalizacion?.u ?? null, vM: penalizacion?.v ?? null,
+      reducidosM: penalizacion?.reducidos ?? null, flujoProhibido };
 
     if (entra === null) {
+      estado = flujoProhibido.esPositivo ? 'infactible' : 'optimo';
       iteraciones.push({
         iteracion,
         asignacion: actual.map((fila) => [...fila]),
@@ -604,16 +595,17 @@ export function resolverTransporte(entrada: EntradaTransporteCore): ResultadoTra
         u,
         v,
         reducidos,
+        ...simbolico,
         entra: null,
         ciclo: [],
         theta: null,
         sale: null,
         costo,
-        optimo: true,
+        optimo: estado === 'optimo',
       });
-      salir = true;
-      continue;
+      break;
     }
+    if (iteracion === LIMITE_ITERACIONES) break;
 
     const camino = buscarCiclo(entra, basicas, m, n);
     if (camino === null) {
@@ -624,6 +616,7 @@ export function resolverTransporte(entrada: EntradaTransporteCore): ResultadoTra
         u,
         v,
         reducidos,
+        ...simbolico,
         entra,
         ciclo: [],
         theta: null,
@@ -631,8 +624,8 @@ export function resolverTransporte(entrada: EntradaTransporteCore): ResultadoTra
         costo,
         optimo: false,
       });
-      salir = true;
-      continue;
+      estado = 'inconcluso';
+      break;
     }
 
     const ciclo = construirCiclo(entra, camino, actual);
@@ -640,7 +633,9 @@ export function resolverTransporte(entrada: EntradaTransporteCore): ResultadoTra
     let indiceSale = -1;
     ciclo.forEach((celda, indice) => {
       if (celda.signo !== -1) return;
-      if (theta === null || celda.cantidad.cmp(theta) < 0) {
+      const anterior = ciclo[indiceSale];
+      if (theta === null || celda.cantidad.cmp(theta) < 0 ||
+        (celda.cantidad.equals(theta) && celda.i * n + celda.j < anterior.i * n + anterior.j)) {
         theta = celda.cantidad;
         indiceSale = indice;
       }
@@ -663,6 +658,7 @@ export function resolverTransporte(entrada: EntradaTransporteCore): ResultadoTra
       u,
       v,
       reducidos,
+      ...simbolico,
       entra,
       ciclo,
       theta: t,
@@ -679,18 +675,19 @@ export function resolverTransporte(entrada: EntradaTransporteCore): ResultadoTra
     base = nuevaBase;
     actual = nueva;
     iteracion++;
-    if (iteracion >= LIMITE_ITERACIONES) salir = true;
   }
 
-  const ultima = iteraciones[iteraciones.length - 1];
-  const optimo = ultima?.optimo === true;
   const costoFinal = costTotal(costosOriginales, actual);
-  const mensaje = optimo
+  const mensaje = estado === 'optimo'
     ? `Solución óptima con ${etiquetaMetodo(metodoUsado)} como método inicial.${notaMetodo}`
-    : `Se alcanzó el límite de iteraciones sin certificar la optimalidad.${notaMetodo}`;
+    : estado === 'infactible'
+      ? 'No existe una asignación factible con las rutas permitidas: el flujo prohibido mínimo es positivo.'
+      : estado === 'limite-iteraciones'
+        ? 'Se alcanzó el límite de iteraciones sin certificar la optimalidad.'
+        : 'No se encontró un ciclo de pivoteo; el resultado es inconcluso.';
 
   return {
-    estado: optimo ? 'optimo' : 'infactible',
+    estado,
     mensaje,
     m,
     n,
@@ -707,6 +704,7 @@ export function resolverTransporte(entrada: EntradaTransporteCore): ResultadoTra
     origenFicticio,
     destinoFicticio,
     comparacion,
+    fasePenalizada,
     iteraciones,
     asignacion: actual,
     costo: costoFinal,

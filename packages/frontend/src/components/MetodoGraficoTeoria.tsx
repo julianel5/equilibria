@@ -109,7 +109,7 @@ export default function MetodoGraficoTeoria() {
         <p className="mb-5 text-sm text-slate-600  dark:text-gray-300">
           Los conceptos que conectan el álgebra del modelo con el dibujo del plano cartesiano:
         </p>
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
           {GLOSARIO.map((g) => (
             <div
               key={g.termino}

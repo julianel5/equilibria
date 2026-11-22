@@ -154,11 +154,11 @@ export default function PuntoReordenTeoria() {
         </div>
       </section>
 
-      <aside className="max-w-4xl text-sm text-slate-400  dark:text-gray-500">
+      <aside className="max-w-4xl text-sm text-slate-600 dark:text-gray-300">
         <p>
-          Esta sección es un resumen introductorio de carácter académico y se ofrece como contenido
-          de relleno. Puede ampliarse o sustituirse por la investigación propia en fuentes
-          especializadas de gestión de operaciones e inventarios.
+          En revisión continua, el punto de reorden suma la demanda esperada durante la entrega y
+          el inventario de seguridad. Bajo la aproximación normal, el factor de seguridad corresponde
+          al cuantil de la probabilidad objetivo de no sufrir un faltante en ese período.
         </p>
       </aside>
     </article>

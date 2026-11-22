@@ -113,7 +113,7 @@ export default function EOQDescuentosPage() {
         setResultado(res);
       } catch (e) {
         if (e instanceof ApiError) {
-          setErrors(e.issues.map((i) => i.message));
+          setErrors(e.issues.length ? e.issues.map((i) => i.message) : [e.message]);
           const campos: Record<string, string> = {};
           for (const issue of e.issues) {
             campos[issue.path] = issue.message;
@@ -426,7 +426,7 @@ export default function EOQDescuentosPage() {
               value={`${fmtDecimal(resultado.loteOptimo)} ${unidad}`}
               formula={'Q^* = \\sqrt{ \\frac{2DS}{H_j} }'}
               tone="blue"
-              description="Candidato del nivel ganador. Si el lote local caía debajo del intervalo, se ajustó a la cantidad mínima del nivel."
+              description="Candidato del nivel ganador. Si el lote local quedaba fuera del intervalo, se ajustó al límite más cercano."
             />
             <KpiCard
               large
@@ -641,9 +641,9 @@ function DesgloseNiveles({ resultado, activo, onActivo, unidad, moneda }: Desglo
           : 'border-slate-200 bg-white text-slate-500 hover:border-blue-300 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:text-blue-400'
     }`;
 
-  // ¿El candidato se ajustó a q_min? (Q* original quedó fuera del intervalo)
   const q = rangoActivo.descartado ? 0 : (rangoActivo.qAjustado ?? 0);
-  const ajustado = !rangoActivo.descartado && rangoActivo.qAjustado !== rangoActivo.qOriginal;
+  const alMinimo = rangoActivo.qOriginal < rangoActivo.cantidadMinima;
+  const alMaximo = rangoActivo.cantidadMaxima !== null && rangoActivo.qOriginal > rangoActivo.cantidadMaxima;
   const numOrdenes = q > 0 ? demanda / q : 0;
 
   const textoH = esFijo
@@ -713,18 +713,7 @@ function DesgloseNiveles({ resultado, activo, onActivo, unidad, moneda }: Desglo
               Este nivel fue descartado
             </p>
             <p>
-              Este nivel fue descartado porque el lote óptimo supera la cantidad máxima permitida
-              por el proveedor.
-            </p>
-            <p className="mt-1 text-xs text-slate-500  dark:text-gray-400">
-              Q* local = {fmtDecimal(rangoActivo.qOriginal)} {unidad} &gt; q<sub>max</sub> ={' '}
-              {rangoActivo.cantidadMaxima === null
-                ? '∞'
-                : fmtDecimal(rangoActivo.cantidadMaxima)}{' '}
-              {unidad}
-              {rangoActivo.costoTotal === null
-                ? ' — no se evalúa ningún costo porque no existe una cantidad pedible a este precio.'
-                : ''}
+               No se pudo evaluar un lote positivo con costo finito para este nivel.
             </p>
           </div>
         </div>
@@ -734,15 +723,17 @@ function DesgloseNiveles({ resultado, activo, onActivo, unidad, moneda }: Desglo
             title="Cantidad a Pedir"
             value={`${fmtDecimal(q)} ${unidad}`}
             formula={
-              ajustado
-                ? 'Q = q_{min}  \\quad \\text{si } Q^* < q_{min}'
-                : 'Q^*_j = \\sqrt{ \\frac{2DS}{H_j} }'
+               alMinimo
+                 ? 'Q = q_{min}  \\quad \\text{si } Q^* < q_{min}'
+                 : alMaximo ? 'Q = q_{max}  \\quad \\text{si } Q^* > q_{max}' : 'Q^*_j = \\sqrt{ \\frac{2DS}{H_j} }'
             }
             tone="blue"
             description={
-              ajustado
-                ? `El lote óptimo local (${fmtDecimal(rangoActivo.qOriginal)} ${unidad}) quedó debajo del mínimo del nivel; se compra la cantidad mínima para acceder al precio.`
-                : 'El lote óptimo local cayó dentro del intervalo de cantidades de este nivel, así que se aplica la raíz cuadrada clásica.'
+               alMinimo
+                 ? `El lote óptimo local (${fmtDecimal(rangoActivo.qOriginal)} ${unidad}) quedó debajo del mínimo del nivel; se compra la cantidad mínima para acceder al precio.`
+                 : alMaximo
+                   ? `El lote óptimo local (${fmtDecimal(rangoActivo.qOriginal)} ${unidad}) superó el máximo del nivel; se evalúa la cantidad máxima.`
+                   : 'El lote óptimo local cayó dentro del intervalo de cantidades de este nivel, así que se aplica la raíz cuadrada clásica.'
             }
           />
           <KpiCard

@@ -463,6 +463,20 @@ describe('Teoría de Decisiones — procesos paso a paso', () => {
   const r = calcularTeoriaDecisiones(basico);
   const buscar = (id: string) => r.procesos.find((p) => p.id === id);
 
+  test('conserva el nombre editable literal al interpolarlo en fórmulas', () => {
+    const nombre = 'Planta_1 50% $ & #{A} \\ ~ ^';
+    const tex = '\\text{Planta\\_1 50\\% \\$ \\& \\#\\{A\\} \\textbackslash{} \\textasciitilde{} \\textasciicircum{}}';
+    const resultado = calcularTeoriaDecisiones({
+      ...basico,
+      alternativas: [{ nombre, pagos: [1000, 1000, 1000] }, ...basico.alternativas.slice(1)],
+    });
+    for (const clave of ['maximax', 'savage']) {
+      expect(resultado.procesos.find(p => p.id === `decision-${clave}-alt-0`)?.simbolo).toBe(tex);
+      expect(resultado.procesos.find(p => p.id === `decision-${clave}-ganador`)?.resultado).toContain(tex);
+      expect(resultado.criterios.find(c => c.clave === clave)?.ganador.alternativa).toBe(nombre);
+    }
+  });
+
   test('genera una tarjeta por alternativa y una de decisión por criterio', () => {
     // maximax, maximin, laplace, hurwicz (4 c/u) + savage (3+2) + vme (4) = 25
     expect(r.procesos.map((p) => p.id)).toEqual([

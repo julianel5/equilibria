@@ -158,7 +158,7 @@ export function calcularEOQFaltantes(input: EOQFaltantesInput): EOQFaltantesResu
   // ═══════════════════════════════════════════════════════════════════════════
   const eoq = Math.sqrt((2 * D * S) / H);
   const factorFaltantes = H / (H + B);
-  const cantidadOptima = Math.round(eoq * Math.sqrt((H + B) / B));
+  const cantidadOptima = Math.max(1, Math.round(eoq * Math.sqrt((H + B) / B)));
 
   // ═══════════════════════════════════════════════════════════════════════════
   // S* = Q* × (H / (H + B))  y  Imax = Q* - S*

@@ -10,12 +10,12 @@ const ETAPAS: { titulo: string; detalle: string }[] = [
   {
     titulo: 'Costo reducido con Gran M',
     detalle:
-      'Los costos reducidos se calculan como Zⱼ − Cⱼ = c_{B}B⁻¹aⱼ − cⱼ, donde las variables artificiales tienen costo Cⱼ = ±M. Para MAX, entra la columna con Zⱼ − Cⱼ más negativo (incluyendo el efecto de M); para MIN, entra la más positiva. El óptimo se alcanza cuando se satisface el criterio correspondiente y ninguna artificial permanece positiva en la base.',
+      'Los costos reducidos se calculan como Zⱼ − Cⱼ = c_{B}B⁻¹aⱼ − cⱼ. Se representa cada término como a + bM y se compara primero b y luego a. Mientras haya flujo artificial, solo se eligen columnas que mejoran la penalización. La regla de Bland escoge la variable elegible de menor índice.',
   },
   {
     titulo: 'Prueba de la razón mínima',
     detalle:
-      'Para la columna entrante se divide el lado derecho de cada fila entre su coeficiente. Los denominadores negativos o cero se descartan. La fila con la razón más pequeña entrega la variable que sale. Si una variable artificial sale, su columna se elimina de futuros cálculos (ya no puede volver a entrar).',
+      'Para la columna entrante se divide el lado derecho de cada fila entre su coeficiente positivo. Sale la variable de razón mínima; en empate, la básica de menor índice. Una artificial que sale ya no puede volver a entrar.',
   },
   {
     titulo: 'Pivote (Gauss–Jordan)',
@@ -43,17 +43,17 @@ const SUPUESTOS: { titulo: string; detalle: string }[] = [
   {
     titulo: 'Certidumbre',
     detalle:
-      'Los parámetros del modelo (cⱼ, bᵢ, aᵢⱼ, M) son constantes conocidos con certeza. M debe elegirse lo suficientemente grande para que su efecto domine cualquier otro coeficiente.',
+      'Los parámetros del modelo (cⱼ, bᵢ, aᵢⱼ) son constantes conocidos. M es un símbolo y no requiere elegir un número.',
   },
   {
     titulo: 'No negatividad',
     detalle:
-      'Todas las variables de decisión, de exceso, de holgura y artificiales son ≥ 0. Una artificial positiva en el tableau final indica que el problema original no tiene solución factible.',
+      'Todas las variables de decisión, de exceso, de holgura y artificiales son ≥ 0. Una artificial positiva certifica infactibilidad solo si la penalización ya no puede mejorar.',
   },
   {
-    titulo: 'Elección de M',
+    titulo: 'Comparación de M',
     detalle:
-      'M debe ser un número positivo lo suficientemente grande. En la implementación se usa un M simbólico grande; si al finalizar alguna artificial sigue en base con valor positivo, el problema original es infactible.',
+      'El coeficiente de M tiene prioridad sobre cualquier costo real. La vista algebraica presenta a + bM y la numérica presenta el mismo valor como par exacto (a, b).',
   },
 ];
 
@@ -147,10 +147,10 @@ export default function GranMTeoria() {
         <ul className="list-disc space-y-2 pl-5 text-sm text-amber-800  dark:text-amber-200">
           <li>
             Si al finalizar <strong>ninguna variable artificial Rᵢ permanece en la base con valor
-            positivo</strong>, se obtiene una solución factible y óptima del problema original.
+             positivo</strong> y el algoritmo certifica optimalidad, se obtiene una solución factible y óptima del problema original.
           </li>
           <li>
-            Si al finalizar <strong>alguna artificial Rᵢ sigue en la base con valor positivo</strong>,
+             Si al certificar el mínimo de la penalización <strong>alguna artificial Rᵢ sigue en la base con valor positivo</strong>,
             el problema original <strong>no tiene solución factible</strong> (el conjunto factible
             original es vacío).
           </li>

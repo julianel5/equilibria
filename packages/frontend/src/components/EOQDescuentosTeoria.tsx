@@ -35,7 +35,7 @@ const SUPUESTOS: { titulo: string; detalle: string }[] = [
 
 const ALGORITMO: string[] = [
   'Para cada nivel j se calcula el lote óptimo local Q* = √(2DS / H_j).',
-  'Q* se depura contra el intervalo: si Q* < q_min el candidato se ajusta a Q = q_min; si q_min ≤ Q* ≤ q_max es válido; si Q* > q_max el nivel se descarta.',
+  'Si Q* queda debajo de q_min, se usa q_min; si supera un q_max finito, se usa q_max. Dentro del intervalo se conserva Q*.',
   'Para cada candidato válido se evalúa el costo total anual TC = (D/Q)S + (Q/2)H_j + D·C_j.',
   'El lote óptimo final es el candidato con el TC más bajo (fila ganadora en la tabla).',
 ];
@@ -60,10 +60,10 @@ const FORMULAS: { tex: string; nombre: string; detalle: string }[] = [
       'Incluye ordenar, mantener y el costo de adquisición al precio del nivel. El ganador es el TC_j mínimo.',
   },
   {
-    tex: 'Q = \\begin{cases} q_{min} & \\text{si } Q^* < q_{min} \\\\ Q^* & \\text{si } q_{min} \\le Q^* \\le q_{max} \\end{cases}',
+    tex: 'Q = \\begin{cases} q_{min} & \\text{si } Q^* < q_{min} \\\\ Q^* & \\text{si } q_{min} \\le Q^* \\le q_{max} \\\\ q_{max} & \\text{si } Q^* > q_{max} \\end{cases}',
     nombre: 'Regla de ajuste del candidato',
     detalle:
-      'Si el lote local queda debajo del intervalo, hay que comprar el mínimo para acceder al precio; si lo supera, el nivel se descarta.',
+      'Si el lote local queda fuera del intervalo, se evalúa el extremo más cercano.',
   },
 ];
 
@@ -89,8 +89,7 @@ export default function EOQDescuentosTeoria() {
           </p>
           <p>
             Por eso el modelo se resuelve <strong>por etapas</strong>: se calcula el lote óptimo
-            local de cada nivel, se lo ajusta a los límites del intervalo (o se descarta el nivel
-            si el lote calculado supera su máximo), y finalmente se elige el candidato con el
+             local de cada nivel, se ajusta a los límites del intervalo y se elige el candidato con el
             <strong> costo total anual más bajo</strong>.
           </p>
           <p>
@@ -133,7 +132,7 @@ export default function EOQDescuentosTeoria() {
         <p className="mb-6 text-sm text-slate-600  dark:text-gray-300">
           El subíndice j indica que la variable depende del nivel de precio evaluado.
         </p>
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           {FORMULAS.map((f) => (
             <div
               key={f.nombre}
@@ -149,11 +148,11 @@ export default function EOQDescuentosTeoria() {
         </div>
       </section>
 
-      <aside className="max-w-4xl text-sm text-slate-400  dark:text-gray-500">
+      <aside className="max-w-4xl text-sm text-slate-600 dark:text-gray-300">
         <p>
-          Esta sección es un resumen introductorio de carácter académico y se ofrece como contenido
-          de relleno. Puede ampliarse o sustituirse por la investigación propia en fuentes
-          especializadas de gestión de operaciones e inventarios.
+          El precio del tramo ganador se aplica a todas las unidades del pedido, no solo a las que
+          superan el umbral. Por eso se incluye <Formula tex="DC_j" /> al comparar tramos, aunque
+          ese término sea constante dentro de cada uno.
         </p>
       </aside>
     </article>

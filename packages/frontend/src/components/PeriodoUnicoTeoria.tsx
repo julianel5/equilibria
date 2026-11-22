@@ -152,11 +152,11 @@ export default function PeriodoUnicoTeoria() {
         </div>
       </section>
 
-      <aside className="max-w-4xl text-sm text-slate-400  dark:text-gray-500">
+      <aside className="max-w-4xl text-sm text-slate-600 dark:text-gray-300">
         <p>
-          Esta sección es un resumen introductorio de carácter académico y se ofrece como contenido
-          de relleno. Puede ampliarse o sustituirse por la investigación propia en fuentes
-          especializadas de gestión de operaciones e inventarios.
+          Se elige un único pedido antes de observar la demanda, sin reabastecimiento posterior.
+          La razón <Formula tex="C_u/(C_u+C_o)" /> fija el cuantil objetivo. Si la aproximación
+          normal da un cuantil negativo, el pedido óptimo factible es cero.
         </p>
       </aside>
     </article>

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ErrorValidacion } from '../errorValidacion';
 import {
   DEFAULT_DIAS_LABORABLES,
   normalizarAAño,
@@ -38,8 +39,7 @@ import {
 // Reglas de ajuste del candidato por nivel:
 //   1. Si Q*_j < q_min_j  →  el candidato se ajusta a Q = q_min_j.
 //   2. Si q_min_j ≤ Q*_j ≤ q_max_j  →  el candidato es Q = Q*_j (válido).
-//   3. Si Q*_j > q_max_j  →  el nivel se descarta (el óptimo está en niveles
-//      superiores). El último nivel (q_max = ∞) nunca se descarta.
+//   3. Si Q*_j > q_max_j finito  →  el candidato es Q = q_max_j.
 //
 // Para cada candidato válido se evalúa el costo total anual:
 //
@@ -155,7 +155,7 @@ export interface RangoEvaluacion {
   costoMantenerEfectivo: number;  // H_j aplicado (fijo o I × C_j)
   qOriginal: number;              // Q* calculado con H_j (antes de ajustar)
   qAjustado: number | null;       // Q candidato después de la regla de ajuste (null si descartado)
-  descartado: boolean;            // true si Q* > q_max (nivel sin candidato)
+  descartado: boolean;            // true si no hay candidato positivo con costo finito
   costoOrdenar: number | null;    // (D/Q)S del candidato
   costoMantener: number | null;   // (Q/2)H_j del candidato
   costoProducto: number | null;   // D × C_j
@@ -263,19 +263,24 @@ export function calcularEOQDescuentos(input: EOQDescuentosInput): EOQDescuentosR
     // Costo de mantener efectivo del nivel: fijo o porcentaje del precio (anual).
     const H_j = tipo === 'fijo' ? Hfijo : (I / 100) * C_j;
 
-    // Q* = √(2DS / H_j) redondeado a 2 decimales.
-    const qOriginal = Math.round(Math.sqrt((2 * D * S) / H_j) * 100) / 100;
-
+    const qContinuo = Math.sqrt((2 * D * S) / H_j);
+    // Preservar el lote continuo si se haría cero al expresarlo con dos decimales.
+    const qOriginal = round2(qContinuo) || qContinuo;
     const qMax = rango.cantidadMaxima ?? Infinity;
+    const Q = Math.min(qMax, Math.max(rango.cantidadMinima, qOriginal));
+    const costoOrdenar = round2((D / Q) * S);
+    const costoMantenerAnual = round2((Q / 2) * H_j);
+    const costoProducto = round2(D * C_j);
+    const costoTotal = round2(costoOrdenar + costoMantenerAnual + costoProducto);
 
-    // Regla 3: si Q* supera el máximo, el óptimo vive en niveles superiores → descartar.
-    if (qOriginal > qMax) {
+    // Un intervalo sin cantidades positivas o fuera del rango numérico no da candidato.
+    if (Q <= 0 || ![qOriginal, Q, costoTotal].every(Number.isFinite) || H_j <= 0) {
       return {
         cantidadMinima: rango.cantidadMinima,
         cantidadMaxima: rango.cantidadMaxima ?? null,
         costoUnitario: C_j,
         costoMantenerEfectivo: round2(H_j),
-        qOriginal,
+        qOriginal: Number.isFinite(qOriginal) ? qOriginal : 0,
         qAjustado: null,
         descartado: true,
         costoOrdenar: null,
@@ -285,15 +290,6 @@ export function calcularEOQDescuentos(input: EOQDescuentosInput): EOQDescuentosR
         esGanador: false,
       };
     }
-
-    // Regla 1: si Q* < q_min, el candidato se ajusta a q_min.
-    // Regla 2: si q_min ≤ Q* ≤ q_max, el candidato es Q*.
-    const Q = qOriginal < rango.cantidadMinima ? rango.cantidadMinima : qOriginal;
-
-    const costoOrdenar = round2((D / Q) * S);
-    const costoMantenerAnual = round2((Q / 2) * H_j);
-    const costoProducto = round2(D * C_j);
-    const costoTotal = round2(costoOrdenar + costoMantenerAnual + costoProducto);
 
     return {
       cantidadMinima: rango.cantidadMinima,
@@ -312,11 +308,10 @@ export function calcularEOQDescuentos(input: EOQDescuentosInput): EOQDescuentosR
   });
 
   // Seleccionar el candidato válido con el menor TC_j.
-  const validos = evaluados.filter((r) => !r.descartado);
-  const ganador = validos.reduce(
-    (min, r) => (r.costoTotal! < min.costoTotal! ? r : min),
-    validos[0]!
-  );
+  const validos = evaluados.filter((r): r is RangoEvaluacion & { qAjustado: number; costoTotal: number } =>
+    !r.descartado && r.qAjustado !== null && r.costoTotal !== null);
+  if (!validos.length) throw new ErrorValidacion('Ningún tramo admite un lote positivo con costo total finito. Revisa los datos y los límites.');
+  const ganador = validos.reduce((min, r) => r.costoTotal < min.costoTotal ? r : min);
 
   for (const r of evaluados) {
     if (!r.descartado && r.costoTotal === ganador.costoTotal) {
@@ -413,8 +408,8 @@ function construirProcesosDescuentos(datos: DatosProcesosDescuentos): ProcesoCal
           id: `descuentos-n${nivel}-descartado`,
           titulo: `Nivel ${nivel} · Descarte del nivel`,
           simbolo: 'Q^*_j',
-          formula: '\\text{Regla 3: si } Q^*_j > q_{max} \\Rightarrow \\text{el nivel se descarta}',
-          sustitucion: `Q^*_j = ${qOrig} > q_{max} = ${qMax}`,
+          formula: '\\text{Se requiere un lote positivo y costo finito.}',
+          sustitucion: `q_{min} = ${qMin},\\quad q_{max} = ${qMax}`,
           resultado: '\\text{sin candidato}',
           tipoResultado: 'texto',
         })
@@ -423,18 +418,21 @@ function construirProcesosDescuentos(datos: DatosProcesosDescuentos): ProcesoCal
     }
 
     const Q = fmtProceso(r.qAjustado as number);
-    const ajustado = r.qAjustado !== r.qOriginal;
+    const alMinimo = r.qOriginal < r.cantidadMinima;
+    const alMaximo = r.cantidadMaxima !== null && r.qOriginal > r.cantidadMaxima;
     procesos.push(
       proceso({
         id: `descuentos-n${nivel}-ajuste`,
-        titulo: `Nivel ${nivel} · ${ajustado ? 'Ajuste del candidato (Regla 1)' : 'Candidato válido'}`,
+        titulo: `Nivel ${nivel} · ${alMinimo ? 'Ajuste al mínimo (Regla 1)' : alMaximo ? 'Ajuste al máximo (Regla 3)' : 'Candidato válido'}`,
         simbolo: 'Q',
-        formula: ajustado
+        formula: alMinimo
           ? '\\text{Regla 1: si } Q^*_j < q_{min} \\Rightarrow Q = q_{min}'
-          : '\\text{Regla 2: si } q_{min} \\le Q^*_j \\le q_{max} \\Rightarrow Q = Q^*_j',
-        sustitucion: ajustado
+          : alMaximo ? '\\text{Regla 3: si } Q^*_j > q_{max} \\Rightarrow Q = q_{max}'
+            : '\\text{Regla 2: si } q_{min} \\le Q^*_j \\le q_{max} \\Rightarrow Q = Q^*_j',
+        sustitucion: alMinimo
           ? `Q^*_j = ${qOrig} < q_{min} = ${qMin} \\Rightarrow Q = ${qMin}`
-          : `q_{min} = ${qMin} \\le Q^*_j = ${qOrig} \\le q_{max} = ${qMax}`,
+          : alMaximo ? `Q^*_j = ${qOrig} > q_{max} = ${qMax} \\Rightarrow Q = ${qMax}`
+            : `q_{min} = ${qMin} \\le Q^*_j = ${qOrig} \\le q_{max} = ${qMax}`,
         resultado: `Q = ${Q}`,
         tipoResultado: 'cantidad',
       })

@@ -1,4 +1,5 @@
 export { calcularEOQ, generarCurvaTC } from './modules/inventory/eoq.service';
+export { ErrorValidacion } from './modules/errorValidacion';
 export type { EOQInput, EOQResult, SensitivityDataPoint } from './modules/inventory/eoq.service';
 export { EOQInputSchema } from './modules/inventory/eoq.service';
 export { calcularEPQ } from './modules/inventory/epq.service';
@@ -124,6 +125,10 @@ export type {
   FraccionTransporteJSON,
 } from './modules/pl/transporte/transporte.service';
 export { TransporteInputSchema } from './modules/pl/transporte/transporte.service';
+export { calcularAsignacion, AsignacionInputSchema } from './modules/pl/asignacion/asignacion.service';
+export type { AsignacionInput, AsignacionResultado, FraccionAsignacionDTO } from './modules/pl/asignacion/asignacion.service';
+export { resolverAsignacion } from './modules/pl/asignacion/assignmentEngine';
+export type { CeldaAsignacion, MatrizAsignacion, PasoAsignacion, ResultadoAsignacion } from './modules/pl/asignacion/assignmentEngine';
 export { resolverTransporte, etiquetaMetodo } from './modules/pl/transporte/transporte';
 export type {
   ResultadoTransporteCore,

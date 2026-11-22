@@ -348,7 +348,7 @@ export default function EPQPage() {
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
           <h2 className="mb-1 text-lg font-semibold text-slate-700  dark:text-gray-100">Parámetros</h2>
           <p className="mb-4 text-sm text-slate-400  dark:text-gray-500">
-            Ingresa la demanda, la tasa de producción y los costos del modelo.
+            Ingresa la demanda y la tasa de producción en la misma unidad de tiempo. Esa unidad se aplica a D y P.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -378,7 +378,7 @@ export default function EPQPage() {
                       <SelectorUnidadTiempo
                         valor={form.unidadDemanda}
                         onChange={handleSelectChange('unidadDemanda')}
-                        ariaLabel="Unidad de tiempo de la demanda"
+                        ariaLabel="Unidad de tiempo de la demanda y la producción"
                       />
                     </div>
                   ) : (

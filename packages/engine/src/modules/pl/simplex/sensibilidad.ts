@@ -14,7 +14,8 @@
  * costo 0 aquí (ya cumplieron su papel de base inicial) y no pueden reentrar.
  */
 import { Frac } from './fraction';
-import { inversa, nombresVariables, type ObjetivoSimplex } from './simplex';
+import { aFrac, inversa, nombresVariables, type ObjetivoSimplex } from './simplex';
+import { compararM, escalarM, terminoM, type TerminoM } from './granM';
 
 export type TipoRestriccion = 'LE' | 'GE' | 'EQ';
 
@@ -68,9 +69,9 @@ const masEstricto = (actual: Frac | null, candidato: Frac, cmpSigno: 1 | -1): Fr
  * (las artificiales que quedaron en 0 se sacan antes con pivotes degenerados).
  */
 export function prepararBaseOptima(
-  c: number[],
-  A: number[][],
-  b: number[],
+  c: (number | Frac)[],
+  A: (number | Frac)[][],
+  b: (number | Frac)[],
   objetivo: ObjetivoSimplex,
   tipos: TipoRestriccion[],
   basicaFinal: string[]
@@ -85,18 +86,16 @@ export function prepararBaseOptima(
   // artificiales +1. Costos: c_j para las decisiones y 0 para el resto.
   const Acomp: Frac[][] = Array.from({ length: m }, () => new Array<Frac>(tot).fill(Frac.CERO));
   for (let i = 0; i < m; i++) {
-    for (let j = 0; j < n; j++) Acomp[i][j] = Frac.deDecimal(A[i][j]);
+    for (let j = 0; j < n; j++) Acomp[i][j] = aFrac(A[i][j]);
     const k = i + 1;
     if (tipos[i] === 'LE') Acomp[i][variables.indexOf(`S_{${k}}`)] = Frac.UNO;
     if (tipos[i] === 'GE') Acomp[i][variables.indexOf(`E_{${k}}`)] = Frac.UNO.neg();
     if (tipos[i] !== 'LE') Acomp[i][variables.indexOf(`R_{${k}}`)] = Frac.UNO;
   }
   const esArtificial = (j: number) => variables[j].startsWith('R_');
-  const costo = variables.map((_, j) => (j < n ? Frac.deDecimal(c[j]) : Frac.CERO));
-  // Costos de Gran M (artificiales ∓M), solo para sacar artificiales de la base.
-  const M = Frac.deDecimal(1000000);
-  const costoGranM = variables.map((_, j) => (esArtificial(j) ? (esMax ? M.neg() : M) : costo[j]));
-  const bFrac = b.map((v) => Frac.deDecimal(v));
+  const costo = variables.map((_, j) => (j < n ? aFrac(c[j]) : Frac.CERO));
+  const coefM = variables.map((_, j) => esArtificial(j) ? (esMax ? Frac.UNO.neg() : Frac.UNO) : Frac.CERO);
+  const bFrac = b.map(aFrac);
 
   /** B⁻¹, yᵀ = c_B B⁻¹, α = B⁻¹A y costos reducidos c̄_j = c_j − yᵀa_j de una base. */
   const evaluarBase = (base: number[], cs: Frac[]) => {
@@ -121,18 +120,19 @@ export function prepararBaseOptima(
   const signoOpt = esMax ? Frac.UNO : Frac.UNO.neg(); // óptimo ⇔ signoOpt·c̄_j ≤ 0
   for (let r = 0; r < m; r++) {
     if (!esArtificial(indicesBase[r])) continue;
-    const { alfa, reducido } = evaluarBase(indicesBase, costoGranM);
+    const { alfa, reducido } = evaluarBase(indicesBase, costo);
+    const reducidoM = evaluarBase(indicesBase, coefM).reducido;
     const candidatas = Array.from({ length: tot }, (_, j) => j).filter(
       (j) => !esArtificial(j) && !indicesBase.includes(j) && !alfa[r][j].esCero
     );
     let entra = -1;
-    let mejor: Frac | null = null;
+    let mejor: TerminoM | null = null;
     for (const orientacion of [Frac.UNO, Frac.UNO.neg()]) {
       for (const k of candidatas) {
         const a = alfa[r][k].mul(orientacion);
         if (!a.esNegativo) continue;
-        const theta = signoOpt.mul(reducido[k]).div(a);
-        if (mejor === null || theta.cmp(mejor) < 0) {
+        const theta = escalarM(terminoM(reducido[k], reducidoM[k]), signoOpt.div(a));
+        if (mejor === null || compararM(theta, mejor) < 0) {
           mejor = theta;
           entra = k;
         }
@@ -152,9 +152,9 @@ export function prepararBaseOptima(
 }
 
 export function analizarSensibilidad(
-  c: number[],
-  A: number[][],
-  b: number[],
+  c: (number | Frac)[],
+  A: (number | Frac)[][],
+  b: (number | Frac)[],
   objetivo: ObjetivoSimplex,
   tipos: TipoRestriccion[],
   basicaFinal: string[]
@@ -170,7 +170,7 @@ export function analizarSensibilidad(
 
   // ---- Restricciones: holgura, precio sombra y rango de b_i ----
   const restricciones: RestriccionSensibilidad[] = Array.from({ length: m }, (_, i) => {
-    const lhs = A[i].reduce((acc, a, j) => acc.add(Frac.deDecimal(a).mul(valor[j])), Frac.CERO);
+    const lhs = A[i].reduce<Frac>((acc, a, j) => acc.add(aFrac(a).mul(valor[j])), Frac.CERO);
     const diferencia = bFrac[i].sub(lhs);
     const holgura = tipos[i] === 'GE' ? diferencia.neg() : tipos[i] === 'LE' ? diferencia : Frac.CERO;
 

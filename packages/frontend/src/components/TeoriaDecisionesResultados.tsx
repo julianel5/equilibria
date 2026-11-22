@@ -25,7 +25,9 @@ interface Props {
   estados: string[];
 }
 
-const fmt = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 4 });
+const fmt = (n: number) => n !== 0 && Math.abs(n) < 0.0001
+  ? n.toLocaleString('en-US', { maximumSignificantDigits: 4 })
+  : n.toLocaleString('en-US', { maximumFractionDigits: 4 });
 
 function TablaValores(criterio: CriterioResult) {
   return (
@@ -81,9 +83,9 @@ function TablaArrepentimiento({ criterio, estados }: { criterio: CriterioResult;
   return (
     <div>
       <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400  dark:text-gray-500">
-        Matriz de arrepentimiento r_ij
+        Matriz de arrepentimiento <Formula tex="r_{ij}" />
       </h4>
-      <div className="overflow-x-auto rounded-lg border border-slate-200  dark:border-gray-700">
+      <div className="max-w-full overflow-x-auto rounded-lg border border-slate-200 dark:border-gray-700">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400  dark:bg-gray-900 dark:text-gray-500">
@@ -136,7 +138,7 @@ function TablaArrepentimiento({ criterio, estados }: { criterio: CriterioResult;
 
 export default function TeoriaDecisionesResultados({ resultado, alternativas, estados }: Props) {
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 [overflow-wrap:anywhere]">
       {/* Panel resumen de ganadores */}
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
         <h2 className="text-lg font-semibold text-slate-700  dark:text-gray-100">
@@ -200,7 +202,7 @@ export default function TeoriaDecisionesResultados({ resultado, alternativas, es
         >
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-lg font-semibold text-slate-700  dark:text-gray-100">{c.nombre}</h3>
-            <span className="text-sm text-slate-500  dark:text-gray-400">
+            <span className="min-w-0 max-w-full text-sm text-slate-500 dark:text-gray-400">
               <Formula tex={c.formula} />
             </span>
           </div>

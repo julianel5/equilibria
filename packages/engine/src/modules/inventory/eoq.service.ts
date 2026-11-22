@@ -139,7 +139,7 @@ export function calcularEOQ(input: EOQInput): EOQResult {
   // Q* = √(2DS / H)
   // Cantidad Económica de Pedido
   // ═══════════════════════════════════════════════════════════════════════════
-  const cantidadOptima = Math.round(Math.sqrt((2 * D * S) / H));
+  const cantidadOptima = Math.max(1, Math.round(Math.sqrt((2 * D * S) / H)));
 
   // ═══════════════════════════════════════════════════════════════════════════
   // N = D / Q*

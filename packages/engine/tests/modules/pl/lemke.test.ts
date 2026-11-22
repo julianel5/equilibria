@@ -45,8 +45,8 @@ describe('Algoritmo de Lemke — LCP', () => {
   it('detecta un rayo terminal cuando no hay solución complementaria', () => {
     // w = -z - 1 no puede ser ≥ 0 con z ≥ 0.
     const res = calcularLemke({ tipo: 'lcp', M: [[-1]], q: [-1] });
-    expect(res.estado).toBe('sin-solucion');
-    expect(res.mensaje.toLowerCase()).toContain('rayo terminal');
+    expect(res.estado).toBe('rayo-inconcluso');
+    expect(res.mensaje.toLowerCase()).toContain('terminación por rayo');
   });
 
   it('genera la traza con pivoteo complementario y procesos', () => {

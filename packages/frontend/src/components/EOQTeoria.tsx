@@ -129,11 +129,11 @@ export default function EOQTeoria() {
         </div>
       </section>
 
-      <aside className="max-w-4xl text-sm text-slate-400  dark:text-gray-500">
+      <aside className="max-w-4xl text-sm text-slate-600 dark:text-gray-300">
         <p>
-          Esta sección es un resumen introductorio de carácter académico y se ofrece como contenido
-          de relleno. Puede ampliarse o sustituirse por la investigación propia en fuentes
-          especializadas de gestión de operaciones e inventarios.
+          Con demanda constante y reposición instantánea, el inventario medio es <Formula tex="Q/2" />.
+          Sin descuentos ni faltantes, el lote continuo minimiza <Formula tex="DS/Q+HQ/2" />;
+          en ese punto coinciden los costos de ordenar y mantener.
         </p>
       </aside>
     </article>

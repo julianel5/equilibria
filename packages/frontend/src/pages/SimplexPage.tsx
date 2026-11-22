@@ -45,16 +45,22 @@ const TEX_OPERADOR: Record<'LE' | 'GE' | 'EQ', string> = { LE: '\\le', GE: '\\ge
 
 /** Combinación lineal en TeX: omite ceros y los 1, y escribe "- 2X_3" en vez de "+ -2X_3". */
 function texCombinacion(coeficientes: string[]): string {
-  const terminos = coeficientes
-    .map((c, j) => ({ v: Number(c), j }))
-    .filter(({ v }) => v !== 0)
-    .map(({ v, j }, k) => {
-      const abs = Math.abs(v);
-      const coef = abs === 1 ? '' : String(abs);
-      const signo = v < 0 ? (k === 0 ? '-' : '- ') : k === 0 ? '' : '+ ';
-      return `${signo}${coef}X_{${j + 1}}`;
-    });
+  const terminos: string[] = [];
+  coeficientes.forEach((texto, j) => {
+    const v = texto.trim();
+    if (/^[+-]?0+(?:[.,]0+)?$/.test(v)) return;
+    const signo = v.startsWith('-') ? '-' : terminos.length ? '+' : '';
+    const abs = v.replace(/^[+-]/, '');
+    terminos.push(`${signo}${abs === '1' ? '' : texCoeficiente(abs)}x_{${j + 1}}`);
+  });
   return terminos.length ? terminos.join(' ') : '0';
+}
+
+function texCoeficiente(texto: string): string {
+  const v = texto.trim();
+  const f = /^([+-]?\d+)\/([+-]?\d+)$/.exec(v);
+  if (f) return `\\frac{${f[1]}}{${f[2]}}`;
+  return /^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:e[+-]?\d{1,3})?$/i.test(v) ? v : '?';
 }
 
 const inputBase =
@@ -66,10 +72,11 @@ const inputCoef =
 const inputOperador =
   'w-14 appearance-none rounded-md border border-slate-300 bg-white py-2 pl-1 pr-7 text-center text-sm font-semibold shadow-inner focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/30';
 
-function filasIniciales(n: number): FilaRestriccion[] {
+function filasIniciales(n: number, penalizacion = false): FilaRestriccion[] {
   const base: FilaRestriccion[] = [
     { id: 'r1', operador: 'LE', b: '36', coeficientes: ['1', '2'] },
     { id: 'r2', operador: 'LE', b: '60', coeficientes: ['5', '1'] },
+    ...(penalizacion ? [{ id: 'r3', operador: 'GE' as const, b: '10', coeficientes: ['1', '1'] }] : []),
   ];
   return base.map((r) => ({
     ...r,
@@ -93,9 +100,9 @@ function reconciliarFilas(filas: FilaRestriccion[], n: number): FilaRestriccion[
  * `entra`/`sale` marcan la decisión que se toma SOBRE esta tabla (columna
  * entrante y fila pivote), que el motor guarda en la tabla siguiente.
  */
-function TablaTabular({ t, entra, sale, algebraico = false }: { t: TablaTabularDTO; entra: number | null; sale: number | null; algebraico?: boolean }) {
+function TablaTabular({ t, entra, sale, algebraico = true }: { t: TablaTabularDTO; entra: number | null; sale: number | null; algebraico?: boolean }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="max-w-full overflow-x-auto">
       <table className="min-w-full border-collapse text-sm [&_th]:border [&_th]:border-slate-300 [&_td]:border [&_td]:border-slate-300">
         <thead>
           <tr>
@@ -157,14 +164,14 @@ function TablaTabular({ t, entra, sale, algebraico = false }: { t: TablaTabularD
                   j === entra ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-gray-200'
                 }`}
               >
-                <Formula tex={algebraico ? formatearM(f, t.reducidosM?.[j]) : f.tex} />
+                <Formula tex={formatearM(f, t.reducidosM?.[j], algebraico)} />
               </td>
             ))}
             <td
               title={`${t.z.num}/${t.z.den}`}
               className="px-2 py-1.5 text-center font-bold tabular-nums text-slate-800 dark:text-gray-100"
             >
-              <Formula tex={algebraico ? formatearM(t.z, t.zM) : t.z.tex} />
+              <Formula tex={formatearM(t.z, t.zM, algebraico)} />
             </td>
           </tr>
         </tbody>
@@ -198,9 +205,10 @@ const esArtificial = (v: string): boolean => v.startsWith('R_');
  * descomposición simbólica que calcula el motor. Si no está disponible,
  * muestra el valor exacto original.
  */
-function formatearM(original: FraccionJSON, termino: TerminoMDTO | null | undefined): string {
+function formatearM(original: FraccionJSON, termino: TerminoMDTO | null | undefined, algebraico = true): string {
   if (!termino) return original.tex;
   const { a, b } = termino;
+  if (!algebraico) return `\\left(${a.tex},\\,${b.tex}\\right)`;
   const aCero = a.num === '0';
   const bCero = b.num === '0';
   if (aCero && bCero) return '0';
@@ -214,7 +222,7 @@ function formatearM(original: FraccionJSON, termino: TerminoMDTO | null | undefi
   if (aCero) return mTex;
   return mTex.startsWith('-') ? `${a.tex} ${mTex}` : `${a.tex} + ${mTex}`;
 }
-const signoFrac = (f: FraccionJSON): number => Math.sign(fracVal(f));
+const signoFrac = (f: FraccionJSON): number => f.num === '0' ? 0 : f.num.startsWith('-') ? -1 : 1;
 
 interface AnalisisFactibilidad {
   negativas: number[];
@@ -222,13 +230,12 @@ interface AnalisisFactibilidad {
   factible: boolean;
 }
 
-function analizarFactibilidad(t: TablaTabularDTO, esFinal: boolean): AnalisisFactibilidad {
+function analizarFactibilidad(t: TablaTabularDTO): AnalisisFactibilidad {
   const negativas = t.rhs.flatMap((f, i) => (signoFrac(f) < 0 ? [i] : []));
   const artificialesPositivas = t.rhs.flatMap((f, i) =>
     esArtificial(t.basica[i]) && signoFrac(f) > 0 ? [i] : []
   );
-  // Una artificial positiva en la tabla final significa que el problema original no tiene solución factible.
-  const factible = negativas.length === 0 && !(esFinal && artificialesPositivas.length > 0);
+  const factible = negativas.length === 0 && artificialesPositivas.length === 0;
   return { negativas, artificialesPositivas, factible };
 }
 
@@ -241,18 +248,15 @@ interface AnalisisOptimalidad {
 /** Mismo criterio que el motor: MAX → óptimo si todo Z_j − C_j ≥ 0; MIN → si todo Z_j − C_j ≤ 0. */
 function analizarOptimalidad(t: TablaTabularDTO, objetivo: ObjetivoSimplex): AnalisisOptimalidad {
   const usarMax = objetivo === 'max';
+  const penalizada = t.zM && signoFrac(t.zM.b) !== 0;
   const violan = t.reducidos.flatMap((f, j) => {
-    const s = signoFrac(f);
+    if (esArtificial(t.variables[j]) || t.basica.includes(t.variables[j])) return [];
+    const m = t.reducidosM?.[j];
+    const sm = m ? signoFrac(m.b) : 0;
+    const s = penalizada ? sm : sm || signoFrac(m?.a ?? f);
     return (usarMax ? s < 0 : s > 0) ? [j] : [];
   });
-  let mejor: number | null = null;
-  for (const j of violan) {
-    const v = fracVal(t.reducidos[j]);
-    if (mejor === null || (usarMax ? v < fracVal(t.reducidos[mejor]) : v > fracVal(t.reducidos[mejor]))) {
-      mejor = j;
-    }
-  }
-  return { violan, mejor, optima: violan.length === 0 };
+  return { violan, mejor: violan[0] ?? null, optima: !penalizada && violan.length === 0 };
 }
 
 const celdaModal = 'border border-slate-200 px-2 py-1 dark:border-gray-700';
@@ -271,8 +275,8 @@ function Veredicto({ ok, children }: { ok: boolean; children: React.ReactNode })
   );
 }
 
-function ExplicacionFactible({ t, esFinal }: { t: TablaTabularDTO; esFinal: boolean }) {
-  const { negativas, artificialesPositivas, factible } = analizarFactibilidad(t, esFinal);
+function ExplicacionFactible({ t, infactibilidadCertificada }: { t: TablaTabularDTO; infactibilidadCertificada: boolean }) {
+  const { negativas, artificialesPositivas, factible } = analizarFactibilidad(t);
   const noBasicas = t.variables.filter((v) => !t.basica.includes(v));
   return (
     <div className="space-y-3 text-sm text-slate-600 dark:text-gray-300">
@@ -280,7 +284,7 @@ function ExplicacionFactible({ t, esFinal }: { t: TablaTabularDTO; esFinal: bool
         Una solución básica es factible si todas las variables básicas toman valores{' '}
         <Formula tex="x_B = b \ge 0" />. Las variables no básicas valen 0.
       </p>
-      <table className="w-full border-collapse text-sm">
+      <div className="max-w-full overflow-x-auto"><table className="w-full border-collapse text-sm">
         <thead>
           <tr className="bg-slate-50 text-xs text-slate-500 dark:bg-gray-800 dark:text-gray-400">
             <th className={`${celdaModal} text-left`}>Variable básica</th>
@@ -306,7 +310,7 @@ function ExplicacionFactible({ t, esFinal }: { t: TablaTabularDTO; esFinal: bool
             );
           })}
         </tbody>
-      </table>
+      </table></div>
       {noBasicas.length > 0 ? (
         <p className="text-xs">
           No básicas: <Formula tex={`${noBasicas.join(' = ')} = 0`} />
@@ -319,9 +323,9 @@ function ExplicacionFactible({ t, esFinal }: { t: TablaTabularDTO; esFinal: bool
               <Formula tex={`${t.basica[i]} = ${t.rhs[i].tex}`} />{' '}
             </React.Fragment>
           ))}
-          {esFinal
-            ? 'sigue en la base con valor positivo en la tabla final: el problema original no tiene solución factible.'
-            : 'todavía es positiva. La solución es factible para el problema ampliado, y el método la irá expulsando de la base (penalización M).'}
+          {infactibilidadCertificada
+            ? 'sigue positiva tras certificar el mínimo de la penalización: el problema original es infactible.'
+            : 'todavía es positiva: esta base no representa una solución factible del problema original.'}
         </p>
       ) : null}
       <Veredicto ok={factible}>
@@ -329,7 +333,7 @@ function ExplicacionFactible({ t, esFinal }: { t: TablaTabularDTO; esFinal: bool
           ? `Hay ${negativas.length} valor(es) negativos en b → NO es factible.`
           : factible
             ? 'Todos los valores de b son ≥ 0 → SÍ es factible.'
-            : 'b ≥ 0 pero quedan artificiales positivas en la tabla final → NO es factible para el problema original.'}
+            : 'b ≥ 0, pero quedan artificiales positivas → esta solución NO es factible para el problema original.'}
       </Veredicto>
     </div>
   );
@@ -339,21 +343,24 @@ function ExplicacionOptima({
   t,
   objetivo,
   noAcotado,
+  certificado,
 }: {
   t: TablaTabularDTO;
   objetivo: ObjetivoSimplex;
   noAcotado: boolean;
+  certificado: boolean;
 }) {
-  const { violan, mejor, optima } = analizarOptimalidad(t, objetivo);
+  const { violan, mejor, optima: criterio } = analizarOptimalidad(t, objetivo);
+  const optima = criterio && certificado && analizarFactibilidad(t).factible;
   const condicion = objetivo === 'max' ? 'Z_j - C_j \\ge 0' : 'Z_j - C_j \\le 0';
   return (
     <div className="space-y-3 text-sm text-slate-600 dark:text-gray-300">
       <p>
         Criterio de optimalidad ({objetivo === 'max' ? 'maximización' : 'minimización'}): la tabla es óptima si para
-        toda variable <Formula tex={condicion} />. Un valor{' '}
+        toda variable elegible <Formula tex={condicion} /> y la solución es factible para el problema original. Un valor{' '}
         {objetivo === 'max' ? 'negativo' : 'positivo'} indica que esa variable, al entrar, todavía mejora Z.
       </p>
-      <table className="w-full border-collapse text-sm">
+      <div className="max-w-full overflow-x-auto"><table className="w-full border-collapse text-sm">
         <thead>
           <tr className="bg-slate-50 text-xs text-slate-500 dark:bg-gray-800 dark:text-gray-400">
             <th className={`${celdaModal} text-left`}>Variable</th>
@@ -376,7 +383,7 @@ function ExplicacionOptima({
                   {basica ? <span className="ml-1 text-xs text-slate-400">(básica)</span> : null}
                 </td>
                 <td className={`${celdaModal} text-right tabular-nums`}>
-                  <Formula tex={t.reducidos[j].tex} />
+                  <Formula tex={formatearM(t.reducidos[j], t.reducidosM?.[j])} />
                 </td>
                 <td className={`${celdaModal} text-center font-semibold ${viola ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                   {viola ? '✗' : '✓'}
@@ -385,20 +392,21 @@ function ExplicacionOptima({
             );
           })}
         </tbody>
-      </table>
+      </table></div>
       <p className="text-xs">
-        Valor actual de la función objetivo: <Formula tex={`Z = ${t.z.tex}`} />
+        Valor actual de la función objetivo: <Formula tex={`Z = ${formatearM(t.z, t.zM)}`} />
       </p>
       <Veredicto ok={optima}>
         {optima ? (
           <>Ningún <Formula tex="Z_j - C_j" /> viola la condición → SÍ es óptima. Z* = <Formula tex={t.z.tex} /></>
         ) : (
           <>
-            {violan.length} variable(s) violan la condición → NO es óptima.{' '}
+            {violan.length ? `${violan.length} variable(s) pueden mejorar el objetivo.` :
+              'No se ha certificado un óptimo factible para el problema original.'}{' '}
             {mejor !== null ? (
               <>
                 Candidata a entrar: <Formula tex={t.variables[mejor]} /> (
-                <Formula tex={`Z_j - C_j = ${t.reducidos[mejor].tex}`} />, el {objetivo === 'max' ? 'más negativo' : 'más positivo'}).
+                <Formula tex={`Z_j - C_j = ${formatearM(t.reducidos[mejor], t.reducidosM?.[mejor])}`} />, menor índice según Bland).
               </>
             ) : null}
             {noAcotado ? ' Sin embargo, su columna no tiene ningún coeficiente positivo: el problema es no acotado.' : ''}
@@ -412,17 +420,15 @@ function ExplicacionOptima({
 function ExplicacionEntra({ t, decision, objetivo }: { t: TablaTabularDTO; decision: TablaTabularDTO; objetivo: ObjetivoSimplex }) {
   const { violan } = analizarOptimalidad(t, objetivo);
   const e = decision.columnaEntrante!;
-  const fn = objetivo === 'max' ? '\\min' : '\\max';
   return (
     <div className="space-y-3 text-sm text-slate-600 dark:text-gray-300">
       <p>
-        Entre las variables que violan el criterio de optimalidad se elige la que más mejora Z por unidad:{' '}
-        {objetivo === 'max' ? 'el Z_j − C_j más negativo' : 'el Z_j − C_j más positivo'}.
+        La regla de Bland elige la primera columna elegible que mejora el objetivo. Con Gran M se compara primero el coeficiente de M.
       </p>
       <div className="rounded-md bg-slate-50 px-3 py-2 dark:bg-gray-800">
         <Formula
           display
-          tex={`${fn}\\{ ${violan.map((j) => `\\underbrace{${t.reducidos[j].tex}}_{${t.variables[j]}}`).join(',\\; ')} \\} = ${t.reducidos[e].tex}`}
+          tex={`\\left\\{${violan.map(j => `\\underbrace{${formatearM(t.reducidos[j], t.reducidosM?.[j])}}_{${t.variables[j]}}`).join(',\\; ')}\\right\\}`}
         />
       </div>
       <Veredicto ok>
@@ -443,9 +449,9 @@ function ExplicacionSale({ t, decision }: { t: TablaTabularDTO; decision: TablaT
         Prueba de la razón mínima con la columna de <Formula tex={t.variables[e]} />: para cada fila con{' '}
         <Formula tex="a_{ie} > 0" /> se calcula <Formula tex="b_i / a_{ie}" />. Sale la variable de la fila con la
         menor razón, porque es la primera que llega a 0 y así ninguna variable básica se vuelve negativa (se mantiene la
-        factibilidad).
+        factibilidad). Si hay empate, sale la variable básica de menor índice.
       </p>
-      <table className="w-full border-collapse text-sm">
+      <div className="max-w-full overflow-x-auto"><table className="w-full border-collapse text-sm">
         <thead>
           <tr className="bg-slate-50 text-xs text-slate-500 dark:bg-gray-800 dark:text-gray-400">
             <th className={`${celdaModal} text-left`}>Básica</th>
@@ -482,7 +488,7 @@ function ExplicacionSale({ t, decision }: { t: TablaTabularDTO; decision: TablaT
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
       {noAcotado ? (
         <Veredicto ok={false}>
           Ningún <Formula tex="a_{ie}" /> es positivo: <Formula tex={t.variables[e]} /> puede crecer sin límite → el
@@ -510,12 +516,10 @@ function vectorTex(v: FraccionJSON[]): string {
   return `\\begin{bmatrix} ${v.map((f) => f.tex).join(' \\\\ ')} \\end{bmatrix}`;
 }
 
-function filaVectorTex(v: FraccionJSON[]): string {
-  return `\\begin{bmatrix} ${v.map((f) => f.tex).join(' & ')} \\end{bmatrix}`;
+function filaVectorTex(v: string[]): string {
+  return `\\begin{bmatrix} ${v.join(' & ')} \\end{bmatrix}`;
 }
 
-const fmtFrac = (f: FraccionJSON): string => (f.den === '1' ? f.num : `${f.num}/${f.den}`);
-const fracVal = (f: FraccionJSON): number => Number(f.num) / Number(f.den);
 
 function razonRevisadoTexto(r: RazonRevisadoDTO): React.ReactNode {
   if (r.descartada) {
@@ -530,8 +534,12 @@ function razonRevisadoTexto(r: RazonRevisadoDTO): React.ReactNode {
   );
 }
 
-function IteracionRevisada({ it, objetivo }: { it: IteracionRevisadaDTO; objetivo: ObjetivoSimplex }) {
+function IteracionRevisada({ it, objetivo, algebraico }: { it: IteracionRevisadaDTO; objetivo: ObjetivoSimplex; algebraico: boolean }) {
   const entrante = it.variableEntrante;
+  const penalizado = it.cBM.some(c => signoFrac(c.b) !== 0) || it.costosReducidos.some(c => signoFrac(c.cjM.b) !== 0);
+  const mostrar = (f: FraccionJSON, m: TerminoMDTO) => formatearM(f, penalizado ? m : null, algebraico);
+  const cb = filaVectorTex(it.cB.map((f, i) => mostrar(f, it.cBM[i])));
+  const y = filaVectorTex(it.y.map((f, i) => mostrar(f, it.yM[i])));
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm  dark:border-gray-700 dark:bg-gray-800">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -540,17 +548,18 @@ function IteracionRevisada({ it, objetivo }: { it: IteracionRevisadaDTO; objetiv
         </h4>
         {entrante ? (
           <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600  dark:bg-blue-500/15 dark:text-blue-400">
-            Entró {it.variableEntrante} · Salió {it.variableSaliente}
+            Entra <Formula tex={entrante} /> · {it.variableSaliente
+              ? <>Sale <Formula tex={it.variableSaliente} /></> : 'Sin variable saliente'}
           </span>
         ) : (
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500  dark:bg-gray-700 dark:text-gray-400">
-            {it.basica.some(esArtificial) ? 'Base inicial (holguras y artificiales)' : 'Base inicial (holguras)'}
+            Base inicial: <Formula tex={it.basica.join(',\\; ')} />
           </span>
         )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="min-w-0 space-y-3">
           <div className="rounded-md bg-slate-50 px-3 py-2  dark:bg-gray-900">
             <p className="mb-1 text-xs font-medium text-slate-500  dark:text-gray-400">
               Inversa de la base <Formula tex="B^{-1}" />
@@ -561,22 +570,22 @@ function IteracionRevisada({ it, objetivo }: { it: IteracionRevisadaDTO; objetiv
             <p className="mb-1 text-xs font-medium text-slate-500  dark:text-gray-400">
               Multiplicadores <Formula tex="y^T = c_B B^{-1}" />
             </p>
-            <Formula tex={`${filaVectorTex(it.cB)} \\cdot ${matrizTex(it.BInv)} = ${filaVectorTex(it.y)}`} />
+            <Formula tex={`${cb} \\cdot ${matrizTex(it.BInv)} = ${y}`} />
           </div>
           <div className="rounded-md bg-slate-50 px-3 py-2  dark:bg-gray-900">
             <p className="mb-1 text-xs font-medium text-slate-500  dark:text-gray-400">
               Lados básicos <Formula tex="b_B = B^{-1} b" /> y valor <Formula tex="Z" />
             </p>
-            <Formula tex={`Z = ${filaVectorTex(it.cB)} \\cdot ${vectorTex(it.bi)} = ${it.z.tex}`} />
+            <Formula tex={`Z = ${cb} \\cdot ${vectorTex(it.bi)} = ${mostrar(it.z, it.zM)}`} />
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           <div className="rounded-md bg-slate-50 px-3 py-2  dark:bg-gray-900">
             <p className="mb-2 text-xs font-medium text-slate-500  dark:text-gray-400">
               Costos reducidos <Formula tex={it.columnaEntrante === null ? '\\bar{c}_j' : ''} />
             </p>
-            <div className="overflow-x-auto">
+            <div className="max-w-full overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-300 text-left text-xs text-slate-400  dark:border-gray-600">
@@ -594,17 +603,17 @@ function IteracionRevisada({ it, objetivo }: { it: IteracionRevisadaDTO; objetiv
                       <tr key={c.variable} className="border-b border-slate-100 last:border-0  dark:border-gray-700">
                         <td className="pr-3 py-1 text-slate-700  dark:text-gray-200">
                           <Formula tex={c.variable} />
-                          {esEntrante && fracVal(c.cr) > 0 ? ' ←' : ''}
+                          {esEntrante ? ' ←' : ''}
                         </td>
                         <td className="pr-3 py-1 text-right tabular-nums text-slate-600  dark:text-gray-300">
-                          <Formula tex={c.cj.tex} />
+                          <Formula tex={mostrar(c.cj, c.cjM)} />
                         </td>
                         <td
                           className={`py-1 text-right tabular-nums ${
                             esEntrante ? 'font-bold text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-gray-200'
                           }`}
                         >
-                          <Formula tex={c.cr.tex} />
+                          <Formula tex={mostrar(c.cr, c.crM)} />
                         </td>
                       </tr>
                     );
@@ -619,7 +628,7 @@ function IteracionRevisada({ it, objetivo }: { it: IteracionRevisadaDTO; objetiv
               <p className="mb-2 text-xs font-medium text-slate-500  dark:text-gray-400">
                 Razón mínima con <Formula tex="d = B^{-1} a_e" />
               </p>
-              <div className="overflow-x-auto">
+              <div className="max-w-full overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-300 text-left text-xs text-slate-400  dark:border-gray-600">
@@ -645,7 +654,7 @@ function IteracionRevisada({ it, objetivo }: { it: IteracionRevisadaDTO; objetiv
                         </td>
                         <td
                           className={`pr-3 py-1 text-right tabular-nums ${
-                            fracVal(r.d) <= 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-600 dark:text-gray-300'
+                            signoFrac(r.d) <= 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-600 dark:text-gray-300'
                           }`}
                         >
                           <Formula tex={r.d.tex} />
@@ -681,11 +690,13 @@ function IteracionRevisada({ it, objetivo }: { it: IteracionRevisadaDTO; objetiv
 // ---------------------------------------------------------------------------
 
 export default function SimplexPage() {
+  const location = useLocation();
+  const esGranM = location.pathname === '/pl/penalizacion';
   const [metodo, setMetodo] = useState<MetodoSimplex>('tabular');
   const [objetivo, setObjetivo] = useState<ObjetivoSimplex>('max');
   const [n, setN] = useState('2');
   const [coefsObj, setCoefsObj] = useState<string[]>(['10', '8']);
-  const [filas, setFilas] = useState<FilaRestriccion[]>(() => filasIniciales(2));
+  const [filas, setFilas] = useState<FilaRestriccion[]>(() => filasIniciales(2, esGranM));
   /** Nombre de cada variable de decisión ('' = sin nombre). */
   const [etiquetas, setEtiquetas] = useState<string[]>(['', '']);
   const [resultado, setResultado] = useState<SimplexResultado | null>(null);
@@ -694,20 +705,18 @@ export default function SimplexPage() {
   const [pestana, setPestana] = useState<Pestana>('calculadora');
   const [modalProblema, setModalProblema] = useState<ProblemaTipico | null>(null);
   const [explicacionModal, setExplicacionModal] = useState<{ tipo: TipoExplicacion; indice: number } | null>(null);
-  const [vistaAlgebraica, setVistaAlgebraica] = useState(false);
+  const [vistaAlgebraica, setVistaAlgebraica] = useState(true);
   const versionAuto = useRef(0);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const transferredRef = useRef(false);
-  const location = useLocation();
 
   const numVariables = useMemo(() => {
     const v = Number.parseInt(n, 10);
     return Number.isFinite(v) ? Math.min(Math.max(v, 1), 12) : 1;
   }, [n]);
 
-  const esGranM = location.pathname === '/pl/penalizacion';
-  const hayDobleFase = useMemo(
+  const requierePenalizacion = useMemo(
     () => !esGranM && filas.some((r) => r.operador === 'GE' || r.operador === 'EQ'),
     [filas, esGranM]
   );
@@ -816,18 +825,18 @@ export default function SimplexPage() {
     () => ({
       metodo,
       objetivo,
-      funcionObjetivo: coefsObj.map((v) => Number(v)),
+      funcionObjetivo: coefsObj,
       restricciones: filas.map((r) => ({
-        coeficientes: r.coeficientes.map((v) => Number(v)),
+        coeficientes: r.coeficientes,
         tipo: r.operador,
-        b: Number(r.b),
+        b: r.b,
       })),
     }),
     [metodo, objetivo, coefsObj, filas]
   );
 
   const calcular = useCallback(async () => {
-    if (hayDobleFase) {
+    if (requierePenalizacion) {
       setResultado(null);
       setErrors([]);
       setCargando(false);
@@ -863,7 +872,7 @@ export default function SimplexPage() {
     } finally {
       setCargando(false);
     }
-  }, [construirPayload, coefsObj, filas, hayDobleFase]);
+  }, [construirPayload, coefsObj, filas, requierePenalizacion]);
 
   useEffect(() => {
     void calcular();
@@ -937,9 +946,9 @@ export default function SimplexPage() {
         ariaLabel="Secciones del método simplex"
       />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[460px_1fr]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[460px_minmax(0,1fr)]">
         {/* Formulario */}
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
+         <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-md dark:border-gray-700 dark:bg-gray-800">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-lg font-semibold text-slate-700  dark:text-gray-100">Configuración del problema</h2>
@@ -1007,8 +1016,7 @@ export default function SimplexPage() {
                 {coefsObj.map((v, j) => (
                   <label key={j} className="flex items-center gap-1">
                     <input
-                      type="number"
-                      step="any"
+                      type="text"
                       required
                       aria-label={`Coeficiente de x${j + 1}`}
                       value={v}
@@ -1016,7 +1024,7 @@ export default function SimplexPage() {
                       className={inputCoef}
                     />
                     <span className="text-sm font-medium text-slate-600  dark:text-gray-300">
-                      <Formula tex={`x_${j + 1}`} />
+                       <Formula tex={`x_{${j + 1}}`} />
                     </span>
                     {j < coefsObj.length - 1 ? <span className="text-sm text-slate-400">+</span> : null}
                   </label>
@@ -1024,9 +1032,7 @@ export default function SimplexPage() {
               </div>
               <div className="mt-2 rounded-md bg-slate-50 px-3 py-2  dark:bg-gray-900">
                 <Formula
-                  tex={`${objetivo === 'max' ? '\\max' : '\\min'} \\; Z = ${coefsObj
-                    .map((v, j) => `${v === '0' ? '0' : v} x_${j + 1}`)
-                    .join(' + ')}`}
+                  tex={`${objetivo === 'max' ? '\\max' : '\\min'} \\; Z = ${texCombinacion(coefsObj)}`}
                 />
               </div>
               <div className="mt-2">
@@ -1048,8 +1054,7 @@ export default function SimplexPage() {
                     {r.coeficientes.map((v, j) => (
                       <span key={j} className="flex items-center gap-1">
                         <input
-                          type="number"
-                          step="any"
+                          type="text"
                           required
                           placeholder="0"
                           aria-label={`Coeficiente x${j + 1} de ${r.id}`}
@@ -1058,7 +1063,7 @@ export default function SimplexPage() {
                           className={inputCoef}
                         />
                         <span className="whitespace-nowrap text-sm font-medium text-slate-500  dark:text-gray-400">
-                          <Formula tex={`x_${j + 1}`} />
+                           <Formula tex={`x_{${j + 1}}`} />
                         </span>
                         {j < r.coeficientes.length - 1 ? <span className="text-sm text-slate-400">+</span> : null}
                       </span>
@@ -1088,8 +1093,7 @@ export default function SimplexPage() {
                       </svg>
                     </span>
                     <input
-                      type="number"
-                      step="any"
+                      type="text"
                       required
                       placeholder="0"
                       aria-label={`Lado derecho de ${r.id}`}
@@ -1134,7 +1138,7 @@ export default function SimplexPage() {
           </form>
 
           {/* Alerta de restricciones ≥ / = */}
-          {hayDobleFase ? (
+           {requierePenalizacion ? (
             <div
               role="alert"
               className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm  dark:border-amber-800 dark:bg-amber-500/10"
@@ -1190,15 +1194,15 @@ export default function SimplexPage() {
         </section>
 
         {/* Resultados */}
-        <section>
-          {cargando && !resultado && errors.length === 0 && !hayDobleFase ? (
+         <section className="min-w-0">
+          {cargando && !resultado && errors.length === 0 && !requierePenalizacion ? (
             <div className="mx-auto flex max-w-md flex-col items-center gap-2 rounded-lg border border-slate-200 bg-white p-8 text-center shadow-md  dark:border-gray-700 dark:bg-gray-800">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
               <p className="text-sm text-slate-500  dark:text-gray-400">Resolviendo el problema…</p>
             </div>
           ) : null}
 
-          {hayDobleFase ? (
+          {requierePenalizacion ? (
             <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-amber-400 bg-white p-8 text-center shadow-md  dark:border-gray-700 dark:bg-gray-800">
               <p className="text-3xl">🛠️</p>
               <p className="text-lg font-semibold text-slate-700 dark:text-gray-100">
@@ -1210,7 +1214,7 @@ export default function SimplexPage() {
             </div>
           ) : null}
 
-          {resultado && !hayDobleFase ? (
+          {resultado && !requierePenalizacion ? (
             <>
               <h2 className="mb-3 text-lg font-semibold text-slate-700  dark:text-gray-100">
                 Resultados — {objetivo === 'max' ? 'maximización' : 'minimización'}
@@ -1223,12 +1227,17 @@ export default function SimplexPage() {
                 >
                   <p className="font-bold text-amber-700  dark:text-amber-400">Problema no acotado</p>
                   <p className="mt-1 text-amber-700  dark:text-amber-300">
-                    La columna entrante no tiene denominadores positivos: la función objetivo crece
-                    sin límite y el óptimo no es finito.
+                     Existe una dirección factible que mejora la función objetivo sin límite.
                   </p>
                 </div>
               ) : null}
 
+              {resultado.estado === 'limite-iteraciones' && (
+                <div role="alert" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-500/10">
+                  <strong>Límite de iteraciones (inconcluso)</strong>
+                  <p>No se certificó un óptimo. La traza muestra los pivotes realizados.</p>
+                </div>
+              )}
               {resultado.estado === 'infactible' ? (
                 <div
                   role="alert"
@@ -1236,25 +1245,25 @@ export default function SimplexPage() {
                 >
                   <p className="font-bold text-red-700  dark:text-red-400">Problema infactible</p>
                   <p className="mt-1 text-red-700  dark:text-red-300">
-                    Al terminar el método queda una variable artificial con valor positivo en la base:
+                    Al certificar el mínimo de la penalización queda una variable artificial positiva:
                     no existe ninguna solución que cumpla todas las restricciones a la vez.
                   </p>
                 </div>
               ) : null}
 
-              <div className="grid gap-4 sm:grid-cols-2">
+               {resultado.estado === 'optimo' && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <KpiCard
                   highlight
                   large
                   title="Valor óptimo Z*"
-                  value={resultado.estado === 'infactible' ? 'Sin solución' : fmtFrac(resultado.valorObjetivo)}
+                   value={{ tex: resultado.valorObjetivo.tex }}
                   formula={'Z^{*} = c_B x_B^{*}'}
                   tone="amber"
                   description="Mejor valor finito de la función objetivo, calculado con fracciones exactas."
                 />
                 <KpiCard
                   title="Solución óptima x*"
-                  value={resultado.estado === 'infactible' ? '—' : resultado.solucion.map(fmtFrac).join('  ·  ')}
+                   value={{ tex: `\\left(${resultado.solucion.map(f => f.tex).join(',\\; ')}\\right)` }}
                   formula={'x^{*} = (x_1, \\dots, x_n)'}
                   tone="emerald"
                   description="Valor de cada variable de decisión; las ausentes de la base valen 0."
@@ -1263,18 +1272,17 @@ export default function SimplexPage() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-gray-400">Base final</p>
                   <p className="mt-2 text-2xl font-bold tabular-nums text-blue-600 dark:text-blue-400">
                     {resultado.basicaFinal.map((v, i) => {
-                      const limpio = v.replace(/[{}]/g, '').replace(/([A-Za-z]+)(\d+)/g, '$1_$2');
-                      return (
-                        <span key={i}>
-                          <Formula tex={limpio} />
+                       return (
+                         <span key={i}>
+                           <Formula tex={v} />
                           {i < resultado.basicaFinal.length - 1 ? ', ' : ''}
                         </span>
                       );
                     })}
                   </p>
                   <div className="mt-3 rounded-md border border-transparent bg-gray-100 px-3 py-2 text-gray-800 dark:border dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
-                    <Formula tex={'B = \\{ x_B \\}'} />
-                  </div>
+                     <Formula tex={'B = \\{ x_B \\}'} />
+                   </div>
                   <p className="mt-2 text-xs leading-relaxed text-slate-400 dark:text-gray-500">
                     Conjunto de variables básicas en el vértice óptimo (holguras incluidas).
                   </p>
@@ -1284,9 +1292,9 @@ export default function SimplexPage() {
                   value={`${resultado.metodo === 'tabular' ? resultado.tablas.length - 1 : resultado.revisado.length - 1}`}
                   formula={metodo === 'tabular' ? 'T_k' : 'B^{-1}_k'}
                   tone="slate"
-                  description="Número de pivotes necesarios para alcanzar el óptimo."
-                />
-              </div>
+                   description="Número de pivotes necesarios para alcanzar el óptimo."
+                 />
+               </div>}
 
               {resultado.estado === 'optimo' && resultado.optimosMultiples ? (
                 <AvisoOptimosMultiples
@@ -1341,7 +1349,7 @@ export default function SimplexPage() {
                         : 'border-slate-300 bg-white text-slate-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200'
                     }`}
                   >
-                    {vistaAlgebraica ? 'Algebraica (M)' : 'Numerica (M=1.000.000)'}
+                    {vistaAlgebraica ? 'Algebraica (a + bM)' : 'Numérica (par exacto a, b)'}
                   </button>
                 </div>
               ) : null}
@@ -1370,8 +1378,8 @@ export default function SimplexPage() {
                       const decision = resultado.tablas[k + 1] ?? null;
                       const noAcotado = decision?.filaSaliente === -1;
                       const esFinal = decision === null;
-                      const factible = analizarFactibilidad(t, esFinal).factible;
-                      const optima = analizarOptimalidad(t, resultado.objetivo).optima;
+                       const factible = analizarFactibilidad(t).factible;
+                       const optima = factible && esFinal && resultado.estado === 'optimo' && analizarOptimalidad(t, resultado.objetivo).optima;
                       const botonClase =
                         'rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 dark:border-gray-700 dark:hover:bg-gray-800';
                       const respuesta = (ok: boolean) => (
@@ -1388,7 +1396,7 @@ export default function SimplexPage() {
                             t={t}
                             entra={decision?.columnaEntrante ?? null}
                             sale={decision && !noAcotado ? decision.filaSaliente : null}
-                            algebraico={esGranM && vistaAlgebraica}
+                            algebraico={!esGranM || vistaAlgebraica}
                           />
                           {decision?.ratios ? (
                             <p className="text-xs text-slate-500 dark:text-gray-400">
@@ -1435,7 +1443,7 @@ export default function SimplexPage() {
                     })
                   : resultado.revisado.map((it) => (
                       <div key={it.iteracion} className="mt-4 space-y-2 first:mt-0">
-                        <IteracionRevisada it={it} objetivo={objetivo} />
+                         <IteracionRevisada it={it} objetivo={resultado.objetivo} algebraico={!esGranM || vistaAlgebraica} />
                       </div>
                     ))}
 
@@ -1444,8 +1452,8 @@ export default function SimplexPage() {
                     role="status"
                     className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700  dark:border-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-400"
                   >
-                    Óptimo: no existe ninguna columna que mejore la función objetivo. Z* ={' '}
-                    {fmtFrac(resultado.valorObjetivo)}
+                     Óptimo: no existe ninguna columna que mejore la función objetivo.{' '}
+                     <Formula tex={`Z^* = ${resultado.valorObjetivo.tex}`} />
                   </p>
                 ) : null}
               </div>
@@ -1471,36 +1479,33 @@ export default function SimplexPage() {
                 <div className="mt-2 space-y-1 text-sm text-slate-700 dark:text-gray-200">
                   <div>
                     <Formula
-                      tex={`${objetivo === 'max' ? '\\max' : '\\min'} Z = ${coefsObj
-                        .map((c, j) => `${c}X_${j + 1}`)
-                        .join(' + ')}${filas
+                      tex={`${objetivo === 'max' ? '\\max' : '\\min'} Z = ${texCombinacion(coefsObj)}${filas
                         .map((r, i) => {
-                          if (r.operador === 'LE') return ` + 0S_${i + 1}`;
-                          if (r.operador === 'GE') return ` + 0E_${i + 1} ${objetivo === 'max' ? '-' : '+'} M R_${i + 1}`;
-                          return ` ${objetivo === 'max' ? '-' : '+'} M R_${i + 1}`;
+                          if (r.operador === 'LE') return '';
+                          return ` ${objetivo === 'max' ? '-' : '+'} M R_{${i + 1}}`;
                         })
                         .join('')}`}
                     />
                   </div>
                   {filas.map((r, i) => {
-                    const coefStr = r.coeficientes.map((c, j) => `${c}X_${j + 1}`).join(' + ');
+                    const coefStr = texCombinacion(r.coeficientes);
                     if (r.operador === 'LE') {
                       return (
                         <div key={i}>
-                          <Formula tex={`${coefStr} + S_${i + 1} = ${r.b}`} />
+                           <Formula tex={`${coefStr} + S_{${i + 1}} = ${texCoeficiente(r.b)}`} />
                         </div>
                       );
                     }
                     if (r.operador === 'GE') {
                       return (
                         <div key={i}>
-                          <Formula tex={`${coefStr} - E_${i + 1} + R_${i + 1} = ${r.b}`} />
+                          <Formula tex={`${coefStr} - E_{${i + 1}} + R_{${i + 1}} = ${texCoeficiente(r.b)}`} />
                         </div>
                       );
                     }
                     return (
                       <div key={i}>
-                        <Formula tex={`${coefStr} + R_${i + 1} = ${r.b}`} />
+                        <Formula tex={`${coefStr} + R_{${i + 1}} = ${texCoeficiente(r.b)}`} />
                       </div>
                     );
                   })}
@@ -1513,7 +1518,7 @@ export default function SimplexPage() {
             const todasLE = filas.length > 0 && filas.every((f) => f.operador === 'LE');
             if (!esMax || !todasLE) return null;
             const m = filas.length;
-            const holguras = Array.from({ length: m }, (_, i) => `S_${i + 1}`);
+             const holguras = Array.from({ length: m }, (_, i) => `S_{${i + 1}}`);
             return (
               <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900/50 dark:bg-blue-950/20">
                 <h3 className="text-sm font-semibold text-slate-700 dark:text-gray-100">
@@ -1521,13 +1526,13 @@ export default function SimplexPage() {
                 </h3>
                 <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">
                   Al convertir restricciones ≤ con b ≥ 0 se suman variables de holgura{' '}
-                  {holguras.join(', ')} con coeficiente 0 en Z.
+                   <Formula tex={holguras.join(', ')} /> con coeficiente 0 en Z.
                 </p>
                 <div className="mt-2 space-y-1 text-sm text-slate-700 dark:text-gray-200">
                   <div>
                     <Formula
                       tex={`\\max Z = ${coefsObj
-                        .map((c, j) => `${c}X_${j + 1}`)
+                         .map((c, j) => `${texCoeficiente(c)}X_{${j + 1}}`)
                         .join(' + ')} + ${holguras
                         .map((h) => `0${h}`)
                         .join(' + ')}`}
@@ -1537,10 +1542,10 @@ export default function SimplexPage() {
                     <div key={i} className="mt-1">
                       <Formula
                         tex={`${r.coeficientes
-                          .map((c, j) => `${c}X_${j + 1}`)
+                           .map((c, j) => `${texCoeficiente(c)}X_{${j + 1}}`)
                           .join(' + ')} + ${holguras
                           .map((h, k) => (k === i ? h : `0${h}`))
-                          .join(' + ')} = ${r.b}`}
+                           .join(' + ')} = ${texCoeficiente(r.b)}`}
                       />
                     </div>
                   ))}
@@ -1563,9 +1568,11 @@ export default function SimplexPage() {
           sale: '¿Por qué sale esta variable?',
         };
         let contenido: React.ReactNode = null;
-        if (explicacionModal.tipo === 'factible') contenido = <ExplicacionFactible t={t} esFinal={decision === null} />;
+        if (explicacionModal.tipo === 'factible') contenido = <ExplicacionFactible t={t}
+          infactibilidadCertificada={decision === null && resultado.estado === 'infactible'} />;
         else if (explicacionModal.tipo === 'optima')
-          contenido = <ExplicacionOptima t={t} objetivo={resultado.objetivo} noAcotado={decision?.filaSaliente === -1} />;
+          contenido = <ExplicacionOptima t={t} objetivo={resultado.objetivo} noAcotado={decision?.filaSaliente === -1}
+            certificado={decision === null && resultado.estado === 'optimo'} />;
         else if (decision && explicacionModal.tipo === 'entra')
           contenido = <ExplicacionEntra t={t} decision={decision} objetivo={resultado.objetivo} />;
         else if (decision) contenido = <ExplicacionSale t={t} decision={decision} />;

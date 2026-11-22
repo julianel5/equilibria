@@ -3,13 +3,12 @@ import {
   calcularMetodoGrafico,
   MetodoGraficoInputSchema,
   calcularSimplex,
-  SimplexInputSchema,
   calcularSimplexDual,
   SimplexDualInputSchema,
   calcularLemke,
   LemkeInputSchema,
   calcularTransporte,
-  TransporteInputSchema,
+  calcularAsignacion,
 } from '@math-platform/engine';
 import { sendError } from '../utils/sendError';
 
@@ -31,8 +30,7 @@ router.post('/grafico', (req, res) => {
 // traza matricial (B^{-1}, y^T, costos reducidos) y procesos paso a paso.
 router.post('/simplex', (req, res) => {
   try {
-    const validated = SimplexInputSchema.parse(req.body);
-    const resultado = calcularSimplex(validated);
+    const resultado = calcularSimplex(req.body);
     res.json({ success: true, data: resultado });
   } catch (error) {
     sendError(res, error);
@@ -65,8 +63,17 @@ router.post('/lemke', (req, res) => {
 // Modelo de Transporte: métodos iniciales (Noroeste, Costo Mínimo, Vogel) + MODI/UV.
 router.post('/transporte', (req, res) => {
   try {
-    const validated = TransporteInputSchema.parse(req.body);
-    const resultado = calcularTransporte(validated);
+    const resultado = calcularTransporte(req.body);
+    res.json({ success: true, data: resultado });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+// Problema de Asignación: el servicio valida la entrada y serializa la traza exacta.
+router.post('/asignacion', (req, res) => {
+  try {
+    const resultado = calcularAsignacion(req.body);
     res.json({ success: true, data: resultado });
   } catch (error) {
     sendError(res, error);

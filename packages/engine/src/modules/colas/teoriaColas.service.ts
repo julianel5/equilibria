@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ErrorValidacion } from '../errorValidacion';
 import { proceso, type ProcesoCalculo } from '../procesos';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -40,13 +41,16 @@ export const TeoriaColasInputSchema = z
   .object({
     tasaLlegada: z
       .number()
+      .finite()
       .positive({ message: 'La tasa de llegada (λ) debe ser mayor que 0.' }),
     tasaServicio: z
       .number()
+      .finite()
       .positive({ message: 'La tasa de servicio (μ) debe ser mayor que 0.' }),
     servidores: z
       .number()
       .int({ message: 'El número de servidores (c) debe ser un entero.' })
+      .max(100_000, { message: 'El modelo admite hasta 100.000 servidores.' })
       .min(1, { message: 'El número de servidores (c) debe ser mayor o igual a 1.' }),
     unidadTiempo: z.enum(['horas', 'minutos', 'dias']).default('horas'),
     // Submódulo opcional de análisis de costos (optimización económica).
@@ -64,7 +68,7 @@ export const TeoriaColasInputSchema = z
   .superRefine((data, ctx) => {
     // Regla de estabilidad crítica: la capacidad total (c·μ) debe superar la
     // tasa de llegada λ. Si ρ ≥ 1 la cola crece sin límite.
-    if (data.tasaLlegada >= data.servidores * data.tasaServicio) {
+    if (data.tasaLlegada / data.tasaServicio >= data.servidores) {
       ctx.addIssue({
         code: 'custom',
         path: ['tasaLlegada'],
@@ -173,7 +177,11 @@ export interface TeoriaColasResult {
 const N_MAX = 15;
 
 const redondear = (n: number, decimales = 6): number =>
-  Math.round(n * 10 ** decimales) / 10 ** decimales;
+  Math.abs(n) <= Number.MAX_SAFE_INTEGER / 10 ** decimales
+    ? Math.round(n * 10 ** decimales) / 10 ** decimales : n;
+
+/** No presentar una probabilidad pequeña positiva como cero por redondeo. */
+const metricaVisible = (n: number): number => redondear(n) || n;
 
 const fmtCorto = (n: number, max = 4): string =>
   n.toLocaleString('en-US', { maximumFractionDigits: max });
@@ -216,10 +224,20 @@ function convertirSubUnidad(valor: number, unidad: UnidadTiempoColas): Conversio
   return null;
 }
 
-function factorial(n: number): number {
-  let resultado = 1;
-  for (let k = 2; k <= n; k += 1) resultado *= k;
-  return resultado;
+/** Suma hasta c-1 y término c en una escala común para evitar desbordamiento. */
+function terminosErlang(r: number, c: number) {
+  const umbral = 1e200;
+  let suma = 0, termino = 1, escalaLog = 0;
+  for (let k = 1; k <= c; k++) {
+    suma += termino;
+    if (suma >= umbral) {
+      suma /= umbral;
+      termino /= umbral;
+      escalaLog += Math.log(umbral);
+    }
+    termino *= r / k;
+  }
+  return { suma, termino, escalaLog };
 }
 
 interface MetricasColas {
@@ -234,7 +252,7 @@ interface MetricasColas {
 export function calcularMM1(lambda: number, mu: number): MetricasColas {
   const rho = lambda / mu;
   const p0 = 1 - rho;
-  const lq = (lambda * lambda) / (mu * (mu - lambda));
+  const lq = (rho * rho) / (1 - rho);
   const l = lq + lambda / mu;
   const wq = lq / lambda;
   const w = wq + 1 / mu;
@@ -242,19 +260,15 @@ export function calcularMM1(lambda: number, mu: number): MetricasColas {
 }
 
 export function calcularMMc(lambda: number, mu: number, c: number): MetricasColas {
-  const rho = lambda / (c * mu);
-  const cRho = c * rho;
-
-  // P0 = [ Σ_{k=0}^{c−1} (cρ)^k / k! + (cρ)^c / (c!(1−ρ)) ]⁻¹
-  let suma = 0;
-  for (let k = 0; k < c; k += 1) {
-    suma += Math.pow(cRho, k) / factorial(k);
-  }
-  const colaErlang = Math.pow(cRho, c) / (factorial(c) * (1 - rho));
-  const p0 = 1 / (suma + colaErlang);
-
-  const lq = (p0 * Math.pow(cRho, c) * rho) / (factorial(c) * (1 - rho) * (1 - rho));
-  const l = lq + lambda / mu;
+  const r = lambda / mu;
+  const rho = r / c;
+  const { suma, termino, escalaLog } = terminosErlang(r, c);
+  // Multiplicar numerador y denominador por 1−ρ evita un cociente grande.
+  const denominador = suma * (1 - rho) + termino;
+  const p0 = Math.exp(Math.log(1 - rho) - Math.log(denominador) - escalaLog);
+  const probEspera = termino / denominador;
+  const lq = probEspera * (rho / (1 - rho));
+  const l = lq + r;
   const wq = lq / lambda;
   const w = wq + 1 / mu;
   return { rho, p0, lq, l, wq, w };
@@ -270,7 +284,17 @@ export function calcularMMc(lambda: number, mu: number, c: number): MetricasCola
 // c es pequeño (c ≤ 5) para que se aprecie la aritmética del denominador.
 
 /** Formatea con hasta 6 decimales para reflejar los valores redondeados. */
-const fmt = (n: number): string => String(Math.round(n * 1_000_000) / 1_000_000);
+function cientifico(mantisa: string, exponente: string | number): string {
+  return `${mantisa}\\times 10^{${Number(exponente)}}`;
+}
+
+const fmt = (n: number): string => {
+  if (n !== 0 && (Math.abs(n) < 5e-7 || Math.abs(n) >= 1e9)) {
+    const [m, e] = n.toExponential(4).split('e');
+    return cientifico(m, e);
+  }
+  return String(redondear(n));
+};
 
 interface DatosProcesosColas {
   modelo: ModeloColas;
@@ -302,12 +326,21 @@ function expansionP0(c: number, rho: number): { sustitucion: string; denominador
   const r = fmt(cRho);
   const terminos: string[] = [];
   const valores: string[] = [];
-  for (let k = 0; k < c; k += 1) {
+  let termino = 1;
+  for (let k = 0; k < (c <= 5 ? c : 3); k += 1) {
     terminos.push(`\\frac{${r}^{${k}}}{${k}!}`);
-    valores.push(fmt(Math.pow(cRho, k) / factorial(k)));
+    valores.push(fmt(termino));
+    termino *= cRho / (k + 1);
   }
   const ultimo = `\\frac{${r}^{${c}}}{${c}!\\left(1-${fmt(rho)}\\right)}`;
-  valores.push(fmt(Math.pow(cRho, c) / (factorial(c) * (1 - rho))));
+  const escalados = terminosErlang(cRho, c);
+  if (escalados.escalaLog === 0 || escalados.termino === 0) {
+    valores.push(fmt(escalados.termino / (1 - rho)));
+  } else {
+    const log10 = (Math.log(escalados.termino) + escalados.escalaLog - Math.log(1 - rho)) / Math.LN10;
+    const exp = Math.floor(log10);
+    valores.push(cientifico((10 ** (log10 - exp)).toFixed(4), exp));
+  }
 
   const visibles = c <= 5 ? terminos.concat([ultimo]) : terminos.slice(0, 3).concat(['\\cdots', ultimo]);
   const valoresVisibles = c <= 5 ? valores : valores.slice(0, 3).concat(['\\cdots', valores[valores.length - 1]]);
@@ -486,14 +519,9 @@ function distribucionMM1(rho: number): EstadoProbabilidadColas[] {
 }
 
 function distribucionMMc(p0: number, c: number, rho: number): EstadoProbabilidadColas[] {
-  const cRho = c * rho;
+  let probabilidad = p0;
   return Array.from({ length: N_MAX + 1 }, (_, n) => {
-    let probabilidad: number;
-    if (n < c) {
-      probabilidad = (p0 * Math.pow(cRho, n)) / factorial(n);
-    } else {
-      probabilidad = (p0 * Math.pow(cRho, c) * Math.pow(rho, n - c)) / factorial(c);
-    }
+    if (n > 0) probabilidad *= n <= c ? (c * rho) / n : rho;
     return { n, probabilidad: redondear(probabilidad) };
   });
 }
@@ -507,12 +535,15 @@ export function calcularTeoriaColas(input: TeoriaColasInput): TeoriaColasResult 
   const modelo: ModeloColas = c === 1 ? 'MM1' : 'MMc';
 
   const metricas = modelo === 'MM1' ? calcularMM1(lambda, mu) : calcularMMc(lambda, mu, c);
+  if (!Object.values(metricas).every(Number.isFinite)) {
+    throw new ErrorValidacion('Las tasas ingresadas exceden el rango numérico del modelo. Revisa las unidades y magnitudes.');
+  }
   const distribucion =
     modelo === 'MM1' ? distribucionMM1(metricas.rho) : distribucionMMc(metricas.p0, c, metricas.rho);
 
   const unidad = validated.unidadTiempo;
-  const wq = redondear(metricas.wq);
-  const w = redondear(metricas.w);
+  const wq = metricaVisible(metricas.wq);
+  const w = metricaVisible(metricas.w);
 
   // Submódulo opcional de costos: CT = s·Cs + Base·Cw (Base = L o L_q).
   let analisisCostos: AnalisisCostosColas | null = null;
@@ -534,6 +565,9 @@ export function calcularTeoriaColas(input: TeoriaColasInput): TeoriaColasResult 
       cwTotal,
       ct: redondear(csTotal + cwTotal, 2),
     };
+    if (![csTotal, cwTotal, analisisCostos.ct].every(Number.isFinite)) {
+      throw new ErrorValidacion('Los costos ingresados exceden el rango numérico del modelo.');
+    }
   }
 
   return {
@@ -542,8 +576,8 @@ export function calcularTeoriaColas(input: TeoriaColasInput): TeoriaColasResult 
     mu,
     c,
     rho: redondear(metricas.rho),
-    p0: redondear(metricas.p0),
-    lq: redondear(metricas.lq),
+    p0: metricaVisible(metricas.p0),
+    lq: metricaVisible(metricas.lq),
     l: redondear(metricas.l),
     wq,
     w,

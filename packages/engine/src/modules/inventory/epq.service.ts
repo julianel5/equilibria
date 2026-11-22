@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { validarModoCostoMantener } from './costoMantenerCondicional';
 import {
   normalizarDemandaYH,
+  factorAAño,
   UNIDADES_TIEMPO,
   type NormalizacionUnidades,
 } from './unidadesTiempo';
@@ -85,22 +86,30 @@ export const EPQInputSchema = z.object({
     .describe('Tiempo de entrega en días (L) - opcional, default 0'),
   unidadDemanda: z.enum(UNIDADES_TIEMPO)
     .optional()
-    .describe('Unidad de tiempo de la demanda (D). Por defecto "anual".'),
+    .describe('Unidad de tiempo compartida por demanda (D) y producción (P). Por defecto "anual".'),
   unidadCostoMantener: z.enum(UNIDADES_TIEMPO)
     .optional()
     .describe('Unidad de tiempo del costo de mantener (H o I). Por defecto "anual".'),
 });
 
+function tasasAnuales(data: z.infer<typeof EPQInputSchema>) {
+  const unidad = data.unidadDemanda ?? 'anual';
+  const factor = factorAAño(unidad, data.diasLaborables);
+  return { unidad, factor, DAnual: data.demandaAnual * factor, PAnual: data.tasaProduccion * factor };
+}
+
 // Validación de viabilidad: en el EPQ la producción debe cubrir la demanda.
 // Si P ≤ D el lote no consigue reponerse y el modelo es inviable.
 // También valida la forma condicional del costo de mantener (fijo o I × C).
 export const EPQValidatedSchema = EPQInputSchema.superRefine((data, ctx) => {
-  if (data.tasaProduccion <= data.demandaAnual) {
+  // P se ingresa en el mismo período que D, incluso si H usa otro.
+  const { DAnual, PAnual } = tasasAnuales(data);
+  if (!Number.isFinite(PAnual) || !Number.isFinite(DAnual) || PAnual <= DAnual) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['tasaProduccion'],
       message:
-        'La tasa de producción (P) debe ser estrictamente mayor que la demanda anual (D). Si P ≤ D el modelo EPQ es inviable.',
+        'En una misma unidad de tiempo, la tasa de producción (P) debe ser estrictamente mayor que la demanda (D) y ambas deben ser finitas. Si P ≤ D el modelo EPQ es inviable.',
     });
   }
 
@@ -147,7 +156,18 @@ export function calcularEPQ(input: EPQInput): EPQResult {
   // quedan en la unidad compartida y los costos/pedidos se expresan en ese período.
   const { D, H, conversionUnidades } = normalizarDemandaYH(validated);
   const { factorBase } = conversionUnidades;
-  const P = validated.tasaProduccion;
+  const { unidad: unidadD, factor: factorEntrada, DAnual, PAnual } = tasasAnuales(validated);
+  const P = validated.tasaProduccion * (factorEntrada / factorBase);
+  if (conversionUnidades.activa && factorEntrada !== factorBase) {
+    conversionUnidades.pasos.push({
+      variable: 'P',
+      concepto: 'Tasa de producción',
+      valorOrigen: validated.tasaProduccion,
+      unidadOrigen: unidadD,
+      factor: factorEntrada,
+      valorAnual: P,
+    });
+  }
   const S = validated.costoOrdenar;
   const C = validated.costoUnitario ?? 0;
   const diasLaborables = validated.diasLaborables ?? 365;
@@ -157,13 +177,13 @@ export function calcularEPQ(input: EPQInput): EPQResult {
   // Imax = Q*·(1 - D/P) ⇒ Ch = (Q*/2)·H·(1 - D/P)
   // El inventario se acumula (P - D) durante la producción y se agota a D.
   // ═══════════════════════════════════════════════════════════════════════════
-  const factorProduccion = 1 - D / P;
+  const factorProduccion = 1 - DAnual / PAnual;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Q* = √( 2DS / ( H·(1 - D/P) ) )
   // Lote óptimo de producción
   // ═══════════════════════════════════════════════════════════════════════════
-  const cantidadOptima = Math.round(Math.sqrt((2 * D * S) / (H * factorProduccion)));
+  const cantidadOptima = Math.max(1, Math.round(Math.sqrt((2 * D * S) / (H * factorProduccion))));
 
   // Inventario máximo (redondeo a 2 decimales para casos fraccionarios)
   const inventarioMaximo =

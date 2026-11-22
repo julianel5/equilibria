@@ -92,13 +92,13 @@ function textoTableau(t: IteracionDualDTO): string {
   const cols = t.variables.length;
   const encabezado = [
     '',
-    ...t.variables.map((v, j) => (t.columnaEntrante === j ? `{\\color{blue} ${v}}` : v)),
+    ...t.variables.map((v, j) => (t.columnaEntrante === j ? `\\htmlClass{math-entrante}{${v}}` : v)),
     'b',
   ];
   const lineas: string[] = [encabezado.join(' & ')];
   t.filas.forEach((fila, i) => {
     const celdas = fila.map((f, j) =>
-      i === t.filaSaliente && j === t.columnaEntrante ? `{\\color{red} ${f.tex}}` : f.tex
+      i === t.filaSaliente && j === t.columnaEntrante ? `\\htmlClass{math-pivote}{${f.tex}}` : f.tex
     );
     lineas.push(`${t.basica[i]} & ${celdas.join(' & ')} & ${t.rhs[i].tex}`);
   });
@@ -186,7 +186,7 @@ export function calcularSimplexDual(input: SimplexDualInput): SimplexDualResulta
       id: `dual-estandar-${n}-${m}`,
       titulo: 'Forma estándar para el Simplex Dual',
       simbolo: 'B^{-1}b \\le 0',
-      formula: filasEstandar.join('\\\\ '),
+      formula: `\\begin{gathered}${filasEstandar.join('\\\\ ')}\\end{gathered}`,
       sustitucion:
         '\\text{Las restricciones } \\le \\text{ usan holguras } S_i;\\; \\ge \\text{ usan excesos } E_i;\\; = \\text{ se desdobla en } \\ge \\text{ y } \\le.',
       resultado: `\\text{Base inicial: } ${core.basicaFinal.length ? core.iteraciones[0].basica.join(', ') : ''}.`,

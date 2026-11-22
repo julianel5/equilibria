@@ -5,6 +5,7 @@ import type { FraccionJSON } from '../simplex/simplex.service';
 import {
   resolverLemke,
   type ComplementariedadLemke,
+  type EstadoLemke,
   type IteracionLemke,
   type RazonLemke,
 } from './lemke';
@@ -51,7 +52,7 @@ export interface QPResumenDTO {
 
 export interface LemkeResultado {
   tipo: 'lcp' | 'qp';
-  estado: 'solucion' | 'sin-solucion';
+  estado: EstadoLemke;
   mensaje: string;
   tamanoLCP: number;
   variables: string[];
@@ -118,13 +119,13 @@ function textoTableau(t: IteracionLemkeDTO): string {
   const cols = t.variables.length;
   const encabezado = [
     '',
-    ...t.variables.map((v, j) => (t.entra === j ? `{\\color{blue} ${v}}` : v)),
+    ...t.variables.map((v, j) => (t.entra === j ? `\\htmlClass{math-entrante}{${v}}` : v)),
     'b',
   ];
   const lineas: string[] = [encabezado.join(' & ')];
   t.filas.forEach((fila, i) => {
     const celdas = fila.map((f, j) =>
-      i === t.sale && j === t.entra ? `{\\color{red} ${f.tex}}` : f.tex
+      i === t.sale && j === t.entra ? `\\htmlClass{math-pivote}{${f.tex}}` : f.tex
     );
     lineas.push(`${t.basica[i]} & ${celdas.join(' & ')} & ${t.rhs[i].tex}`);
   });
@@ -138,6 +139,26 @@ function textoRatios(ratios: RazonLemkeDTO[]): string {
     .filter((r) => !r.descartada)
     .map((r) => `${r.valorBase.tex}/${r.coeficiente.tex}=${r.razon!.tex}`)
     .join(',\\;\\;');
+}
+
+/** LDLᵀ exacta: un pivote cero en una PSD exige fila y columna residuales nulas. */
+function esSemidefinidaPositiva(Q: Frac[][]): boolean {
+  const resto = Q.map(fila => [...fila]);
+  for (let k = 0; k < resto.length; k++) {
+    const pivote = resto[k][k];
+    if (pivote.esNegativo) return false;
+    if (pivote.esCero) {
+      if (resto[k].slice(k + 1).some(v => !v.esCero)) return false;
+      continue;
+    }
+    for (let i = k + 1; i < resto.length; i++) {
+      for (let j = i; j < resto.length; j++) {
+        const valor = resto[i][j].sub(resto[i][k].mul(resto[k][j]).div(pivote));
+        resto[i][j] = resto[j][i] = valor;
+      }
+    }
+  }
+  return true;
 }
 
 export const LemkeInputSchema = z
@@ -224,18 +245,12 @@ export const LemkeInputSchema = z
         message: `c debe tener ${n} componentes.`,
       });
     }
-    // La derivación KKT supone Q simétrica.
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const a = data.Q[i]?.[j];
-        const b = data.Q[j]?.[i];
-        if (a !== undefined && b !== undefined && Math.abs(a - b) > 1e-9) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['Q', i, j],
-            message: 'Q debe ser simétrica para construir las condiciones KKT.',
-          });
-        }
+    if (n <= 20 && data.Q.every(fila => fila.length === n && fila.every(Number.isFinite))) {
+      const Q = data.Q.map(fila => fila.map(Frac.deDecimal));
+      if (!Q.every((fila, i) => fila.every((v, j) => v.equals(Q[j][i])))) {
+        ctx.addIssue({ code: 'custom', path: ['Q'], message: 'Q debe ser simétrica para construir las condiciones KKT.' });
+      } else if (!esSemidefinidaPositiva(Q)) {
+        ctx.addIssue({ code: 'custom', path: ['Q'], message: 'El problema es no convexo: Q debe ser semidefinida positiva.' });
       }
     }
     const A = data.A ?? [];
@@ -447,19 +462,29 @@ export function calcularLemke(input: LemkeInput): LemkeResultado {
         tipoResultado: 'texto',
       })
     );
-  } else {
+  } else if (core.estado === 'rayo-inconcluso') {
     procesos.push(
       proceso({
         id: 'lemke-sin-solucion',
-        titulo: 'Rayo terminal',
+        titulo: 'Terminación por rayo (inconcluso)',
         simbolo: '\\infty',
         formula: '\\text{La columna entrante no tiene coeficientes positivos.}',
         sustitucion: '\\text{No se puede continuar el pivoteo complementario.}',
         resultado:
-          '\\text{Lemke no encontró una solución complementaria desde este punto de arranque.}',
+          '\\text{Esta trayectoria no encontró una solución; no demuestra que no exista.}',
         tipoResultado: 'texto',
       })
     );
+  } else {
+    procesos.push(proceso({
+      id: 'lemke-limite-iteraciones',
+      titulo: 'Límite de iteraciones (inconcluso)',
+      simbolo: '',
+      formula: '\\text{Se agotaron los pivotes permitidos.}',
+      sustitucion: `\\text{Iteraciones registradas: } ${core.iteraciones.length}.`,
+      resultado: '\\text{No se certificó una solución complementaria.}',
+      tipoResultado: 'texto',
+    }));
   }
 
   return {

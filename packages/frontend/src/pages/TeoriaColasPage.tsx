@@ -53,8 +53,14 @@ interface FormState {
   servidores: string;
 }
 
-const fmtDecimal = (n: number, max = 4) =>
-  n.toLocaleString('en-US', { maximumFractionDigits: max });
+const fmtDecimal = (n: number, max = 4) => n > 0 && n < 0.5 * 10 ** -max
+  ? n.toExponential(3)
+  : n.toLocaleString('en-US', { maximumFractionDigits: max });
+
+function resultadoFinito(r: TeoriaColasResult): boolean {
+  return [r.lambda, r.mu, r.c, r.rho, r.p0, r.lq, r.l, r.wq, r.w].every(Number.isFinite)
+    && Array.isArray(r.distribucion) && r.distribucion.every(estado => Number.isFinite(estado.probabilidad));
+}
 
 export default function TeoriaColasPage() {
   const [pestana, setPestana] = useState<Pestana>('calculadora');
@@ -83,10 +89,16 @@ export default function TeoriaColasPage() {
         servidores: modo === 'MM1' ? 1 : Math.max(1, Math.floor(Number(datos.servidores)) || 1),
         unidadTiempo: unidad,
       });
+      if (!resultadoFinito(res)) {
+        setResultado(null);
+        setErrors(['No se pudieron calcular métricas finitas con estas tasas. Revisa los datos y las unidades.']);
+        return;
+      }
       setResultado(res);
     } catch (e) {
+      setResultado(null);
       if (e instanceof ApiError) {
-        setErrors(e.issues.map((i) => i.message));
+        setErrors(e.issues.length ? e.issues.map((i) => i.message) : [e.message]);
         const campos: Record<string, string> = {};
         for (const issue of e.issues) {
           campos[issue.path] = issue.message;
@@ -172,6 +184,8 @@ export default function TeoriaColasPage() {
         />
         {resultado && resultado.procesos ? (
           <ProcesosView procesos={resultado.procesos} unidad="clientes" />
+        ) : errors.length ? (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">{errors.join(' ')}</p>
         ) : (
           <div className="mx-auto flex max-w-md flex-col items-center gap-2 rounded-lg border border-slate-200 bg-white p-8 text-center shadow-md  dark:border-gray-700 dark:bg-gray-800">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
@@ -187,33 +201,7 @@ export default function TeoriaColasPage() {
     );
   }
 
-  if (!resultado) {
-    return (
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <TeoriaColasHeader />
-          <GlossaryButton onClick={() => setGlosarioAbierto(true)} />
-        </div>
-        <TabsPanel
-          pestanas={PESTANAS}
-          activa={pestana}
-          onCambio={(c) => setPestana(c as Pestana)}
-          ariaLabel="Secciones del modelo de teoría de colas"
-        />
-        <div className="mx-auto flex max-w-md flex-col items-center gap-2 rounded-lg border border-slate-200 bg-white p-8 text-center shadow-md  dark:border-gray-700 dark:bg-gray-800">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
-          <p className="text-sm text-slate-500  dark:text-gray-400">Calculando las métricas de colas…</p>
-        </div>
-        <Glossary
-          abierto={glosarioAbierto}
-          onClose={() => setGlosarioAbierto(false)}
-          variables={VARIABLES_TEORIACOLAS}
-        />
-      </div>
-    );
-  }
-
-  const esMM1 = resultado.modelo === 'MM1';
+  const esMM1 = resultado?.modelo === 'MM1';
   const descripcionTiempo = (item: TiempoConUnidadColas) =>
     item.conversion
       ? `Equivale a ${item.conversion.texto} (conversión pedagógica para valores menores a 1 ${ETIQUETA_UNIDAD[unidadTiempo]}).`
@@ -366,6 +354,7 @@ export default function TeoriaColasPage() {
                 <input
                   type="number"
                   min="2"
+                  max="100000"
                   step="1"
                   required
                   aria-label="Número de servidores (c)"
@@ -428,7 +417,7 @@ export default function TeoriaColasPage() {
         </section>
 
         {/* Métricas clave (KPIs) */}
-        <section>
+        {resultado && <section>
           <h2 className="mb-3 text-lg font-semibold text-slate-700  dark:text-gray-100">
             Resultados — {esMM1 ? 'M/M/1' : 'M/M/c'}
           </h2>
@@ -484,11 +473,11 @@ export default function TeoriaColasPage() {
             seleccionadas (<strong>{ETIQUETA_UNIDAD[unidadTiempo]}</strong>). Si el valor es menor a 1
             se agrega su equivalente en minutos o segundos.
           </p>
-        </section>
+        </section>}
       </div>
 
       {/* Distribución de probabilidad de estados */}
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
+      {resultado && <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-md  dark:border-gray-700 dark:bg-gray-800">
         <h2 className="text-lg font-semibold text-slate-700  dark:text-gray-100">
           Distribución de Probabilidad P(n)
         </h2>
@@ -502,7 +491,7 @@ export default function TeoriaColasPage() {
           rho={resultado.rho}
           p0={resultado.p0}
         />
-      </section>
+      </section>}
 
       <Glossary
         abierto={glosarioAbierto}

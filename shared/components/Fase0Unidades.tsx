@@ -2,8 +2,8 @@ import Formula from './Formula';
 import { PERIODO_DE_UNIDAD, PERIODO_PLURAL, type UnidadTiempo } from './SelectorUnidadTiempo';
 
 export interface PasoNormalizacion {
-  /** Símbolo matemático de la variable convertida (D, H o I). */
-  variable: 'D' | 'H' | 'I';
+  /** Símbolo matemático de la variable convertida. */
+  variable: 'D' | 'P' | 'H' | 'I';
   /** Nombre legible (p. ej. "Demanda"). */
   concepto: string;
   /** Valor tal como lo ingresó el estudiante (en su unidad original). */
@@ -45,9 +45,9 @@ function latexDePaso(paso: PasoNormalizacion): string {
     denominador: string
   ) => `${simbolo} = ${valor} \\;\\text{${numerador}/${denominador}}`;
 
-  if (paso.variable === 'D') {
+  if (paso.variable === 'D' || paso.variable === 'P') {
     return (
-      texto('D', String(paso.valorOrigen), 'unidades', PERIODO_DE_UNIDAD[paso.unidadOrigen]) +
+      texto(paso.variable, String(paso.valorOrigen), 'unidades', PERIODO_DE_UNIDAD[paso.unidadOrigen]) +
       ` \\times ${paso.factor} \\;\\text{${periodoPlural(paso)}/año}` +
       ` = ${paso.valorAnual} \\;\\text{unidades/año}`
     );

@@ -120,11 +120,11 @@ function Simulador({
       const real = await calcularSimplex({
         metodo: 'tabular',
         objetivo,
-        funcionObjetivo: coefsObj.map((c, j) => (tipo === 'c' && j === idx ? v : Number(c))),
+        funcionObjetivo: coefsObj.map((c, j) => tipo === 'c' && j === idx ? nuevoValor : c),
         restricciones: filas.map((f, i) => ({
-          coeficientes: f.coeficientes.map(Number),
+          coeficientes: f.coeficientes,
           tipo: f.operador,
-          b: tipo === 'b' && i === idx ? v : Number(f.b),
+          b: tipo === 'b' && i === idx ? nuevoValor : f.b,
         })),
       });
       const mismaBase =
@@ -301,8 +301,8 @@ export default function SensibilidadPage() {
       const r = await calcularSimplex({
         metodo: 'tabular',
         objetivo: p.objetivo,
-        funcionObjetivo: p.coefsObj.map(Number),
-        restricciones: p.filas.map((f) => ({ coeficientes: f.coeficientes.map(Number), tipo: f.operador, b: Number(f.b) })),
+        funcionObjetivo: p.coefsObj,
+        restricciones: p.filas.map((f) => ({ coeficientes: f.coeficientes, tipo: f.operador, b: f.b })),
       });
       setResultado(r);
       setResuelto((prev) => ({ coefsObj: p.coefsObj, filas: p.filas, etiquetas: p.etiquetas, version: (prev?.version ?? 0) + 1 }));
@@ -531,7 +531,8 @@ export default function SensibilidadPage() {
               {resultado.estado !== 'optimo' ? (
                 <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
                   <p className="font-bold">
-                    {resultado.estado === 'infactible' ? 'Problema infactible' : 'Problema no acotado'}
+                    {resultado.estado === 'infactible' ? 'Problema infactible'
+                      : resultado.estado === 'no-acotado' ? 'Problema no acotado' : 'Límite de iteraciones (inconcluso)'}
                   </p>
                   <p className="mt-1">
                     El análisis de sensibilidad parte de una solución óptima finita; este problema no la tiene.

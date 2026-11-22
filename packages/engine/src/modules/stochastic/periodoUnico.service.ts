@@ -246,6 +246,7 @@ interface DatosProcesosPeriodoUnico {
   distribucion: 'normal' | 'uniforme';
   valorZ: number | null;
   cantidadOptima: number;
+  cuantilNormal?: number;
   demandaMedia?: number;
   desviacionDemanda?: number;
   limiteInferior?: number;
@@ -314,17 +315,28 @@ export function construirProcesosPeriodoUnico(d: DatosProcesosPeriodoUnico): Pro
     }
 
     // 5. Q* = μ + Z·σ  (demanda normal).
+    const ajustado = d.cuantilNormal !== undefined && d.cuantilNormal < 0;
+    const simbolo = ajustado ? 'Q_{\\mathrm{sin\\ límite}}' : 'Q^*';
     procesos.push(
       proceso({
         id: 'periodo-q',
-        titulo: 'Cantidad óptima de pedido',
-        simbolo: 'Q^*',
-        formula: 'Q^* = \\mu + Z\\,\\sigma',
-        sustitucion: `Q^* = ${fmt2(d.demandaMedia ?? 0)} + (${fmt3(d.valorZ ?? 0)})\\,\\cdot\\,${fmt2(d.desviacionDemanda ?? 0)}`,
-        resultado: `Q^* = ${fmt2(d.cantidadOptima)}`,
+        titulo: ajustado ? 'Cuantil normal sin restricción' : 'Cantidad óptima de pedido',
+        simbolo,
+        formula: `${simbolo} = \\mu + Z\\,\\sigma`,
+        sustitucion: `${simbolo} = ${fmt2(d.demandaMedia ?? 0)} + (${fmt3(d.valorZ ?? 0)})\\,\\cdot\\,${fmt2(d.desviacionDemanda ?? 0)}`,
+        resultado: `${simbolo} = ${fmt2(d.cuantilNormal ?? d.cantidadOptima)}`,
         tipoResultado: 'cantidad',
       })
     );
+    if (ajustado) procesos.push(proceso({
+      id: 'periodo-no-negatividad',
+      titulo: 'Ajuste por no negatividad',
+      simbolo: 'Q^*',
+      formula: `Q^* = \\max\\{0, ${simbolo}\\}`,
+      sustitucion: `Q^* = \\max\\{0, ${fmt2(d.cuantilNormal!)}\\}`,
+      resultado: 'Q^* = 0\\quad\\text{(no se realiza un pedido)}',
+      tipoResultado: 'cantidad',
+    }));
   } else {
     // 5'. Q* = a + CSL·(b − a)  (demanda uniforme).
     procesos.push(
@@ -361,6 +373,7 @@ export function calcularPeriodoUnico(input: PeriodoUnicoInput): PeriodoUnicoResu
   const servicio = cu / (cu + co);
 
   let valorZ: number | null = null;
+  let cuantilNormal: number | undefined;
   let cantidadOptima = 0;
   const distribucion = validated.distribucion;
 
@@ -368,7 +381,8 @@ export function calcularPeriodoUnico(input: PeriodoUnicoInput): PeriodoUnicoResu
     const mu = validated.demandaMedia as number;
     const sigma = validated.desviacionDemanda as number;
     valorZ = inversaNormalEstandar(servicio);
-    cantidadOptima = sigma === 0 ? mu : mu + valorZ * sigma;
+    cuantilNormal = sigma === 0 ? mu : mu + valorZ * sigma;
+    cantidadOptima = Math.max(0, cuantilNormal);
   } else {
     const a = validated.limiteInferior as number;
     const b = validated.limiteSuperior as number;
@@ -417,6 +431,7 @@ export function calcularPeriodoUnico(input: PeriodoUnicoInput): PeriodoUnicoResu
       distribucion,
       valorZ,
       cantidadOptima,
+      cuantilNormal,
       demandaMedia: distribucion === 'normal' ? (validated.demandaMedia as number) : undefined,
       desviacionDemanda: distribucion === 'normal' ? (validated.desviacionDemanda as number) : undefined,
       limiteInferior: distribucion === 'uniforme' ? (validated.limiteInferior as number) : undefined,

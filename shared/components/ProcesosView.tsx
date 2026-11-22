@@ -35,15 +35,15 @@ function unidadDeResultado(
   }
 }
 
-/** Bloque KaTeX: Fórmula / Sustitución / Resultado separados por \\ (sin aligned). */
+/** Agrupa las tres líneas dentro de un entorno multilínea de KaTeX. */
 function bloqueKaTeX(p: PasoProceso, unidad: string, moneda: string): string {
   const uni = unidadDeResultado(p, unidad, moneda);
-  const sufijo = uni.trim() ? ` \\;\\text{${uni}}` : '';
-  return [
+  const sufijo = uni.trim() ? ` \\;\\text{${uni.replace(/([_%$&#{}])/g, '\\$1')}}` : '';
+  return '\\begin{gathered}' + [
     `\\text{Fórmula: } ${p.formula}`,
     `\\text{Sustitución: } ${p.sustitucion}`,
     `\\text{Resultado: } ${p.resultado}${sufijo}`,
-  ].join(' \\\\ ');
+  ].join(' \\\\ ') + '\\end{gathered}';
 }
 
 /**
@@ -59,7 +59,7 @@ export default function ProcesosView({
   moneda = 'USD',
 }: ProcesosViewProps) {
   return (
-    <section className="space-y-4">
+    <section className="min-w-0 max-w-full space-y-4">
       <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-5 shadow-md  dark:border-emerald-900/50 dark:bg-emerald-950/20">
         <h2 className="mb-1 text-lg font-semibold text-slate-700  dark:text-gray-100">
           {encabezado}
