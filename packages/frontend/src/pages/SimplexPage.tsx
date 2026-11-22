@@ -94,21 +94,21 @@ function reconciliarFilas(filas: FilaRestriccion[], n: number): FilaRestriccion[
 function TablaTabular({ t, entra, sale, algebraico = false }: { t: TablaTabularDTO; entra: number | null; sale: number | null; algebraico?: boolean }) {
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full border-collapse text-sm">
+      <table className="min-w-full border-collapse text-sm [&_th]:border [&_th]:border-slate-300 [&_td]:border [&_td]:border-slate-300">
         <thead>
           <tr>
-            <th className="border border-slate-300 px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400  dark:border-gray-600" />
+            <th />
             {t.variables.map((v, j) => (
               <th
                 key={`${v}-${j}`}
-                className={`border border-slate-300 px-2 py-1.5 text-center text-xs ${
+                className={`px-2 py-1.5 text-center text-xs ${
                   j === entra ? 'font-bold text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-gray-300'
                 }`}
               >
                 <Formula tex={v} />
               </th>
             ))}
-            <th className="border border-slate-300 px-2 py-1.5 text-center text-xs font-semibold text-slate-600  dark:border-gray-600 dark:text-gray-300">
+            <th className="px-2 py-1.5 text-center text-xs font-semibold text-slate-600 dark:text-gray-300">
               b
             </th>
           </tr>
@@ -116,7 +116,7 @@ function TablaTabular({ t, entra, sale, algebraico = false }: { t: TablaTabularD
         <tbody>
           {t.filas.map((fila, i) => (
             <tr key={i} className={i === sale ? 'bg-amber-50 dark:bg-amber-500/10' : ''}>
-              <td className="border border-slate-300 px-2 py-1.5 text-center">
+              <td className="px-2 py-1.5 text-center">
                 <Formula tex={t.basica[i]} />
               </td>
               {fila.map((f, j) => {
@@ -125,7 +125,7 @@ function TablaTabular({ t, entra, sale, algebraico = false }: { t: TablaTabularD
                   <td
                     key={j}
                     title={`${f.num}/${f.den}`}
-                    className={`border border-slate-300 px-2 py-1.5 text-center tabular-nums ${
+                    className={`px-2 py-1.5 text-center tabular-nums ${
                       esPivote
                         ? 'bg-red-100 text-base font-bold text-red-600 dark:bg-red-900/40 dark:text-red-400'
                         : 'text-slate-700 dark:text-gray-200'
@@ -137,21 +137,21 @@ function TablaTabular({ t, entra, sale, algebraico = false }: { t: TablaTabularD
               })}
               <td
                 title={`${t.rhs[i].num}/${t.rhs[i].den}`}
-                className="border border-slate-300 px-2 py-1.5 text-center font-medium tabular-nums text-slate-800  dark:border-gray-600 dark:text-gray-100"
+                className="px-2 py-1.5 text-center font-medium tabular-nums text-slate-800 dark:text-gray-100"
               >
                 <Formula tex={t.rhs[i].tex} />
               </td>
             </tr>
           ))}
           <tr>
-            <td className="border border-slate-300 px-2 py-1.5 text-center text-xs font-semibold text-slate-500  dark:border-gray-600 dark:text-gray-400">
+            <td className="px-2 py-1.5 text-center text-xs font-semibold text-slate-500 dark:text-gray-400">
               <Formula tex={'Z_j - C_j'} />
             </td>
             {t.reducidos.map((f, j) => (
               <td
                 key={j}
                 title={`${f.num}/${f.den}`}
-                className={`border border-slate-300 px-2 py-1.5 text-center tabular-nums ${
+                className={`px-2 py-1.5 text-center tabular-nums ${
                   j === entra ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-gray-200'
                 }`}
               >
@@ -160,7 +160,7 @@ function TablaTabular({ t, entra, sale, algebraico = false }: { t: TablaTabularD
             ))}
             <td
               title={`${t.z.num}/${t.z.den}`}
-              className="border border-slate-300 px-2 py-1.5 text-center font-bold tabular-nums text-slate-800  dark:border-gray-600 dark:text-gray-100"
+              className="px-2 py-1.5 text-center font-bold tabular-nums text-slate-800 dark:text-gray-100"
             >
               <Formula tex={algebraico ? formatearM(t.z, t.zM) : t.z.tex} />
             </td>
