@@ -564,19 +564,19 @@ function IteracionRevisada({ it, objetivo, algebraico }: { it: IteracionRevisada
             <p className="mb-1 text-xs font-medium text-slate-500  dark:text-gray-400">
               Inversa de la base <Formula tex="B^{-1}" />
             </p>
-            <Formula tex={matrizTex(it.BInv)} />
+             <Formula display tex={matrizTex(it.BInv)} />
           </div>
           <div className="rounded-md bg-slate-50 px-3 py-2  dark:bg-gray-900">
             <p className="mb-1 text-xs font-medium text-slate-500  dark:text-gray-400">
               Multiplicadores <Formula tex="y^T = c_B B^{-1}" />
             </p>
-            <Formula tex={`${cb} \\cdot ${matrizTex(it.BInv)} = ${y}`} />
+             <Formula display tex={`${cb} \\cdot ${matrizTex(it.BInv)} = ${y}`} />
           </div>
           <div className="rounded-md bg-slate-50 px-3 py-2  dark:bg-gray-900">
             <p className="mb-1 text-xs font-medium text-slate-500  dark:text-gray-400">
               Lados básicos <Formula tex="b_B = B^{-1} b" /> y valor <Formula tex="Z" />
             </p>
-            <Formula tex={`Z = ${cb} \\cdot ${vectorTex(it.bi)} = ${mostrar(it.z, it.zM)}`} />
+             <Formula display tex={`Z = ${cb} \\cdot ${vectorTex(it.bi)} = ${mostrar(it.z, it.zM)}`} />
           </div>
         </div>
 
@@ -1008,9 +1008,9 @@ export default function SimplexPage() {
             </div>
 
             {/* Función objetivo */}
-            <fieldset>
-              <legend className="mb-2 block text-sm font-medium text-slate-600  dark:text-gray-300">
-                Función objetivo <Formula tex={'Z = \\sum c_j x_j'} />
+             <fieldset className="min-w-0">
+               <legend className="mb-2 block text-sm font-medium text-slate-600  dark:text-gray-300">
+                 Función objetivo <Formula tex={'Z = \\sum c_j x_j'} />
               </legend>
               <div className="flex flex-wrap items-center gap-2">
                 {coefsObj.map((v, j) => (
@@ -1030,9 +1030,10 @@ export default function SimplexPage() {
                   </label>
                 ))}
               </div>
-              <div className="mt-2 rounded-md bg-slate-50 px-3 py-2  dark:bg-gray-900">
-                <Formula
-                  tex={`${objetivo === 'max' ? '\\max' : '\\min'} \\; Z = ${texCombinacion(coefsObj)}`}
+               <div className="mt-2 rounded-md bg-slate-50 px-3 py-2  dark:bg-gray-900">
+                 <Formula
+                   display
+                   tex={`${objetivo === 'max' ? '\\max' : '\\min'} \\; Z = ${texCombinacion(coefsObj)}`}
                 />
               </div>
               <div className="mt-2">
@@ -1041,9 +1042,9 @@ export default function SimplexPage() {
             </fieldset>
 
             {/* Restricciones */}
-            <fieldset>
-              <legend className="mb-2 block text-sm font-medium text-slate-600  dark:text-gray-300">
-                Restricciones
+             <fieldset className="min-w-0">
+               <legend className="mb-2 block text-sm font-medium text-slate-600  dark:text-gray-300">
+                 Restricciones
               </legend>
               <div className="space-y-2">
                 {filas.map((r) => (
@@ -1479,6 +1480,7 @@ export default function SimplexPage() {
                 <div className="mt-2 space-y-1 text-sm text-slate-700 dark:text-gray-200">
                   <div>
                     <Formula
+                      display
                       tex={`${objetivo === 'max' ? '\\max' : '\\min'} Z = ${texCombinacion(coefsObj)}${filas
                         .map((r, i) => {
                           if (r.operador === 'LE') return '';
@@ -1492,20 +1494,20 @@ export default function SimplexPage() {
                     if (r.operador === 'LE') {
                       return (
                         <div key={i}>
-                           <Formula tex={`${coefStr} + S_{${i + 1}} = ${texCoeficiente(r.b)}`} />
+                           <Formula display tex={`${coefStr} + S_{${i + 1}} = ${texCoeficiente(r.b)}`} />
                         </div>
                       );
                     }
                     if (r.operador === 'GE') {
                       return (
                         <div key={i}>
-                          <Formula tex={`${coefStr} - E_{${i + 1}} + R_{${i + 1}} = ${texCoeficiente(r.b)}`} />
+                          <Formula display tex={`${coefStr} - E_{${i + 1}} + R_{${i + 1}} = ${texCoeficiente(r.b)}`} />
                         </div>
                       );
                     }
                     return (
                       <div key={i}>
-                        <Formula tex={`${coefStr} + R_{${i + 1}} = ${texCoeficiente(r.b)}`} />
+                        <Formula display tex={`${coefStr} + R_{${i + 1}} = ${texCoeficiente(r.b)}`} />
                       </div>
                     );
                   })}
@@ -1531,6 +1533,7 @@ export default function SimplexPage() {
                 <div className="mt-2 space-y-1 text-sm text-slate-700 dark:text-gray-200">
                   <div>
                     <Formula
+                      display
                       tex={`\\max Z = ${coefsObj
                          .map((c, j) => `${texCoeficiente(c)}X_{${j + 1}}`)
                         .join(' + ')} + ${holguras
@@ -1541,6 +1544,7 @@ export default function SimplexPage() {
                   {filas.map((r, i) => (
                     <div key={i} className="mt-1">
                       <Formula
+                        display
                         tex={`${r.coeficientes
                            .map((c, j) => `${texCoeficiente(c)}X_{${j + 1}}`)
                           .join(' + ')} + ${holguras
@@ -1682,11 +1686,11 @@ export default function SimplexPage() {
               <div>
                 <h4 className="mb-2 text-sm font-semibold text-slate-700 dark:text-gray-200">Modelo</h4>
                 <div className="rounded-md bg-slate-50 p-3 dark:bg-gray-800">
-                  <Formula tex={`\\${modalProblema.objetivo} Z = ${texCombinacion(modalProblema.coeficientesObjetivo)}`} />
+                  <Formula display tex={`\\${modalProblema.objetivo} Z = ${texCombinacion(modalProblema.coeficientesObjetivo)}`} />
                   <div className="mt-2 space-y-1">
                     {modalProblema.restricciones.map((r, i) => (
                       <div key={i}>
-                        <Formula tex={`${texCombinacion(r.coeficientes)} ${TEX_OPERADOR[r.operador]} ${r.b}`} />
+                        <Formula display tex={`${texCombinacion(r.coeficientes)} ${TEX_OPERADOR[r.operador]} ${texCoeficiente(r.b)}`} />
                       </div>
                     ))}
                   </div>

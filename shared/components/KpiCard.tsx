@@ -47,7 +47,7 @@ export default function KpiCard({
   return (
     <div className={shell}>
       <p className={titleClass}>{conSubindices(title)}</p>
-      <p className={valueClass}>{typeof value === 'string' ? value : <Formula tex={value.tex} />}</p>
+      <p className={valueClass}>{typeof value === 'string' ? value : <Formula display tex={value.tex} />}</p>
       {formula && (
         <div className="mt-3 rounded-md border border-transparent bg-gray-100 px-3 py-2 text-gray-800  dark:border dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
           <Formula tex={formula} />

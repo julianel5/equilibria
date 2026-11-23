@@ -1,29 +1,16 @@
 import { z } from 'zod';
 import { Frac } from '../simplex/fraction';
+import { entradaExacta, indicePositivo } from '../simplex/entradaExacta';
 import { resolverAsignacion, type PasoAsignacion, type ResultadoAsignacion } from './assignmentEngine';
 
 const MAX_DIMENSION = 10;
 
-const numeroExacto = z.string().trim().max(80).transform((texto, ctx) => {
-  const fraccion = /^([+-]?\d+)\/([+-]?\d+)$/.exec(texto);
-  if (fraccion && BigInt(fraccion[2]) !== 0n) return new Frac(fraccion[1], fraccion[2]);
-
-  const decimal = /^([+-]?)(\d*)(?:[.,](\d+))?$/.exec(texto);
-  if (decimal && (decimal[2] || decimal[3])) {
-    const parteDecimal = decimal[3] ?? '';
-    return new Frac(`${decimal[1]}${decimal[2] || '0'}${parteDecimal}`, 10n ** BigInt(parteDecimal.length));
-  }
-
-  ctx.addIssue({ code: 'custom', message: 'Escribe un entero, decimal o fracción con denominador distinto de cero.' });
-  return z.NEVER;
-});
-
 export const AsignacionInputSchema = z.object({
-  costos: z.array(z.array(numeroExacto).min(1).max(MAX_DIMENSION)).min(1).max(MAX_DIMENSION),
+  costos: z.array(z.array(entradaExacta).min(1).max(MAX_DIMENSION)).min(1).max(MAX_DIMENSION),
   objetivo: z.enum(['min', 'max']).default('min'),
   prohibidas: z.array(z.object({
-    origen: z.number().int().min(1).max(MAX_DIMENSION),
-    destino: z.number().int().min(1).max(MAX_DIMENSION),
+    origen: indicePositivo.pipe(z.number().max(MAX_DIMENSION)),
+    destino: indicePositivo.pipe(z.number().max(MAX_DIMENSION)),
   })).max(MAX_DIMENSION ** 2).default([]),
 }).superRefine(({ costos, prohibidas }, ctx) => {
   const n = costos[0]?.length ?? 0;

@@ -35,10 +35,11 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-const PORT = process.env.PORT || 3001;
-
-app.listen(PORT, () => {
-  console.log(`[API] Servidor corriendo en http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  const port = process.env.PORT || 3001;
+  app.listen(port, () => {
+    console.log(`[API] Servidor corriendo en http://localhost:${port}`);
+  });
+}
 
 export default app;

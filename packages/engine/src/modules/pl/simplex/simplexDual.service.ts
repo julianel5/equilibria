@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { entradaExacta } from './entradaExacta';
 import { proceso, type ProcesoCalculo } from '../../procesos';
 import { Frac } from './fraction';
 import type { ObjetivoSimplex } from './simplex';
@@ -119,24 +120,14 @@ export const SimplexDualInputSchema = z
   .object({
     objetivo: z.enum(['max', 'min']).default('min'),
     funcionObjetivo: z
-      .array(
-        z.number().finite({
-          message: 'Los coeficientes de la función objetivo deben ser números finitos.',
-        })
-      )
+      .array(entradaExacta)
       .min(1, { message: 'La función objetivo requiere al menos una variable.' }),
     restricciones: z
       .array(
         z.object({
-          coeficientes: z.array(
-            z.number().finite({
-              message: 'Los coeficientes de la restricción deben ser números finitos.',
-            })
-          ),
+          coeficientes: z.array(entradaExacta),
           tipo: z.enum(['LE', 'GE', 'EQ']).default('LE'),
-          b: z.number().finite({
-            message: 'El término independiente (b) debe ser un número finito.',
-          }),
+          b: entradaExacta,
         })
       )
       .min(1, { message: 'Se requiere al menos una restricción.' }),
@@ -174,12 +165,12 @@ export function calcularSimplexDual(input: SimplexDualInput): SimplexDualResulta
   // 1) Forma estándar dual.
   const filasEstandar = tipos.map((t, i) => {
     if (t === 'LE') {
-      return `\\sum_j a_{${i + 1}j} x_j + S_{${i + 1}} = ${b[i]}`;
+      return `\\sum_j a_{${i + 1}j} x_j + S_{${i + 1}} = ${b[i].toTex()}`;
     }
     if (t === 'GE') {
-      return `-\\sum_j a_{${i + 1}j} x_j + E_{${i + 1}} = ${-b[i]}`;
+      return `-\\sum_j a_{${i + 1}j} x_j + E_{${i + 1}} = ${b[i].neg().toTex()}`;
     }
-    return `-\\sum_j a_{${i + 1}j} x_j + E_{${i + 1}} = ${-b[i]},\\quad \\sum_j a_{${i + 1}j} x_j + S_{${i + 1}} = ${b[i]}`;
+    return `-\\sum_j a_{${i + 1}j} x_j + E_{${i + 1}} = ${b[i].neg().toTex()},\\quad \\sum_j a_{${i + 1}j} x_j + S_{${i + 1}} = ${b[i].toTex()}`;
   });
   procesos.push(
     proceso({

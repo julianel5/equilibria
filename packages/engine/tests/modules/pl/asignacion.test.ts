@@ -82,9 +82,10 @@ describe('Algoritmo húngaro', () => {
   });
 
   it('rechaza entradas inválidas sin redondear ni rellenar datos', () => {
-    for (const costos of [[], [['1'], ['2', '3']], [['']], [['1/0']], [['abc']], [[1]]]) {
-      expect(() => calcularAsignacion({ costos: costos as string[][] })).toThrow();
+    for (const costos of [[], [['1'], ['2', '3']], [['']], [['1/0']], [['abc']], [[Infinity]]]) {
+      expect(() => calcularAsignacion({ costos })).toThrow();
     }
+    expect(calcularAsignacion({ costos: [[1]] }).valorObjetivo).toMatchObject({ num: '1', den: '1' });
     expect(() => calcularAsignacion({ costos: [['1']], prohibidas: [{ origen: 2, destino: 1 }] })).toThrow();
   });
 

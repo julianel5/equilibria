@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { entradaExacta } from '../simplex/entradaExacta';
 import { proceso, type ProcesoCalculo } from '../../procesos';
 import { Frac } from '../simplex/fraction';
 import type { FraccionJSON } from '../simplex/simplex.service';
@@ -165,17 +166,17 @@ export const LemkeInputSchema = z
   .object({
     tipo: z.enum(['lcp', 'qp']).default('lcp'),
     /** LCP: matriz M (n×n). */
-    M: z.array(z.array(z.number().finite({ message: 'Los coeficientes de M deben ser finitos.' }))).optional(),
+    M: z.array(z.array(entradaExacta)).optional(),
     /** LCP: vector q (n). */
-    q: z.array(z.number().finite({ message: 'Los valores de q deben ser finitos.' })).optional(),
+    q: z.array(entradaExacta).optional(),
     /** QP: matriz Q (n×n) de la forma cuadrática. */
-    Q: z.array(z.array(z.number().finite({ message: 'Los coeficientes de Q deben ser finitos.' }))).optional(),
+    Q: z.array(z.array(entradaExacta)).optional(),
     /** QP: vector c (n). */
-    c: z.array(z.number().finite({ message: 'Los coeficientes de c deben ser finitos.' })).optional(),
+    c: z.array(entradaExacta).optional(),
     /** QP: matriz A (m×n) de restricciones A x ≥ b. */
-    A: z.array(z.array(z.number().finite({ message: 'Los coeficientes de A deben ser finitos.' }))).optional(),
+    A: z.array(z.array(entradaExacta)).optional(),
     /** QP: vector b (m). */
-    b: z.array(z.number().finite({ message: 'Los valores de b deben ser finitos.' })).optional(),
+    b: z.array(entradaExacta).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.tipo === 'lcp') {
@@ -245,8 +246,8 @@ export const LemkeInputSchema = z
         message: `c debe tener ${n} componentes.`,
       });
     }
-    if (n <= 20 && data.Q.every(fila => fila.length === n && fila.every(Number.isFinite))) {
-      const Q = data.Q.map(fila => fila.map(Frac.deDecimal));
+    if (n <= 20 && data.Q.every(fila => fila.length === n && fila.every(v => v instanceof Frac))) {
+      const Q = data.Q;
       if (!Q.every((fila, i) => fila.every((v, j) => v.equals(Q[j][i])))) {
         ctx.addIssue({ code: 'custom', path: ['Q'], message: 'Q debe ser simétrica para construir las condiciones KKT.' });
       } else if (!esSemidefinidaPositiva(Q)) {
@@ -283,27 +284,27 @@ export const LemkeInputSchema = z
 export type LemkeInput = z.input<typeof LemkeInputSchema>;
 
 function construirLCPQp(
-  Q: number[][],
-  c: number[],
-  A: number[][],
-  b: number[]
+  Q: Frac[][],
+  c: Frac[],
+  A: Frac[][],
+  b: Frac[]
 ): { M: Frac[][]; q: Frac[] } {
   const n = Q.length;
   const m = A.length;
   const N = n + m;
   const M: Frac[][] = Array.from({ length: N }, () => new Array<Frac>(N).fill(Frac.CERO));
   for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) M[i][j] = Frac.deDecimal(Q[i][j]);
+    for (let j = 0; j < n; j++) M[i][j] = Q[i][j];
   }
   for (let i = 0; i < n; i++) {
-    for (let k = 0; k < m; k++) M[i][n + k] = Frac.deDecimal(A[k][i]).neg();
+    for (let k = 0; k < m; k++) M[i][n + k] = A[k][i].neg();
   }
   for (let k = 0; k < m; k++) {
-    for (let j = 0; j < n; j++) M[n + k][j] = Frac.deDecimal(A[k][j]);
+    for (let j = 0; j < n; j++) M[n + k][j] = A[k][j];
   }
   const q: Frac[] = [
-    ...c.map((v) => Frac.deDecimal(v)),
-    ...b.map((v) => Frac.deDecimal(v).neg()),
+    ...c,
+    ...b.map((v) => v.neg()),
   ];
   return { M, q };
 }
@@ -333,16 +334,14 @@ export function calcularLemke(input: LemkeInput): LemkeResultado {
   let bF: Frac[] = [];
 
   if (tipo === 'lcp') {
-    M = validado.M!.map((fila) => fila.map((v) => Frac.deDecimal(v)));
-    q = validado.q!.map((v) => Frac.deDecimal(v));
+    M = validado.M!;
+    q = validado.q!;
   } else {
-    const A = validado.A ?? [];
-    const b = validado.b ?? [];
-    QF = validado.Q!.map((fila) => fila.map((v) => Frac.deDecimal(v)));
-    cF = validado.c!.map((v) => Frac.deDecimal(v));
-    AF = A.map((fila) => fila.map((v) => Frac.deDecimal(v)));
-    bF = b.map((v) => Frac.deDecimal(v));
-    const lcp = construirLCPQp(validado.Q!, validado.c!, A, b);
+    QF = validado.Q!;
+    cF = validado.c!;
+    AF = validado.A ?? [];
+    bF = validado.b ?? [];
+    const lcp = construirLCPQp(QF, cF, AF, bF);
     M = lcp.M;
     q = lcp.q;
   }

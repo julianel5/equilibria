@@ -1,19 +1,20 @@
 import { z } from 'zod';
 import { Frac } from './simplex/fraction';
+import { entradaExacta } from './simplex/entradaExacta';
 import { ErrorValidacion } from '../errorValidacion';
 
 export const FuncionObjetivoPLSchema = z.object({
   tipo: z.enum(['MAX', 'MIN'], { message: "El tipo de optimización debe ser 'MAX' o 'MIN'." }),
-  c1: z.number().finite(),
-  c2: z.number().finite(),
+  c1: entradaExacta,
+  c2: entradaExacta,
 });
 
 export const RestriccionPLSchema = z.object({
   id: z.string().trim().min(1, { message: 'El id de cada restricción no puede estar vacío.' }),
-  x1: z.number().finite(),
-  x2: z.number().finite(),
+  x1: entradaExacta,
+  x2: entradaExacta,
   operador: z.enum(['<=', '>=', '=']),
-  rhs: z.number().finite(),
+  rhs: entradaExacta,
 });
 
 export const MetodoGraficoInputSchema = z.object({
@@ -22,8 +23,8 @@ export const MetodoGraficoInputSchema = z.object({
 });
 export type MetodoGraficoInput = z.input<typeof MetodoGraficoInputSchema>;
 export type TipoOptimizacionPL = 'MAX' | 'MIN';
-export type FuncionObjetivoPL = z.infer<typeof FuncionObjetivoPLSchema>;
-export type RestriccionPL = z.infer<typeof RestriccionPLSchema>;
+export type FuncionObjetivoPL = { tipo: TipoOptimizacionPL; c1: number; c2: number };
+export type RestriccionPL = { id: string; x1: number; x2: number; operador: '<=' | '>=' | '='; rhs: number };
 export type LineaEfectivaPLResult = RestriccionPL;
 
 export interface VerticePL {
@@ -122,14 +123,13 @@ const puntoDTO = ([x, y]: Vector) => ({ x1: coordenada(x), x2: coordenada(y) });
 
 export function calcularMetodoGrafico(input: MetodoGraficoInput): MetodoGraficoResult {
   const { funcionObjetivo, restricciones } = MetodoGraficoInputSchema.parse(input);
-  const reales: RestriccionPL[] = [
-    ...restricciones,
-    { id: 'x1 >= 0', x1: 1, x2: 0, operador: '>=', rhs: 0 },
-    { id: 'x2 >= 0', x1: 0, x2: 1, operador: '>=', rhs: 0 },
+  const rectas: Recta[] = [
+    ...restricciones.map(({ id, x1, x2, operador, rhs }): Recta => ({
+      id, normal: [x1, x2], operador, rhs,
+    })),
+    { id: 'x1 >= 0', normal: [Frac.UNO, Frac.CERO], operador: '>=', rhs: Frac.CERO },
+    { id: 'x2 >= 0', normal: [Frac.CERO, Frac.UNO], operador: '>=', rhs: Frac.CERO },
   ];
-  const rectas: Recta[] = reales.map(({ id, x1, x2, operador, rhs }) => ({
-    id, normal: [Frac.deDecimal(x1), Frac.deDecimal(x2)], operador, rhs: Frac.deDecimal(rhs),
-  }));
   const puntos = new Map<string, Punto>();
   const descartadas: { base: InterseccionDescartadaPL; punto?: Vector }[] = [];
   for (let i = 0; i < rectas.length; i++) {
@@ -154,7 +154,7 @@ export function calcularMetodoGrafico(input: MetodoGraficoInput): MetodoGraficoR
 
   // La no negatividad hace que el poliedro sea apuntado: si no es vacío, tiene un vértice.
   if (puntos.size === 0) throw new ErrorValidacion('El problema es infactible (no tiene área de solución)');
-  const c: Vector = [Frac.deDecimal(funcionObjetivo.c1), Frac.deDecimal(funcionObjetivo.c2)];
+  const c: Vector = [funcionObjetivo.c1, funcionObjetivo.c2];
   const signoOpt = funcionObjetivo.tipo === 'MAX' ? 1 : -1;
   const rayos = direccionesRecesion(rectas);
   if (rayos.some(d => producto(c, d).signo === signoOpt)) throw new ErrorValidacion('La solución es no acotada');
@@ -170,7 +170,10 @@ export function calcularMetodoGrafico(input: MetodoGraficoInput): MetodoGraficoR
 
   // Mantener los límites de dibujo del DTO anterior. No intervienen en la
   // enumeración, la factibilidad, el objetivo ni la detección de rayos.
-  const interceptos = restricciones.flatMap(r => [r.x1, r.x2].filter(a => a > 0).map(a => r.rhs / a));
+  const reales: RestriccionPL[] = rectas.map(({ id, normal, operador, rhs }) => ({
+    id, ...puntoDTO(normal), operador, rhs: coordenada(rhs),
+  }));
+  const interceptos = reales.flatMap(r => [r.x1, r.x2].filter(a => a > 0).map(a => r.rhs / a));
   const escala = interceptos.reduce((max, x) => Number.isFinite(x) ? Math.max(max, x) : max, 0);
   const limiteDibujo = Math.max(1e6, Math.min(Number.MAX_VALUE / 100, escala) * 100);
   const lineasEfectivas: RestriccionPL[] = [
@@ -180,7 +183,8 @@ export function calcularMetodoGrafico(input: MetodoGraficoInput): MetodoGraficoR
   ];
 
   return {
-    estado: 'optimo', funcionObjetivo, valorZ: coordenada(mejor),
+    estado: 'optimo', funcionObjetivo: { tipo: funcionObjetivo.tipo, c1: coordenada(c[0]), c2: coordenada(c[1]) },
+    valorZ: coordenada(mejor),
     verticeOptimo: multiplesOptimos ? optimos : optimos[0], multiplesOptimos, rayoOptimo, verticesFactibles,
     interseccionesDescartadas: descartadas.map(({ base, punto }) => punto ? { ...base, punto: puntoDTO(punto) } : base),
     lineasEfectivas,

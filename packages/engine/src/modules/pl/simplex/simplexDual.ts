@@ -1,4 +1,6 @@
 import { Frac } from './fraction';
+
+const aFraccion = (valor: number | Frac): Frac => typeof valor === 'number' ? Frac.deDecimal(valor) : valor;
 import type { ObjetivoSimplex } from './simplex';
 
 /**
@@ -83,8 +85,8 @@ function clonarMatriz(M: Frac[][]): Frac[][] {
 
 /** Convierte la matriz de restricciones y su lado derecho a la forma dual. */
 function construirForma(
-  A: number[][],
-  b: number[],
+  A: (number | Frac)[][],
+  b: (number | Frac)[],
   tipos: Array<'LE' | 'GE' | 'EQ'>,
   n: number
 ): {
@@ -136,8 +138,8 @@ function construirForma(
   for (let i = 0; i < m; i++) {
     const t = tipos[i];
     const cols = columnas[i];
-    const coefs = A[i].map((v) => Frac.deDecimal(v));
-    const lado = Frac.deDecimal(b[i]);
+    const coefs = A[i].map(aFraccion);
+    const lado = aFraccion(b[i]);
 
     if (t === 'LE') {
       const fila = nuevaFila();
@@ -194,9 +196,9 @@ function construirForma(
  * de maximización se usa `c' = -c` y al final se recupera `Z = -Z'`.
  */
 export function calcularSimplexDualCore(
-  c: number[],
-  A: number[][],
-  b: number[],
+  c: (number | Frac)[],
+  A: (number | Frac)[][],
+  b: (number | Frac)[],
   objetivo: ObjetivoSimplex,
   tipos?: Array<'LE' | 'GE' | 'EQ'>
 ): ResultadoSimplexDualCore {
@@ -210,7 +212,8 @@ export function calcularSimplexDualCore(
   // Costos de la forma normalizada de minimización.
   const cNorm: Frac[] = new Array<Frac>(tot).fill(Frac.CERO);
   for (let j = 0; j < n; j++) {
-    cNorm[j] = esMin ? Frac.deDecimal(c[j]) : Frac.deDecimal(c[j]).neg();
+    const costo = aFraccion(c[j]);
+    cNorm[j] = esMin ? costo : costo.neg();
   }
 
   let filas = clonarMatriz(forma.filas);

@@ -9,6 +9,7 @@
   "scripts": {
     "build:engine": "npm run build -w @math-platform/engine",
     "test:engine": "npm run test -w @math-platform/engine",
+    "test": "npm run test -w @math-platform/engine -- --runInBand --verbose=false && npm run test -w @math-platform/api",
     "dev:engine": "npm run dev -w @math-platform/engine",
     "dev:api": "npm run dev -w @math-platform/api",
     "dev:frontend": "npm run dev -w @math-platform/frontend",

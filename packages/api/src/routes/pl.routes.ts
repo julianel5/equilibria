@@ -1,12 +1,9 @@
 import { Router } from 'express';
 import {
   calcularMetodoGrafico,
-  MetodoGraficoInputSchema,
   calcularSimplex,
   calcularSimplexDual,
-  SimplexDualInputSchema,
   calcularLemke,
-  LemkeInputSchema,
   calcularTransporte,
   calcularAsignacion,
 } from '@math-platform/engine';
@@ -18,15 +15,14 @@ const router = Router();
 // ordenado para la UI y vértices descartados con su motivo.
 router.post('/grafico', (req, res) => {
   try {
-    const validated = MetodoGraficoInputSchema.parse(req.body);
-    const resultado = calcularMetodoGrafico(validated);
+    const resultado = calcularMetodoGrafico(req.body);
     res.json({ success: true, data: resultado });
   } catch (error) {
     sendError(res, error);
   }
 });
 
-// Método Simplex (Tabular y Revisado) con fracciones exactas: tableaus,
+// Simplex, Gran M y Sensibilidad (Tabular y Revisado) con fracciones exactas: tableaus,
 // traza matricial (B^{-1}, y^T, costos reducidos) y procesos paso a paso.
 router.post('/simplex', (req, res) => {
   try {
@@ -41,8 +37,7 @@ router.post('/simplex', (req, res) => {
 // recupera la factibilidad primal con pivoteo dual.
 router.post('/dual', (req, res) => {
   try {
-    const validated = SimplexDualInputSchema.parse(req.body);
-    const resultado = calcularSimplexDual(validated);
+    const resultado = calcularSimplexDual(req.body);
     res.json({ success: true, data: resultado });
   } catch (error) {
     sendError(res, error);
@@ -52,8 +47,7 @@ router.post('/dual', (req, res) => {
 // Algoritmo de Lemke (pivoteo complementario) para LCP y QP.
 router.post('/lemke', (req, res) => {
   try {
-    const validated = LemkeInputSchema.parse(req.body);
-    const resultado = calcularLemke(validated);
+    const resultado = calcularLemke(req.body);
     res.json({ success: true, data: resultado });
   } catch (error) {
     sendError(res, error);

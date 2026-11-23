@@ -22,8 +22,8 @@ export default function Formula({ tex, display = false }: FormulaProps) {
   return (
     <span
       className={display
-        ? 'math-display block max-w-full overflow-x-auto text-center'
-        : 'inline-block max-w-full overflow-x-auto align-middle'}
+        ? 'math-display block max-w-full overflow-x-auto overflow-y-hidden py-1 text-center'
+        : undefined}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

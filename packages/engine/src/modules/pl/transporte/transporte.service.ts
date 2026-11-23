@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { proceso, type ProcesoCalculo } from '../../procesos';
 import { Frac } from '../simplex/fraction';
-import { entradaExacta } from '../simplex/entradaExacta';
+import { entradaExacta, indicePositivo } from '../simplex/entradaExacta';
 import {
   etiquetaMetodo,
   resolverTransporte,
@@ -205,8 +205,8 @@ export const TransporteInputSchema = z
     prohibidas: z
       .array(
         z.object({
-          origen: z.number().int().min(1, { message: 'El origen debe ser ≥ 1.' }),
-          destino: z.number().int().min(1, { message: 'El destino debe ser ≥ 1.' }),
+          origen: indicePositivo,
+          destino: indicePositivo,
         })
       )
       .default([]),
